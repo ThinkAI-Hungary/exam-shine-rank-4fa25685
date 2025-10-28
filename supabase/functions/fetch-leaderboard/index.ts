@@ -70,24 +70,66 @@ class RateLimiter {
 async function makeLearnWorldsRequest(
   url: string,
   accessToken: string,
-  clientId: string
+  clientId: string,
+  opts: { maxRetries?: number; baseDelayMs?: number } = {}
 ): Promise<any> {
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
-      'Lw-Client': clientId,
-    },
-  });
+  const maxRetries = opts.maxRetries ?? 5;
+  const baseDelayMs = opts.baseDelayMs ?? 800; // start under 1s
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`API request failed (${response.status}): ${text}`);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const start = Date.now();
+    let resp: Response | null = null;
+    try {
+      resp = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'Lw-Client': clientId,
+        },
+      });
+    } catch (e) {
+      if (attempt === maxRetries) {
+        throw new Error(`Network error after ${maxRetries + 1} attempts: ${e instanceof Error ? e.message : e}`);
+      }
+      const wait = baseDelayMs * Math.pow(2, attempt);
+      console.warn(`Network error, retrying in ${wait}ms (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+
+    if (resp.ok) {
+      const json = await resp.json();
+      return json;
+    }
+
+    // Handle rate limit
+    if (resp.status === 429 && attempt < maxRetries) {
+      const retryAfter = Number(resp.headers.get('Retry-After'));
+      const backoff = Number.isFinite(retryAfter) && retryAfter > 0
+        ? retryAfter * 1000
+        : baseDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * 300);
+      const text = await resp.text();
+      console.warn(`429 Too Many Requests for ${url}. Waiting ${backoff}ms before retry. Body: ${text}`);
+      await new Promise(r => setTimeout(r, backoff));
+      continue;
+    }
+
+    // Retry on transient 5xx
+    if (resp.status >= 500 && resp.status < 600 && attempt < maxRetries) {
+      const backoff = baseDelayMs * Math.pow(2, attempt);
+      const text = await resp.text();
+      console.warn(`Server ${resp.status} for ${url}. Retry in ${backoff}ms. Body: ${text}`);
+      await new Promise(r => setTimeout(r, backoff));
+      continue;
+    }
+
+    const text = await resp.text();
+    throw new Error(`API request failed (${resp.status}) after ${Date.now() - start}ms: ${text}`);
   }
 
-  return await response.json();
+  throw new Error('Unreachable');
 }
 
 async function fetchAllCourses(
@@ -397,7 +439,7 @@ serve(async (req) => {
     console.log('API Base URL:', baseUrl);
 
     // Initialize rate limiter
-    const rateLimiter = new RateLimiter(5); // Max 5 concurrent requests
+    const rateLimiter = new RateLimiter(2); // Reduce concurrency to reduce 429s
 
     // Step 1: Fetch all courses
     const courseIds = await fetchAllCourses(baseUrl, accessToken, clientId);
