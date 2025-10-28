@@ -183,6 +183,35 @@ async function fetchCourseProgress(
   }
 }
 
+async function fetchAllCourseProgress(
+  baseUrl: string,
+  userId: string,
+  accessToken: string,
+  clientId: string
+): Promise<CourseProgress[]> {
+  const url = `${baseUrl}/v2/users/${userId}/progress`;
+  try {
+    console.log(`[User ${userId}] Calling all-courses progress URL: ${url}`);
+    const data = await makeLearnWorldsRequest(url, accessToken, clientId);
+
+    let list: any[] = [];
+    if (Array.isArray(data)) list = data;
+    else if (Array.isArray(data?.data)) list = data.data;
+    else if (Array.isArray(data?.items)) list = data.items;
+    else if (Array.isArray(data?.courses)) list = data.courses;
+
+    console.log(`[User ${userId}] All-courses progress count: ${list.length}`);
+    if (list.length > 0) {
+      console.log(`[User ${userId}] Progress sample keys:`, JSON.stringify(Object.keys(list[0] || {})));
+    }
+
+    return list as CourseProgress[];
+  } catch (error) {
+    console.warn(`[User ${userId}] All-courses progress endpoint failed:`, error instanceof Error ? error.message : error);
+    return [];
+  }
+}
+
 // ============= DATA AGGREGATION =============
 function extractExamScores(progress: CourseProgress, userId: string, courseId: string): { score: number; count: number; lastActivity: string | null } {
   let totalScore = 0;
@@ -274,15 +303,49 @@ async function aggregateUserData(
   );
 
   if (enrollments.length === 0) {
-    console.log(`[User ${userId}] No enrollments found - returning zero scores`);
+    console.log(`[User ${userId}] No enrollments found - trying all-courses progress endpoint`);
+    const allProgress = await rateLimiter.run(() =>
+      fetchAllCourseProgress(baseUrl, userId, accessToken, clientId)
+    );
+
+    if (allProgress.length === 0) {
+      console.log(`[User ${userId}] No progress returned from all-courses endpoint - returning zero scores`);
+      return {
+        user_id: userId,
+        username,
+        email,
+        total_score: 0,
+        exam_count: 0,
+        average_score: 0,
+        last_activity: null,
+      };
+    }
+
+    let totalScore = 0;
+    let totalExams = 0;
+    let latestActivity: string | null = null;
+
+    for (const cp of allProgress) {
+      const courseId = (cp as any).course_id || 'unknown';
+      const examData = extractExamScores(cp, userId, courseId);
+      totalScore += examData.score;
+      totalExams += examData.count;
+      if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
+        latestActivity = examData.lastActivity;
+      }
+    }
+
+    const averageScore = totalExams > 0 ? totalScore / totalExams : 0;
+    console.log(`[User ${userId}] FINAL (fallback) AGGREGATION: ${totalExams} exams, ${totalScore} total score, ${averageScore.toFixed(1)} avg`);
+
     return {
       user_id: userId,
       username,
       email,
-      total_score: 0,
-      exam_count: 0,
-      average_score: 0,
-      last_activity: null,
+      total_score: totalScore,
+      exam_count: totalExams,
+      average_score: Math.round(averageScore * 10) / 10,
+      last_activity: latestActivity,
     };
   }
 
