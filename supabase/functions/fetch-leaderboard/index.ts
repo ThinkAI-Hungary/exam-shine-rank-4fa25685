@@ -15,10 +15,11 @@ serve(async (req) => {
     const apiBase = Deno.env.get('LEARNWORLDS_BASE_URL');
     const accessToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN');
     const subdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN');
+    const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID');
 
-    if (!apiBase || !accessToken) {
+    if (!apiBase || !accessToken || !clientId) {
       console.error('Missing LearnWorlds configuration');
-      throw new Error('LEARNWORLDS_BASE_URL and LEARNWORLDS_ACCESS_TOKEN must be configured');
+      throw new Error('LEARNWORLDS_BASE_URL, LEARNWORLDS_ACCESS_TOKEN and LEARNWORLDS_CLIENT_ID must be configured');
     }
 
     // Normalize API base (e.g. https://example.com/admin/api)
@@ -43,6 +44,7 @@ serve(async (req) => {
 
     let usersData: any = null;
     const headerStrategies: Array<{ name: string; headers: Record<string, string> }> = [
+      { name: 'Authorization + Lw-Client', headers: { Authorization: `Bearer ${accessToken}`, 'Lw-Client': `${clientId}` } },
       { name: 'Authorization: Bearer', headers: { Authorization: `Bearer ${accessToken}` } },
       { name: 'X-API-KEY', headers: { 'X-API-KEY': `${accessToken}` } },
       { name: 'X-Auth-Token', headers: { 'X-Auth-Token': `${accessToken}` } },
