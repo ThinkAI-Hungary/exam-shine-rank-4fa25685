@@ -131,9 +131,30 @@ serve(async (req) => {
     await supabaseClient.from('leaderboard_cache').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
     if (leaderboardData.length > 0) {
+      // Normalize timestamps to ISO strings for DB
+      const toInsert = leaderboardData.map((row: any) => {
+        let ts = row.last_activity;
+        let iso: string | null = null;
+        if (ts != null) {
+          if (typeof ts === 'number') {
+            const ms = ts < 1e12 ? ts * 1000 : ts;
+            iso = new Date(ms).toISOString();
+          } else if (typeof ts === 'string') {
+            const n = Number(ts);
+            if (!Number.isNaN(n)) {
+              const ms = n < 1e12 ? n * 1000 : n;
+              iso = new Date(ms).toISOString();
+            } else {
+              iso = ts; // assume ISO string
+            }
+          }
+        }
+        return { ...row, last_activity: iso };
+      });
+
       const { error: insertError } = await supabaseClient
         .from('leaderboard_cache')
-        .insert(leaderboardData);
+        .insert(toInsert);
 
       if (insertError) {
         console.error('Error updating cache:', insertError);
