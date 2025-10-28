@@ -426,6 +426,15 @@ serve(async (req) => {
   try {
     console.log('=== Starting Leaderboard Fetch ===');
 
+    // Parse body options (optional)
+    let options: any = {};
+    if (req.method === 'POST') {
+      try { options = await req.json(); } catch (_) { /* no-op */ }
+    }
+    const limitUsers = Number(options?.options?.limitUsers ?? 10);
+    const limitCourses = Number(options?.options?.limitCourses ?? 8);
+    const filterUserIds: string[] = Array.isArray(options?.options?.userIds) ? options.options.userIds.map(String) : [];
+
     // Get configuration
     const apiBase = Deno.env.get('LEARNWORLDS_BASE_URL');
     const accessToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN');
@@ -437,13 +446,13 @@ serve(async (req) => {
 
     const baseUrl = apiBase.replace(/\/$/, '');
     console.log('API Base URL:', baseUrl);
+    console.log('Options:', { limitUsers, limitCourses, filterUserIdsCount: filterUserIds.length });
 
     // Initialize rate limiter
     const rateLimiter = new RateLimiter(2); // Reduce concurrency to reduce 429s
 
     // Step 1: Fetch all courses
-    const courseIds = await fetchAllCourses(baseUrl, accessToken, clientId);
-    
+    let courseIds = await fetchAllCourses(baseUrl, accessToken, clientId);
     if (courseIds.length === 0) {
       console.warn('No courses found');
       return new Response(
@@ -451,9 +460,14 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    if (limitCourses > 0) courseIds = courseIds.slice(0, limitCourses);
 
     // Step 2: Fetch all users
-    const users = await fetchAllUsers(baseUrl, accessToken, clientId);
+    let users = await fetchAllUsers(baseUrl, accessToken, clientId);
+    if (filterUserIds.length > 0) {
+      users = users.filter(u => filterUserIds.includes(String(u.id)));
+    }
+    if (limitUsers > 0) users = users.slice(0, limitUsers);
     
     if (users.length === 0) {
       console.warn('No users found');
@@ -471,20 +485,33 @@ serve(async (req) => {
       console.log(`Deduplicated users: ${users.length} -> ${uniqueUsers.length}`);
     }
 
-    // Step 3: Process users in batches
-    console.log('Aggregating exam scores for all users...');
-    const batchSize = 10;
+    // Step 3: Process users in small batches and upsert incrementally
+    console.log('Aggregating exam scores for users...');
+    const batchSize = 3;
     const leaderboardData: AggregatedUserData[] = [];
 
     for (let i = 0; i < uniqueUsers.length; i += batchSize) {
       const batch = uniqueUsers.slice(i, i + batchSize);
-      console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueUsers.length / batchSize)}`);
+      console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueUsers.length / batchSize)} (users ${i + 1}-${Math.min(i + batchSize, uniqueUsers.length)})`);
       
       const batchResults = await Promise.all(
         batch.map(user => aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, courseIds))
       );
-      
       leaderboardData.push(...batchResults);
+
+      // Upsert partial batch to DB to avoid timeouts
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      const { error: upsertError } = await supabase
+        .from('leaderboard_cache')
+        .upsert(batchResults, { onConflict: 'user_id' });
+      if (upsertError) {
+        console.error('Database upsert error (batch):', upsertError);
+      } else {
+        console.log(`Batch upserted: ${batchResults.length} records`);
+      }
     }
 
     // Step 4: Sort and rank
@@ -495,30 +522,18 @@ serve(async (req) => {
         rank: index + 1,
       }));
 
-    console.log(`Aggregation complete: ${rankedData.length} users processed`);
-    console.log(`Total exams found: ${rankedData.reduce((sum, u) => sum + u.exam_count, 0)}`);
-
-    // Step 4: Update database cache
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    // Clear cache
-    await supabase.from('leaderboard_cache').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-    // Insert new data
+    // Final write: upsert ranked data with rank
     if (rankedData.length > 0) {
-      const { error: upsertError } = await supabase
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      const { error: finalUpsertError } = await supabase
         .from('leaderboard_cache')
         .upsert(rankedData, { onConflict: 'user_id' });
-
-      if (upsertError) {
-        console.error('Database upsert error:', upsertError);
-        throw upsertError;
+      if (finalUpsertError) {
+        console.error('Database final upsert error:', finalUpsertError);
       }
-
-      console.log('Cache updated successfully');
     }
 
     return new Response(
@@ -526,6 +541,7 @@ serve(async (req) => {
         success: true,
         leaderboard: rankedData,
         count: rankedData.length,
+        limits: { limitUsers, limitCourses },
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
