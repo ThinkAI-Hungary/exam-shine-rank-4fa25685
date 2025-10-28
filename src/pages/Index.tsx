@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Trophy, Code, RefreshCw } from "lucide-react";
+import { Trophy, Code, RefreshCw, Upload } from "lucide-react";
 import Leaderboard from "@/components/Leaderboard";
 import { toast } from "sonner";
+import Papa from "papaparse";
 
 interface LeaderboardEntry {
   rank: number;
@@ -20,6 +21,8 @@ const Index = () => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const embedCode = `<iframe 
   src="${window.location.origin}/embed" 
@@ -76,6 +79,59 @@ const Index = () => {
     }
   };
 
+  const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+          try {
+            // Convert string numbers to actual numbers
+            const parsedData = results.data.map((row: any) => ({
+              username: row.username || row.Username,
+              total_score: parseFloat(row.total_score || row['Total Score'] || 0),
+              exam_count: parseInt(row.exam_count || row['Exam Count'] || 0),
+              average_score: parseFloat(row.average_score || row['Average Score'] || 0),
+              email: row.email || row.Email || null,
+            }));
+
+            const { data, error } = await supabase.functions.invoke('upload-leaderboard', {
+              body: { data: parsedData }
+            });
+
+            if (error) throw error;
+
+            toast.success(`Leaderboard updated with ${parsedData.length} entries!`);
+            await fetchLeaderboard();
+          } catch (error: any) {
+            toast.error(`Failed to upload CSV: ${error.message}`);
+            console.error(error);
+          } finally {
+            setUploading(false);
+            if (fileInputRef.current) {
+              fileInputRef.current.value = '';
+            }
+          }
+        },
+        error: (error) => {
+          toast.error(`Failed to parse CSV: ${error.message}`);
+          setUploading(false);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+        }
+      });
+    } catch (error: any) {
+      toast.error("Failed to read CSV file");
+      console.error(error);
+      setUploading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
@@ -92,6 +148,22 @@ const Index = () => {
             </div>
           </div>
           <div className="flex gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={handleCsvUpload}
+              className="hidden"
+            />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              <Upload className={`w-4 h-4 mr-2 ${uploading ? 'animate-pulse' : ''}`} />
+              {uploading ? 'Uploading...' : 'Upload CSV'}
+            </Button>
             <Button 
               variant="outline" 
               size="sm" 
@@ -99,7 +171,7 @@ const Index = () => {
               disabled={refreshing}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'Refreshing...' : 'Refresh Data'}
+              {refreshing ? 'Refresh Data' : 'Refresh Data'}
             </Button>
             <Dialog>
               <DialogTrigger asChild>
