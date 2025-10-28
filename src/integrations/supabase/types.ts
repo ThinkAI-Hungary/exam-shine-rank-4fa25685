@@ -16,34 +16,37 @@ export type Database = {
     Tables: {
       leaderboard_cache: {
         Row: {
-          course_completions: number | null
+          average_score: number | null
           email: string | null
+          exam_count: number | null
           id: string
           last_activity: string | null
           rank: number | null
-          total_points: number | null
+          total_score: number | null
           updated_at: string
           user_id: string
           username: string
         }
         Insert: {
-          course_completions?: number | null
+          average_score?: number | null
           email?: string | null
+          exam_count?: number | null
           id?: string
           last_activity?: string | null
           rank?: number | null
-          total_points?: number | null
+          total_score?: number | null
           updated_at?: string
           user_id: string
           username: string
         }
         Update: {
-          course_completions?: number | null
+          average_score?: number | null
           email?: string | null
+          exam_count?: number | null
           id?: string
           last_activity?: string | null
           rank?: number | null
-          total_points?: number | null
+          total_score?: number | null
           updated_at?: string
           user_id?: string
           username?: string

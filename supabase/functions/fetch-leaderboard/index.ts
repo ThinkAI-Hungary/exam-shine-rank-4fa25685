@@ -6,280 +6,374 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============= TYPES =============
+interface LearnWorldsUser {
+  id: string;
+  username?: string;
+  email?: string;
+  name?: string;
+}
+
+interface Enrollment {
+  product_id: string;
+  product_type: string;
+}
+
+interface ExamActivity {
+  id: string;
+  type: string;
+  title?: string;
+  score?: number;
+  max_score?: number;
+  status: string;
+  completed_at?: string | number;
+}
+
+interface CourseProgress {
+  activities?: ExamActivity[];
+}
+
+interface AggregatedUserData {
+  user_id: string;
+  username: string;
+  email: string | null;
+  total_score: number;
+  exam_count: number;
+  average_score: number;
+  last_activity: string | null;
+}
+
+// ============= RATE LIMITING =============
+class RateLimiter {
+  private queue: Array<() => Promise<any>> = [];
+  private running = 0;
+  private maxConcurrent: number;
+
+  constructor(maxConcurrent: number = 5) {
+    this.maxConcurrent = maxConcurrent;
+  }
+
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    while (this.running >= this.maxConcurrent) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    this.running++;
+    try {
+      return await fn();
+    } finally {
+      this.running--;
+    }
+  }
+}
+
+// ============= API HELPERS =============
+async function makeLearnWorldsRequest(
+  url: string,
+  accessToken: string,
+  clientId: string
+): Promise<any> {
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+      'Lw-Client': clientId,
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`API request failed (${response.status}): ${text}`);
+  }
+
+  return await response.json();
+}
+
+async function fetchAllUsers(
+  baseUrl: string,
+  accessToken: string,
+  clientId: string
+): Promise<LearnWorldsUser[]> {
+  console.log('Fetching all users...');
+  const allUsers: LearnWorldsUser[] = [];
+  let page = 1;
+  let hasMore = true;
+
+  while (hasMore) {
+    const url = `${baseUrl}/v2/users?page=${page}&per_page=50`;
+    try {
+      const data = await makeLearnWorldsRequest(url, accessToken, clientId);
+      const users = data.data || data || [];
+      
+      if (users.length === 0) {
+        hasMore = false;
+      } else {
+        allUsers.push(...users);
+        console.log(`Fetched page ${page}: ${users.length} users`);
+        page++;
+        
+        // Safety limit
+        if (page > 20) {
+          console.warn('Reached page limit of 20, stopping pagination');
+          hasMore = false;
+        }
+      }
+    } catch (error) {
+      console.error(`Error fetching users page ${page}:`, error);
+      hasMore = false;
+    }
+  }
+
+  console.log(`Total users fetched: ${allUsers.length}`);
+  return allUsers;
+}
+
+async function fetchUserEnrollments(
+  baseUrl: string,
+  userId: string,
+  accessToken: string,
+  clientId: string
+): Promise<Enrollment[]> {
+  try {
+    const url = `${baseUrl}/v2/users/${userId}/enrollments`;
+    const data = await makeLearnWorldsRequest(url, accessToken, clientId);
+    return data.data || data || [];
+  } catch (error) {
+    console.warn(`Failed to fetch enrollments for user ${userId}:`, error instanceof Error ? error.message : error);
+    return [];
+  }
+}
+
+async function fetchCourseProgress(
+  baseUrl: string,
+  userId: string,
+  courseId: string,
+  accessToken: string,
+  clientId: string
+): Promise<CourseProgress | null> {
+  try {
+    const url = `${baseUrl}/v2/users/${userId}/progress/${courseId}`;
+    const data = await makeLearnWorldsRequest(url, accessToken, clientId);
+    return data;
+  } catch (error) {
+    console.warn(`Failed to fetch progress for user ${userId}, course ${courseId}:`, error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+// ============= DATA AGGREGATION =============
+function extractExamScores(progress: CourseProgress): { score: number; count: number; lastActivity: string | null } {
+  let totalScore = 0;
+  let examCount = 0;
+  let lastActivity: string | null = null;
+
+  if (!progress.activities || !Array.isArray(progress.activities)) {
+    return { score: 0, count: 0, lastActivity: null };
+  }
+
+  for (const activity of progress.activities) {
+    // Check if it's a completed exam
+    if (
+      activity.type === 'exam' &&
+      activity.status === 'completed' &&
+      typeof activity.score === 'number'
+    ) {
+      totalScore += activity.score;
+      examCount++;
+
+      // Track most recent activity
+      if (activity.completed_at) {
+        const activityTime = normalizeTimestamp(activity.completed_at);
+        if (activityTime && (!lastActivity || activityTime > lastActivity)) {
+          lastActivity = activityTime;
+        }
+      }
+    }
+  }
+
+  return { score: totalScore, count: examCount, lastActivity };
+}
+
+function normalizeTimestamp(timestamp: string | number | null | undefined): string | null {
+  if (!timestamp) return null;
+
+  try {
+    if (typeof timestamp === 'number') {
+      const ms = timestamp < 1e12 ? timestamp * 1000 : timestamp;
+      return new Date(ms).toISOString();
+    }
+
+    if (typeof timestamp === 'string') {
+      const num = Number(timestamp);
+      if (!Number.isNaN(num)) {
+        const ms = num < 1e12 ? num * 1000 : num;
+        return new Date(ms).toISOString();
+      }
+      // Assume it's already ISO string
+      return timestamp;
+    }
+  } catch (error) {
+    console.warn('Failed to normalize timestamp:', timestamp);
+  }
+
+  return null;
+}
+
+async function aggregateUserData(
+  user: LearnWorldsUser,
+  baseUrl: string,
+  accessToken: string,
+  clientId: string,
+  rateLimiter: RateLimiter
+): Promise<AggregatedUserData> {
+  const userId = String(user.id);
+  const username = user.username || user.name || user.email?.split('@')[0] || 'Unknown';
+  const email = user.email || null;
+
+  // Fetch enrollments
+  const enrollments = await rateLimiter.run(() =>
+    fetchUserEnrollments(baseUrl, userId, accessToken, clientId)
+  );
+
+  if (enrollments.length === 0) {
+    return {
+      user_id: userId,
+      username,
+      email,
+      total_score: 0,
+      exam_count: 0,
+      average_score: 0,
+      last_activity: null,
+    };
+  }
+
+  // Fetch progress for each enrollment
+  let totalScore = 0;
+  let totalExams = 0;
+  let latestActivity: string | null = null;
+
+  for (const enrollment of enrollments) {
+    if (enrollment.product_type !== 'course') continue;
+
+    const progress = await rateLimiter.run(() =>
+      fetchCourseProgress(baseUrl, userId, enrollment.product_id, accessToken, clientId)
+    );
+
+    if (progress) {
+      const examData = extractExamScores(progress);
+      totalScore += examData.score;
+      totalExams += examData.count;
+
+      if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
+        latestActivity = examData.lastActivity;
+      }
+    }
+  }
+
+  const averageScore = totalExams > 0 ? totalScore / totalExams : 0;
+
+  return {
+    user_id: userId,
+    username,
+    email,
+    total_score: totalScore,
+    exam_count: totalExams,
+    average_score: Math.round(averageScore * 10) / 10, // Round to 1 decimal
+    last_activity: latestActivity,
+  };
+}
+
+// ============= MAIN HANDLER =============
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log('=== Starting Leaderboard Fetch ===');
+
+    // Get configuration
     const apiBase = Deno.env.get('LEARNWORLDS_BASE_URL');
     const accessToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN');
-    const subdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN');
     const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID');
 
     if (!apiBase || !accessToken || !clientId) {
-      console.error('Missing LearnWorlds configuration');
-      throw new Error('LEARNWORLDS_BASE_URL, LEARNWORLDS_ACCESS_TOKEN and LEARNWORLDS_CLIENT_ID must be configured');
+      throw new Error('Missing required LearnWorlds configuration');
     }
 
-    // Accept courseId from request body or env
-    let courseId: string | null = Deno.env.get('LEARNWORLDS_COURSE_ID') || null;
-    if (req.method === 'POST') {
-      try {
-        const body = await req.json();
-        courseId = body?.courseId || body?.course_id || courseId;
-      } catch (_) {
-        // no body
-      }
-    }
-    console.log('Using courseId:', courseId || '(none)');
+    const baseUrl = apiBase.replace(/\/$/, '');
+    console.log('API Base URL:', baseUrl);
 
-    // Normalize API base (e.g. https://example.com/admin/api)
-    const normalizedBase = apiBase.replace(/\/$/, '');
-    const sub = subdomain ? subdomain.split('.')[0] : null; // ensure pure subdomain if provided
-    const lwBaseFromSubdomain = sub ? `https://${sub}.learnworlds.com/admin/api` : null;
+    // Initialize rate limiter
+    const rateLimiter = new RateLimiter(5); // Max 5 concurrent requests
 
-    const apiBases = [
-      normalizedBase,
-      ...(lwBaseFromSubdomain && lwBaseFromSubdomain !== normalizedBase ? [lwBaseFromSubdomain] : []),
-    ];
-
-    console.log('API bases to try:', apiBases);
-    console.log('Auth mode: direct access token (Bearer) + Lw-Client');
-
-    // Fetch users from Admin API
-    console.log('Fetching users from LearnWorlds...');
-
-    const userEndpoints = apiBases.flatMap((b) => [
-      `${b}/v2/users`,
-      `${b}/users`,
-    ]);
-
-    let usersData: any = null;
-    const headerStrategies: Array<{ name: string; headers: Record<string, string> }> = [
-      { name: 'Authorization + Lw-Client', headers: { Authorization: `Bearer ${accessToken}`, 'Lw-Client': `${clientId}` } },
-      { name: 'Authorization: Bearer', headers: { Authorization: `Bearer ${accessToken}` } },
-      { name: 'X-API-KEY', headers: { 'X-API-KEY': `${accessToken}` } },
-      { name: 'X-Auth-Token', headers: { 'X-Auth-Token': `${accessToken}` } },
-      { name: 'Api-Key', headers: { 'Api-Key': `${accessToken}` } },
-    ];
-
-    let selectedBase: string | null = null;
-    let selectedHeaderName: string | null = null;
-
-    for (const u of userEndpoints) {
-      for (const strategy of headerStrategies) {
-        try {
-          const usersResp = await fetch(u, {
-            method: 'GET',
-            headers: {
-              Accept: 'application/json',
-              'Content-Type': 'application/json',
-              ...strategy.headers,
-            },
-          });
-
-          if (usersResp.ok) {
-            usersData = await usersResp.json();
-            // capture base used
-            const idx = u.indexOf('/v2/users');
-            const idx2 = idx === -1 ? u.indexOf('/users') : idx;
-            const baseUrl = idx2 !== -1 ? u.slice(0, idx2) : u;
-            selectedBase = baseUrl;
-            selectedHeaderName = strategy.name;
-            console.log(`Users fetched from ${u} using header strategy: ${strategy.name}. Count:`, usersData.data?.length || usersData.length || 0);
-            break;
-          } else {
-            const txt = await usersResp.text();
-            console.info(`Users endpoint failed ${usersResp.status} at ${u} with ${strategy.name}:`, txt);
-          }
-        } catch (e) {
-          console.info(`Users request threw at ${u} with ${strategy.name}:`, e instanceof Error ? e.message : e);
-        }
-      }
-      if (usersData) break;
+    // Step 1: Fetch all users
+    const users = await fetchAllUsers(baseUrl, accessToken, clientId);
+    
+    if (users.length === 0) {
+      console.warn('No users found');
+      return new Response(
+        JSON.stringify({ success: true, leaderboard: [], count: 0 }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    if (!usersData) {
-      throw new Error('Failed to fetch users from all known endpoints');
+    // Step 2: Process users in batches
+    console.log('Aggregating exam scores for all users...');
+    const batchSize = 10;
+    const leaderboardData: AggregatedUserData[] = [];
+
+    for (let i = 0; i < users.length; i += batchSize) {
+      const batch = users.slice(i, i + batchSize);
+      console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(users.length / batchSize)}`);
+      
+      const batchResults = await Promise.all(
+        batch.map(user => aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter))
+      );
+      
+      leaderboardData.push(...batchResults);
     }
 
-    // Process and rank users (optionally enrich with per-course progress)
-    const users = usersData.data || usersData || [];
-    let leaderboardData: any[] = [];
-
-    if (courseId) {
-      console.log('Fetching per-user progress for course:', courseId);
-      let foundCount = 0;
-
-      for (const user of users) {
-        const uid = String(user.id);
-        const username = String(user.username || user.email?.split('@')[0] || 'User');
-        const email = user.email || null;
-        const baseForProgress = selectedBase || apiBases[0];
-        const progressUrl = `${baseForProgress}/v2/users/${uid}/progress/${courseId}`;
-
-        try {
-          const resp = await fetch(progressUrl, {
-            method: 'GET',
-            headers: {
-              Accept: 'application/json',
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${accessToken}`,
-              'Lw-Client': `${clientId}`,
-            },
-          });
-
-          if (!resp.ok) {
-            const txt = await resp.text();
-            console.info(`Progress fetch failed ${resp.status} for user ${uid}:`, txt);
-            leaderboardData.push({
-              user_id: uid,
-              username,
-              email,
-              total_points: 0,
-              course_completions: 0,
-              last_activity: null,
-            });
-            continue;
-          }
-
-          const p = await resp.json();
-          const completedAtRaw = p?.completed_at ?? p?.completedAt ?? p?.last_activity ?? null;
-          const status = (p?.status || p?.completion_status || '').toString().toLowerCase();
-          const isCompleted = Boolean(completedAtRaw) || status === 'completed' || p?.is_completed === true;
-          const score = Number(p?.score ?? p?.final_score ?? p?.grade ?? 0) || 0;
-
-          let last_activity: string | null = null;
-          if (typeof completedAtRaw === 'number') {
-            const ms = completedAtRaw < 1e12 ? completedAtRaw * 1000 : completedAtRaw;
-            last_activity = new Date(ms).toISOString();
-          } else if (typeof completedAtRaw === 'string') {
-            const n = Number(completedAtRaw);
-            if (!Number.isNaN(n)) {
-              const ms = n < 1e12 ? n * 1000 : n;
-              last_activity = new Date(ms).toISOString();
-            } else {
-              last_activity = completedAtRaw; // assume ISO
-            }
-          }
-
-          if (isCompleted) foundCount++;
-
-          leaderboardData.push({
-            user_id: uid,
-            username,
-            email,
-            total_points: score,
-            course_completions: isCompleted ? 1 : 0,
-            last_activity,
-          });
-        } catch (e) {
-          console.info(`Progress request error for user ${uid}:`, e instanceof Error ? e.message : e);
-          leaderboardData.push({
-            user_id: uid,
-            username,
-            email,
-            total_points: 0,
-            course_completions: 0,
-            last_activity: null,
-          });
-        }
-      }
-
-      console.log(`Progress validation: found ${foundCount}/${users.length} completed records for course ${courseId}`);
-    } else {
-      // Fallback: use user aggregate fields
-      leaderboardData = users
-        .map((user: any) => {
-          const lastRaw = user.last_login ?? user.last_activity ?? null;
-          let last_activity: string | null = null;
-          if (typeof lastRaw === 'number') {
-            last_activity = new Date(lastRaw * 1000).toISOString();
-          } else if (typeof lastRaw === 'string') {
-            const num = Number(lastRaw);
-            if (!Number.isNaN(num)) {
-              last_activity = new Date((num < 1e12 ? num * 1000 : num)).toISOString();
-            } else {
-              last_activity = lastRaw; // assume ISO string
-            }
-          }
-
-          const total_points = Number(user.total_points ?? user.points ?? 0) || 0;
-          const course_completions = Number(user.courses_completed ?? user.courses_completed_count ?? 0) || 0;
-          const username = String(user.username || user.email?.split('@')[0] || 'User');
-          const email = user.email || null;
-
-          return {
-            user_id: String(user.id),
-            username,
-            email,
-            total_points,
-            course_completions,
-            last_activity,
-          };
-        });
-    }
-
-    // Sort and rank
-    leaderboardData = leaderboardData
-      .sort((a: any, b: any) => b.total_points - a.total_points)
-      .map((user: any, index: number) => ({
-        ...user,
+    // Step 3: Sort and rank
+    const rankedData = leaderboardData
+      .sort((a, b) => b.total_score - a.total_score)
+      .map((entry, index) => ({
+        ...entry,
         rank: index + 1,
       }));
 
-    console.log('Leaderboard calculated with', leaderboardData.length, 'users');
+    console.log(`Aggregation complete: ${rankedData.length} users processed`);
+    console.log(`Total exams found: ${rankedData.reduce((sum, u) => sum + u.exam_count, 0)}`);
 
-    // Update cache in database
-    const supabaseClient = createClient(
+    // Step 4: Update database cache
+    const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Clear existing cache (safe no-op filter to avoid full table truncate on permissions)
-    await supabaseClient.from('leaderboard_cache').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    // Clear cache
+    await supabase.from('leaderboard_cache').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
-    if (leaderboardData.length > 0) {
-      // Normalize timestamps to ISO strings for DB
-      const toInsert = leaderboardData.map((row: any) => {
-        let ts = row.last_activity as unknown;
-        let iso: string | null = null;
-        if (ts != null) {
-          if (typeof ts === 'number') {
-            const ms = ts < 1e12 ? ts * 1000 : ts;
-            iso = new Date(ms).toISOString();
-          } else if (typeof ts === 'string') {
-            const n = Number(ts);
-            if (!Number.isNaN(n)) {
-              const ms = n < 1e12 ? n * 1000 : n;
-              iso = new Date(ms).toISOString();
-            } else {
-              iso = ts; // assume ISO string
-            }
-          }
-        }
-        return { ...row, last_activity: iso };
-      });
-
-      const { error: insertError } = await supabaseClient
+    // Insert new data
+    if (rankedData.length > 0) {
+      const { error: insertError } = await supabase
         .from('leaderboard_cache')
-        .insert(toInsert);
+        .insert(rankedData);
 
       if (insertError) {
-        console.error('Error updating cache:', insertError);
-      } else {
-        console.log('Cache updated successfully');
+        console.error('Database insert error:', insertError);
+        throw insertError;
       }
+
+      console.log('Cache updated successfully');
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        leaderboard: leaderboardData,
-        count: leaderboardData.length,
-        validation: courseId ? 'Per-course progress mode' : 'Aggregate users mode',
-        users_source: { base: selectedBase, header: selectedHeaderName },
+        leaderboard: rankedData,
+        count: rankedData.length,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -287,7 +381,8 @@ serve(async (req) => {
       }
     );
   } catch (error: any) {
-    console.error('Error in fetch-leaderboard function:', error);
+    console.error('=== Error in fetch-leaderboard ===');
+    console.error(error);
     return new Response(
       JSON.stringify({ error: error?.message || 'Unknown error' }),
       {

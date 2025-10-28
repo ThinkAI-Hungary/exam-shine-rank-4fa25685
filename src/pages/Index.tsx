@@ -45,9 +45,9 @@ const Index = () => {
       const formattedData: LeaderboardEntry[] = (data || []).map((item: any) => ({
         rank: item.rank,
         username: item.username,
-        total_score: item.total_points,
-        exam_count: item.course_completions,
-        average_score: item.total_points > 0 ? (item.total_points / Math.max(item.course_completions, 1)) : 0,
+        total_score: item.total_score,
+        exam_count: item.exam_count,
+        average_score: item.average_score,
       }));
 
       setLeaderboard(formattedData);

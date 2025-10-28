@@ -8,8 +8,9 @@ interface LeaderboardEntry {
   rank: number;
   username: string;
   email: string | null;
-  total_points: number;
-  course_completions: number;
+  total_score: number;
+  exam_count: number;
+  average_score: number;
 }
 
 const Embed = () => {
@@ -67,14 +68,15 @@ const Embed = () => {
               <TableRow className="bg-muted/50">
                 <TableHead className="w-16 text-center">Rank</TableHead>
                 <TableHead>Learner</TableHead>
-                <TableHead className="text-right">Points</TableHead>
-                <TableHead className="text-right">Courses</TableHead>
+                <TableHead className="text-right">Total Score</TableHead>
+                <TableHead className="text-right">Exams</TableHead>
+                <TableHead className="text-right">Avg Score</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {leaderboard.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     <Trophy className="w-10 h-10 mx-auto mb-2 text-muted-foreground/30" />
                     <p>No data available</p>
                   </TableCell>
@@ -95,15 +97,18 @@ const Embed = () => {
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge 
-                        variant={entry.rank <= 3 ? "default" : "secondary"}
+                        variant="secondary"
                         className="font-mono"
                       >
-                        {entry.total_points.toLocaleString()}
+                        {entry.total_score.toLocaleString()}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {entry.exam_count}
+                    </TableCell>
                     <TableCell className="text-right">
-                      <Badge variant="outline" className="font-mono">
-                        {entry.course_completions}
+                      <Badge variant={entry.average_score >= 80 ? "default" : "outline"}>
+                        {entry.average_score.toFixed(1)}%
                       </Badge>
                     </TableCell>
                   </TableRow>
