@@ -22,9 +22,22 @@ serve(async (req) => {
       throw new Error('LEARNWORLDS_BASE_URL, LEARNWORLDS_ACCESS_TOKEN and LEARNWORLDS_CLIENT_ID must be configured');
     }
 
+    // Accept courseId from request body or env
+    let courseId: string | null = Deno.env.get('LEARNWORLDS_COURSE_ID') || null;
+    if (req.method === 'POST') {
+      try {
+        const body = await req.json();
+        courseId = body?.courseId || body?.course_id || courseId;
+      } catch (_) {
+        // no body
+      }
+    }
+    console.log('Using courseId:', courseId || '(none)');
+
     // Normalize API base (e.g. https://example.com/admin/api)
     const normalizedBase = apiBase.replace(/\/$/, '');
-    const lwBaseFromSubdomain = subdomain ? `https://${subdomain}.learnworlds.com/admin/api` : null;
+    const sub = subdomain ? subdomain.split('.')[0] : null; // ensure pure subdomain if provided
+    const lwBaseFromSubdomain = sub ? `https://${sub}.learnworlds.com/admin/api` : null;
 
     const apiBases = [
       normalizedBase,
@@ -32,7 +45,7 @@ serve(async (req) => {
     ];
 
     console.log('API bases to try:', apiBases);
-    console.log('Auth mode: direct access token (Bearer)');
+    console.log('Auth mode: direct access token (Bearer) + Lw-Client');
 
     // Fetch users from Admin API
     console.log('Fetching users from LearnWorlds...');
@@ -51,6 +64,9 @@ serve(async (req) => {
       { name: 'Api-Key', headers: { 'Api-Key': `${accessToken}` } },
     ];
 
+    let selectedBase: string | null = null;
+    let selectedHeaderName: string | null = null;
+
     for (const u of userEndpoints) {
       for (const strategy of headerStrategies) {
         try {
@@ -65,6 +81,12 @@ serve(async (req) => {
 
           if (usersResp.ok) {
             usersData = await usersResp.json();
+            // capture base used
+            const idx = u.indexOf('/v2/users');
+            const idx2 = idx === -1 ? u.indexOf('/users') : idx;
+            const baseUrl = idx2 !== -1 ? u.slice(0, idx2) : u;
+            selectedBase = baseUrl;
+            selectedHeaderName = strategy.name;
             console.log(`Users fetched from ${u} using header strategy: ${strategy.name}. Count:`, usersData.data?.length || usersData.length || 0);
             break;
           } else {
@@ -82,37 +104,125 @@ serve(async (req) => {
       throw new Error('Failed to fetch users from all known endpoints');
     }
 
-    // Process and rank users by total points
+    // Process and rank users (optionally enrich with per-course progress)
     const users = usersData.data || usersData || [];
-    const leaderboardData = users
-      .map((user: any) => {
-        const lastRaw = user.last_login ?? user.last_activity ?? null;
-        let last_activity: string | null = null;
-        if (typeof lastRaw === 'number') {
-          last_activity = new Date(lastRaw * 1000).toISOString();
-        } else if (typeof lastRaw === 'string') {
-          const num = Number(lastRaw);
-          if (!Number.isNaN(num)) {
-            last_activity = new Date((num < 1e12 ? num * 1000 : num)).toISOString();
-          } else {
-            last_activity = lastRaw; // assume ISO string
-          }
-        }
+    let leaderboardData: any[] = [];
 
-        const total_points = Number(user.total_points ?? user.points ?? 0) || 0;
-        const course_completions = Number(user.courses_completed ?? user.courses_completed_count ?? 0) || 0;
+    if (courseId) {
+      console.log('Fetching per-user progress for course:', courseId);
+      let foundCount = 0;
+
+      for (const user of users) {
+        const uid = String(user.id);
         const username = String(user.username || user.email?.split('@')[0] || 'User');
         const email = user.email || null;
+        const baseForProgress = selectedBase || apiBases[0];
+        const progressUrl = `${baseForProgress}/v2/users/${uid}/progress/${courseId}`;
 
-        return {
-          user_id: String(user.id),
-          username,
-          email,
-          total_points,
-          course_completions,
-          last_activity,
-        };
-      })
+        try {
+          const resp = await fetch(progressUrl, {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+              'Lw-Client': `${clientId}`,
+            },
+          });
+
+          if (!resp.ok) {
+            const txt = await resp.text();
+            console.info(`Progress fetch failed ${resp.status} for user ${uid}:`, txt);
+            leaderboardData.push({
+              user_id: uid,
+              username,
+              email,
+              total_points: 0,
+              course_completions: 0,
+              last_activity: null,
+            });
+            continue;
+          }
+
+          const p = await resp.json();
+          const completedAtRaw = p?.completed_at ?? p?.completedAt ?? p?.last_activity ?? null;
+          const status = (p?.status || p?.completion_status || '').toString().toLowerCase();
+          const isCompleted = Boolean(completedAtRaw) || status === 'completed' || p?.is_completed === true;
+          const score = Number(p?.score ?? p?.final_score ?? p?.grade ?? 0) || 0;
+
+          let last_activity: string | null = null;
+          if (typeof completedAtRaw === 'number') {
+            const ms = completedAtRaw < 1e12 ? completedAtRaw * 1000 : completedAtRaw;
+            last_activity = new Date(ms).toISOString();
+          } else if (typeof completedAtRaw === 'string') {
+            const n = Number(completedAtRaw);
+            if (!Number.isNaN(n)) {
+              const ms = n < 1e12 ? n * 1000 : n;
+              last_activity = new Date(ms).toISOString();
+            } else {
+              last_activity = completedAtRaw; // assume ISO
+            }
+          }
+
+          if (isCompleted) foundCount++;
+
+          leaderboardData.push({
+            user_id: uid,
+            username,
+            email,
+            total_points: score,
+            course_completions: isCompleted ? 1 : 0,
+            last_activity,
+          });
+        } catch (e) {
+          console.info(`Progress request error for user ${uid}:`, e instanceof Error ? e.message : e);
+          leaderboardData.push({
+            user_id: uid,
+            username,
+            email,
+            total_points: 0,
+            course_completions: 0,
+            last_activity: null,
+          });
+        }
+      }
+
+      console.log(`Progress validation: found ${foundCount}/${users.length} completed records for course ${courseId}`);
+    } else {
+      // Fallback: use user aggregate fields
+      leaderboardData = users
+        .map((user: any) => {
+          const lastRaw = user.last_login ?? user.last_activity ?? null;
+          let last_activity: string | null = null;
+          if (typeof lastRaw === 'number') {
+            last_activity = new Date(lastRaw * 1000).toISOString();
+          } else if (typeof lastRaw === 'string') {
+            const num = Number(lastRaw);
+            if (!Number.isNaN(num)) {
+              last_activity = new Date((num < 1e12 ? num * 1000 : num)).toISOString();
+            } else {
+              last_activity = lastRaw; // assume ISO string
+            }
+          }
+
+          const total_points = Number(user.total_points ?? user.points ?? 0) || 0;
+          const course_completions = Number(user.courses_completed ?? user.courses_completed_count ?? 0) || 0;
+          const username = String(user.username || user.email?.split('@')[0] || 'User');
+          const email = user.email || null;
+
+          return {
+            user_id: String(user.id),
+            username,
+            email,
+            total_points,
+            course_completions,
+            last_activity,
+          };
+        });
+    }
+
+    // Sort and rank
+    leaderboardData = leaderboardData
       .sort((a: any, b: any) => b.total_points - a.total_points)
       .map((user: any, index: number) => ({
         ...user,
@@ -133,7 +243,7 @@ serve(async (req) => {
     if (leaderboardData.length > 0) {
       // Normalize timestamps to ISO strings for DB
       const toInsert = leaderboardData.map((row: any) => {
-        let ts = row.last_activity;
+        let ts = row.last_activity as unknown;
         let iso: string | null = null;
         if (ts != null) {
           if (typeof ts === 'number') {
@@ -168,6 +278,8 @@ serve(async (req) => {
         success: true,
         leaderboard: leaderboardData,
         count: leaderboardData.length,
+        validation: courseId ? 'Per-course progress mode' : 'Aggregate users mode',
+        users_source: { base: selectedBase, header: selectedHeaderName },
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
