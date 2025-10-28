@@ -138,7 +138,15 @@ async function fetchUserEnrollments(
   try {
     const url = `${baseUrl}/v2/users/${userId}/enrollments`;
     const data = await makeLearnWorldsRequest(url, accessToken, clientId);
-    return data.data || data || [];
+    const enrollments = data.data || data || [];
+    console.log(`[User ${userId}] Found ${enrollments.length} enrollments`);
+    if (enrollments.length > 0) {
+      console.log(`[User ${userId}] Enrollment details:`, JSON.stringify(enrollments.map((e: any) => ({ 
+        product_id: e.product_id, 
+        product_type: e.product_type 
+      }))));
+    }
+    return enrollments;
   } catch (error) {
     console.warn(`Failed to fetch enrollments for user ${userId}:`, error instanceof Error ? error.message : error);
     return [];
@@ -155,6 +163,11 @@ async function fetchCourseProgress(
   try {
     const url = `${baseUrl}/v2/users/${userId}/progress/${courseId}`;
     const data = await makeLearnWorldsRequest(url, accessToken, clientId);
+    console.log(`[User ${userId}] [Course ${courseId}] Progress data structure:`, JSON.stringify({
+      hasActivities: !!data?.activities,
+      activitiesCount: data?.activities?.length || 0,
+      sampleFields: data ? Object.keys(data) : []
+    }));
     return data;
   } catch (error) {
     console.warn(`Failed to fetch progress for user ${userId}, course ${courseId}:`, error instanceof Error ? error.message : error);
@@ -163,22 +176,35 @@ async function fetchCourseProgress(
 }
 
 // ============= DATA AGGREGATION =============
-function extractExamScores(progress: CourseProgress): { score: number; count: number; lastActivity: string | null } {
+function extractExamScores(progress: CourseProgress, userId: string, courseId: string): { score: number; count: number; lastActivity: string | null } {
   let totalScore = 0;
   let examCount = 0;
   let lastActivity: string | null = null;
 
   if (!progress.activities || !Array.isArray(progress.activities)) {
+    console.log(`[User ${userId}] [Course ${courseId}] No activities array found`);
     return { score: 0, count: 0, lastActivity: null };
   }
 
+  console.log(`[User ${userId}] [Course ${courseId}] Inspecting ${progress.activities.length} activities`);
+  
   for (const activity of progress.activities) {
+    console.log(`[User ${userId}] [Course ${courseId}] Activity:`, JSON.stringify({
+      id: activity.id,
+      type: activity.type,
+      status: activity.status,
+      score: activity.score,
+      max_score: activity.max_score,
+      title: activity.title
+    }));
+
     // Check if it's a completed exam
     if (
       activity.type === 'exam' &&
       activity.status === 'completed' &&
       typeof activity.score === 'number'
     ) {
+      console.log(`[User ${userId}] [Course ${courseId}] ✓ EXAM FOUND: score=${activity.score}`);
       totalScore += activity.score;
       examCount++;
 
@@ -192,6 +218,7 @@ function extractExamScores(progress: CourseProgress): { score: number; count: nu
     }
   }
 
+  console.log(`[User ${userId}] [Course ${courseId}] Exam extraction complete: ${examCount} exams, ${totalScore} total score`);
   return { score: totalScore, count: examCount, lastActivity };
 }
 
@@ -231,12 +258,15 @@ async function aggregateUserData(
   const username = user.username || user.name || user.email?.split('@')[0] || 'Unknown';
   const email = user.email || null;
 
+  console.log(`\n=== Processing User: ${username} (${userId}) ===`);
+
   // Fetch enrollments
   const enrollments = await rateLimiter.run(() =>
     fetchUserEnrollments(baseUrl, userId, accessToken, clientId)
   );
 
   if (enrollments.length === 0) {
+    console.log(`[User ${userId}] No enrollments found - returning zero scores`);
     return {
       user_id: userId,
       username,
@@ -252,26 +282,37 @@ async function aggregateUserData(
   let totalScore = 0;
   let totalExams = 0;
   let latestActivity: string | null = null;
+  let coursesProcessed = 0;
 
   for (const enrollment of enrollments) {
-    if (enrollment.product_type !== 'course') continue;
+    if (enrollment.product_type !== 'course') {
+      console.log(`[User ${userId}] Skipping non-course enrollment: ${enrollment.product_type}`);
+      continue;
+    }
+
+    coursesProcessed++;
+    console.log(`[User ${userId}] Processing course ${coursesProcessed}/${enrollments.filter((e: any) => e.product_type === 'course').length}: ${enrollment.product_id}`);
 
     const progress = await rateLimiter.run(() =>
       fetchCourseProgress(baseUrl, userId, enrollment.product_id, accessToken, clientId)
     );
 
     if (progress) {
-      const examData = extractExamScores(progress);
+      const examData = extractExamScores(progress, userId, enrollment.product_id);
       totalScore += examData.score;
       totalExams += examData.count;
 
       if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
         latestActivity = examData.lastActivity;
       }
+    } else {
+      console.log(`[User ${userId}] [Course ${enrollment.product_id}] No progress data returned`);
     }
   }
 
   const averageScore = totalExams > 0 ? totalScore / totalExams : 0;
+
+  console.log(`[User ${userId}] FINAL AGGREGATION: ${totalExams} exams, ${totalScore} total score, ${averageScore.toFixed(1)} avg`);
 
   return {
     user_id: userId,
