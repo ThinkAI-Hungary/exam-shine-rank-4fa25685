@@ -111,6 +111,13 @@ async function fetchAllUsers(
       } else {
         allUsers.push(...users);
         console.log(`Fetched page ${page}: ${users.length} users`);
+        
+        // Log first user structure on first page to understand available fields
+        if (page === 1 && users.length > 0) {
+          console.log('Sample user fields:', JSON.stringify(Object.keys(users[0])));
+          console.log('Sample user data (Benke Viktor if present):', JSON.stringify(users.find((u: any) => u.username?.includes('Benke') || u.name?.includes('Benke'))));
+        }
+        
         page++;
         
         // Safety limit
@@ -137,6 +144,7 @@ async function fetchUserEnrollments(
 ): Promise<Enrollment[]> {
   try {
     const url = `${baseUrl}/v2/users/${userId}/enrollments`;
+    console.log(`[User ${userId}] Calling enrollments URL: ${url}`);
     const data = await makeLearnWorldsRequest(url, accessToken, clientId);
     const enrollments = data.data || data || [];
     console.log(`[User ${userId}] Found ${enrollments.length} enrollments`);
