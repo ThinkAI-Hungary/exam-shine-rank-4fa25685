@@ -14,89 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
-      exams: {
+      leaderboard_cache: {
         Row: {
-          created_at: string
-          description: string | null
+          course_completions: number | null
+          email: string | null
           id: string
-          max_score: number
-          name: string
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          max_score?: number
-          name: string
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          max_score?: number
-          name?: string
-        }
-        Relationships: []
-      }
-      profiles: {
-        Row: {
-          avatar_url: string | null
-          created_at: string
-          id: string
+          last_activity: string | null
+          rank: number | null
+          total_points: number | null
+          updated_at: string
+          user_id: string
           username: string
         }
         Insert: {
-          avatar_url?: string | null
-          created_at?: string
-          id: string
+          course_completions?: number | null
+          email?: string | null
+          id?: string
+          last_activity?: string | null
+          rank?: number | null
+          total_points?: number | null
+          updated_at?: string
+          user_id: string
           username: string
         }
         Update: {
-          avatar_url?: string | null
-          created_at?: string
+          course_completions?: number | null
+          email?: string | null
           id?: string
+          last_activity?: string | null
+          rank?: number | null
+          total_points?: number | null
+          updated_at?: string
+          user_id?: string
           username?: string
         }
         Relationships: []
-      }
-      scores: {
-        Row: {
-          exam_id: string
-          id: string
-          score: number
-          submitted_at: string
-          user_id: string
-        }
-        Insert: {
-          exam_id: string
-          id?: string
-          score: number
-          submitted_at?: string
-          user_id: string
-        }
-        Update: {
-          exam_id?: string
-          id?: string
-          score?: number
-          submitted_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "scores_exam_id_fkey"
-            columns: ["exam_id"]
-            isOneToOne: false
-            referencedRelation: "exams"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scores_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
       }
     }
     Views: {
