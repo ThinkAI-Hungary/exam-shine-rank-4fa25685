@@ -85,14 +85,34 @@ serve(async (req) => {
     // Process and rank users by total points
     const users = usersData.data || usersData || [];
     const leaderboardData = users
-      .map((user: any) => ({
-        user_id: String(user.id),
-        username: user.username || user.email?.split('@')[0] || 'User',
-        email: user.email || null,
-        total_points: user.total_points || user.points || 0,
-        course_completions: user.courses_completed || user.courses_completed_count || 0,
-        last_activity: user.last_login || user.last_activity || null,
-      }))
+      .map((user: any) => {
+        const lastRaw = user.last_login ?? user.last_activity ?? null;
+        let last_activity: string | null = null;
+        if (typeof lastRaw === 'number') {
+          last_activity = new Date(lastRaw * 1000).toISOString();
+        } else if (typeof lastRaw === 'string') {
+          const num = Number(lastRaw);
+          if (!Number.isNaN(num)) {
+            last_activity = new Date((num < 1e12 ? num * 1000 : num)).toISOString();
+          } else {
+            last_activity = lastRaw; // assume ISO string
+          }
+        }
+
+        const total_points = Number(user.total_points ?? user.points ?? 0) || 0;
+        const course_completions = Number(user.courses_completed ?? user.courses_completed_count ?? 0) || 0;
+        const username = String(user.username || user.email?.split('@')[0] || 'User');
+        const email = user.email || null;
+
+        return {
+          user_id: String(user.id),
+          username,
+          email,
+          total_points,
+          course_completions,
+          last_activity,
+        };
+      })
       .sort((a: any, b: any) => b.total_points - a.total_points)
       .map((user: any, index: number) => ({
         ...user,
