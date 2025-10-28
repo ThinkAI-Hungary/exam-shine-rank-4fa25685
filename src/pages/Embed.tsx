@@ -18,8 +18,8 @@ const Embed = () => {
   useEffect(() => {
     fetchLeaderboard();
     
-    // Auto-refresh every 5 minutes
-    const interval = setInterval(fetchLeaderboard, 5 * 60 * 1000);
+    // Auto-refresh every 60 seconds
+    const interval = setInterval(fetchLeaderboard, 60000);
     return () => clearInterval(interval);
   }, []);
 

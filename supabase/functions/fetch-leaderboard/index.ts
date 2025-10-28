@@ -1,159 +1,107 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface LearnWorldsUser {
-  id: string;
-  username: string;
-  email: string;
-  // Add other fields based on LearnWorlds API response
-}
-
-Deno.serve(async (req) => {
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const apiKey = Deno.env.get('LEARNWORLDS_API_KEY');
-    const subdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN');
-
-    if (!apiKey || !subdomain) {
-      throw new Error('LearnWorlds credentials not configured');
+    const learnWorldsApiKey = Deno.env.get('LEARNWORLDS_API_KEY');
+    const learnWorldsSubdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN');
+    
+    if (!learnWorldsApiKey || !learnWorldsSubdomain) {
+      console.error('Missing LearnWorlds credentials');
+      throw new Error('LearnWorlds API credentials not configured');
     }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
     console.log('Fetching users from LearnWorlds...');
-
+    
     // Fetch users from LearnWorlds API
-    const learnWorldsResponse = await fetch(
-      `https://${subdomain}.learnworlds.com/api/v2/users`,
+    const usersResponse = await fetch(
+      `https://${learnWorldsSubdomain}.learnworlds.com/api/v2/users`,
       {
+        method: 'GET',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Accept': 'application/json',
+          'Authorization': learnWorldsApiKey,
+          'Content-Type': 'application/json',
         },
       }
     );
 
-    if (!learnWorldsResponse.ok) {
-      const errorText = await learnWorldsResponse.text();
+    if (!usersResponse.ok) {
+      const errorText = await usersResponse.text();
       console.error('LearnWorlds API error:', errorText);
-      throw new Error(`LearnWorlds API error: ${learnWorldsResponse.status}`);
+      throw new Error(`LearnWorlds API error: ${usersResponse.status}`);
     }
 
-    const userData = await learnWorldsResponse.json();
-    console.log('Fetched users:', userData);
+    const usersData = await usersResponse.json();
+    console.log('Users fetched:', usersData.data?.length || 0);
 
-    // Process users and calculate scores
-    // This is a placeholder - adjust based on actual LearnWorlds API structure
-    const users = userData.data || userData || [];
-    
-    const leaderboardEntries = await Promise.all(
-      users.map(async (user: any, index: number) => {
-        // Fetch user's course progress/completions
-        // Adjust this based on your LearnWorlds setup
-        let totalPoints = 0;
-        let courseCompletions = 0;
-
-        try {
-          // Fetch enrollments for each user
-          const enrollmentsResponse = await fetch(
-            `https://${subdomain}.learnworlds.com/api/v2/users/${user.id}/enrollments`,
-            {
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Accept': 'application/json',
-              },
-            }
-          );
-
-          if (enrollmentsResponse.ok) {
-            const enrollments = await enrollmentsResponse.json();
-            const enrollmentData = enrollments.data || enrollments || [];
-            
-            // Calculate points based on completed courses and progress
-            enrollmentData.forEach((enrollment: any) => {
-              if (enrollment.completion_percentage === 100) {
-                courseCompletions++;
-                totalPoints += 100; // 100 points per completed course
-              } else {
-                totalPoints += Math.floor(enrollment.completion_percentage || 0);
-              }
-            });
-          }
-        } catch (error) {
-          console.error(`Error fetching enrollments for user ${user.id}:`, error);
-        }
-
-        return {
-          user_id: user.id,
-          username: user.username || user.name || user.email?.split('@')[0] || 'Unknown',
-          email: user.email,
-          total_points: totalPoints,
-          course_completions: courseCompletions,
-          last_activity: user.last_login || new Date().toISOString(),
-        };
-      })
-    );
-
-    // Sort by total points and assign ranks
-    const sortedEntries = leaderboardEntries
-      .sort((a, b) => b.total_points - a.total_points)
-      .map((entry, index) => ({
-        ...entry,
+    // Process and rank users by total points
+    const leaderboardData = (usersData.data || [])
+      .map((user: any) => ({
+        user_id: user.id,
+        username: user.username || user.email?.split('@')[0] || 'User',
+        email: user.email,
+        total_points: user.total_points || 0,
+        course_completions: user.courses_completed || 0,
+        last_activity: user.last_login || null,
+      }))
+      .sort((a: any, b: any) => b.total_points - a.total_points)
+      .map((user: any, index: number) => ({
+        ...user,
         rank: index + 1,
       }));
 
+    console.log('Leaderboard calculated with', leaderboardData.length, 'users');
+
     // Update cache in database
-    console.log('Updating leaderboard cache...');
-    
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
     // Clear existing cache
-    await supabase.from('leaderboard_cache').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabaseClient.from('leaderboard_cache').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
     // Insert new data
-    if (sortedEntries.length > 0) {
-      const { error: insertError } = await supabase
+    if (leaderboardData.length > 0) {
+      const { error: insertError } = await supabaseClient
         .from('leaderboard_cache')
-        .insert(sortedEntries);
+        .insert(leaderboardData);
 
       if (insertError) {
-        console.error('Error inserting cache:', insertError);
-        throw insertError;
+        console.error('Error updating cache:', insertError);
+      } else {
+        console.log('Cache updated successfully');
       }
     }
-
-    console.log('Leaderboard updated successfully');
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        entries: sortedEntries.length,
-        data: sortedEntries 
+        leaderboard: leaderboardData,
+        count: leaderboardData.length 
       }),
-      {
+      { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
+        status: 200 
       }
     );
-  } catch (error) {
+
+  } catch (error: any) {
     console.error('Error in fetch-leaderboard function:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return new Response(
-      JSON.stringify({ 
-        error: errorMessage,
-        details: 'Check function logs for more information'
-      }),
-      {
+      JSON.stringify({ error: error.message }),
+      { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
+        status: 500 
       }
     );
   }
