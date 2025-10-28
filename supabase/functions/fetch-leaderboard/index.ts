@@ -23,6 +23,7 @@ serve(async (req) => {
     // Normalize API base (e.g. https://example.com/admin/api)
     const normalizedBase = apiBase.replace(/\/$/, '');
     console.log('Using API base:', normalizedBase);
+    console.log('Auth mode: direct access token (Bearer)');
 
     // Fetch users from Admin API
     console.log('Fetching users from LearnWorlds...');
