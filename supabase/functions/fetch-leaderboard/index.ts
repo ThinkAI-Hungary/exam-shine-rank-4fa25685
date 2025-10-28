@@ -319,14 +319,22 @@ serve(async (req) => {
       );
     }
 
+    // Deduplicate users by id to avoid DB unique constraint conflicts
+    const uniqueUsersMap = new Map<string, LearnWorldsUser>();
+    for (const u of users) uniqueUsersMap.set(String(u.id), u);
+    const uniqueUsers = Array.from(uniqueUsersMap.values());
+    if (uniqueUsers.length !== users.length) {
+      console.log(`Deduplicated users: ${users.length} -> ${uniqueUsers.length}`);
+    }
+
     // Step 2: Process users in batches
     console.log('Aggregating exam scores for all users...');
     const batchSize = 10;
     const leaderboardData: AggregatedUserData[] = [];
 
-    for (let i = 0; i < users.length; i += batchSize) {
-      const batch = users.slice(i, i + batchSize);
-      console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(users.length / batchSize)}`);
+    for (let i = 0; i < uniqueUsers.length; i += batchSize) {
+      const batch = uniqueUsers.slice(i, i + batchSize);
+      console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueUsers.length / batchSize)}`);
       
       const batchResults = await Promise.all(
         batch.map(user => aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter))
@@ -357,13 +365,13 @@ serve(async (req) => {
 
     // Insert new data
     if (rankedData.length > 0) {
-      const { error: insertError } = await supabase
+      const { error: upsertError } = await supabase
         .from('leaderboard_cache')
-        .insert(rankedData);
+        .upsert(rankedData, { onConflict: 'user_id' });
 
-      if (insertError) {
-        console.error('Database insert error:', insertError);
-        throw insertError;
+      if (upsertError) {
+        console.error('Database upsert error:', upsertError);
+        throw upsertError;
       }
 
       console.log('Cache updated successfully');
