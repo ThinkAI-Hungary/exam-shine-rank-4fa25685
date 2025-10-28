@@ -14,6 +14,7 @@ serve(async (req) => {
   try {
     const apiBase = Deno.env.get('LEARNWORLDS_BASE_URL');
     const accessToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN');
+    const subdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN');
 
     if (!apiBase || !accessToken) {
       console.error('Missing LearnWorlds configuration');
@@ -22,39 +23,57 @@ serve(async (req) => {
 
     // Normalize API base (e.g. https://example.com/admin/api)
     const normalizedBase = apiBase.replace(/\/$/, '');
-    console.log('Using API base:', normalizedBase);
+    const lwBaseFromSubdomain = subdomain ? `https://${subdomain}.learnworlds.com/admin/api` : null;
+
+    const apiBases = [
+      normalizedBase,
+      ...(lwBaseFromSubdomain && lwBaseFromSubdomain !== normalizedBase ? [lwBaseFromSubdomain] : []),
+    ];
+
+    console.log('API bases to try:', apiBases);
     console.log('Auth mode: direct access token (Bearer)');
 
     // Fetch users from Admin API
     console.log('Fetching users from LearnWorlds...');
 
-    const userEndpoints = [
-      `${normalizedBase}/v2/users`,
-      `${normalizedBase}/users`,
-    ];
+    const userEndpoints = apiBases.flatMap((b) => [
+      `${b}/v2/users`,
+      `${b}/users`,
+    ]);
 
     let usersData: any = null;
-    for (const u of userEndpoints) {
-      try {
-        const usersResp = await fetch(u, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        });
+    const headerStrategies: Array<{ name: string; headers: Record<string, string> }> = [
+      { name: 'Authorization: Bearer', headers: { Authorization: `Bearer ${accessToken}` } },
+      { name: 'X-API-KEY', headers: { 'X-API-KEY': `${accessToken}` } },
+      { name: 'X-Auth-Token', headers: { 'X-Auth-Token': `${accessToken}` } },
+      { name: 'Api-Key', headers: { 'Api-Key': `${accessToken}` } },
+    ];
 
-        if (usersResp.ok) {
-          usersData = await usersResp.json();
-          console.log('Users fetched from', u, 'count:', usersData.data?.length || usersData.length || 0);
-          break;
-        } else {
-          const txt = await usersResp.text();
-          console.info(`Users endpoint failed ${usersResp.status} at ${u}:`, txt);
+    for (const u of userEndpoints) {
+      for (const strategy of headerStrategies) {
+        try {
+          const usersResp = await fetch(u, {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+              ...strategy.headers,
+            },
+          });
+
+          if (usersResp.ok) {
+            usersData = await usersResp.json();
+            console.log(`Users fetched from ${u} using header strategy: ${strategy.name}. Count:`, usersData.data?.length || usersData.length || 0);
+            break;
+          } else {
+            const txt = await usersResp.text();
+            console.info(`Users endpoint failed ${usersResp.status} at ${u} with ${strategy.name}:`, txt);
+          }
+        } catch (e) {
+          console.info(`Users request threw at ${u} with ${strategy.name}:`, e instanceof Error ? e.message : e);
         }
-      } catch (e) {
-        console.info('Users request threw at', u, e instanceof Error ? e.message : e);
       }
+      if (usersData) break;
     }
 
     if (!usersData) {
