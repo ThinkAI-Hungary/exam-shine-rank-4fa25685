@@ -31,12 +31,26 @@ interface LearnWorldsWebhookPayload {
   [key: string]: any;
 }
 
-interface LearnWorldsEnrollment {
+interface ExamActivity {
   id: string;
-  progress: number; // percentage 0-100
-  course_id: string;
-  completed: boolean;
+  type: string;
+  title?: string;
+  status: string;
+  score?: number | string;
+  grade?: number | string;
   [key: string]: any;
+}
+
+interface CourseProgress {
+  course_id: string;
+  activities: ExamActivity[];
+  [key: string]: any;
+}
+
+interface ExamScoreResult {
+  totalScore: number;
+  examCount: number;
+  lastActivity: string | null;
 }
 
 async function getLearnWorldsAccessToken(): Promise<string> {
@@ -72,55 +86,142 @@ async function getLearnWorldsAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-async function getUserCourseProgress(
+async function makeLearnWorldsRequest(
+  url: string,
+  accessToken: string,
+  retries = 3
+): Promise<any> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`API request (attempt ${attempt}/${retries}):`, url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+
+      // Handle rate limiting (429)
+      if (response.status === 429) {
+        const retryAfter = parseInt(response.headers.get('Retry-After') || '2', 10);
+        console.warn(`Rate limited. Retrying after ${retryAfter}s...`);
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+
+      // Handle server errors (5xx)
+      if (response.status >= 500) {
+        const delay = Math.pow(2, attempt - 1) * 1000; // Exponential backoff
+        console.warn(`Server error ${response.status}. Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      // Client errors (4xx) - don't retry
+      const errorText = await response.text();
+      console.error('LearnWorlds API error:', errorText);
+      throw new Error(`API request failed: ${response.status}`);
+
+    } catch (error) {
+      if (attempt === retries) {
+        throw error;
+      }
+      
+      // Network errors - retry with exponential backoff
+      const delay = Math.pow(2, attempt - 1) * 1000;
+      console.warn(`Request failed, retrying in ${delay}ms...`, error);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw new Error('Max retries exceeded');
+}
+
+function extractExamScores(courseProgress: CourseProgress): ExamScoreResult {
+  let totalScore = 0;
+  let examCount = 0;
+  let lastActivity: string | null = null;
+
+  if (!courseProgress.activities || !Array.isArray(courseProgress.activities)) {
+    return { totalScore: 0, examCount: 0, lastActivity: null };
+  }
+
+  for (const activity of courseProgress.activities) {
+    // Only process completed exams
+    if (activity.type === 'exam' && activity.status === 'completed') {
+      // Extract score - can be in 'score' or 'grade' field
+      const scoreValue = activity.score ?? activity.grade;
+      
+      if (scoreValue !== undefined && scoreValue !== null) {
+        let numericScore: number;
+
+        if (typeof scoreValue === 'string') {
+          // Handle percentage strings like "85%" or "0.85"
+          const cleaned = scoreValue.replace('%', '').trim();
+          numericScore = parseFloat(cleaned);
+          
+          // If it's a decimal (0-1), convert to percentage
+          if (numericScore <= 1) {
+            numericScore *= 100;
+          }
+        } else {
+          numericScore = scoreValue;
+          
+          // If it's a decimal (0-1), convert to percentage
+          if (numericScore <= 1) {
+            numericScore *= 100;
+          }
+        }
+
+        if (!isNaN(numericScore)) {
+          totalScore += numericScore;
+          examCount += 1;
+          
+          console.log(`Exam "${activity.title || activity.id}": ${numericScore}%`);
+        }
+      }
+    }
+  }
+
+  console.log(`Extracted ${examCount} exam scores, total: ${totalScore}`);
+  return { totalScore, examCount, lastActivity };
+}
+
+async function getUserExamScores(
   accessToken: string,
   userId: string,
   courseId: string
-): Promise<number> {
+): Promise<ExamScoreResult> {
   const baseUrl = Deno.env.get('LEARNWORLDS_BASE_URL');
   
   if (!baseUrl) {
     throw new Error('Missing LEARNWORLDS_BASE_URL');
   }
 
-  // Try to get user enrollments to find the course progress
-  const enrollmentsUrl = `${baseUrl}/v2/users/${userId}/enrollments`;
+  const progressUrl = `${baseUrl}/v2/users/${userId}/progress`;
   
-  console.log('Fetching user enrollments from:', enrollmentsUrl);
+  console.log('Fetching user progress from:', progressUrl);
 
-  const response = await fetch(enrollmentsUrl, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Accept': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('LearnWorlds API error:', errorText);
-    throw new Error(`Failed to fetch user enrollments: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('LearnWorlds API response:', JSON.stringify(data, null, 2));
-
-  // Find the enrollment for the specific course
-  const enrollments = data.data || data;
-  const courseEnrollment = Array.isArray(enrollments)
-    ? enrollments.find((e: LearnWorldsEnrollment) => e.course_id === courseId)
+  const data = await makeLearnWorldsRequest(progressUrl, accessToken);
+  
+  // Find the progress for the specific course
+  const progressData = data.data || data;
+  const courseProgress = Array.isArray(progressData)
+    ? progressData.find((p: CourseProgress) => p.course_id === courseId)
     : null;
 
-  if (!courseEnrollment) {
-    console.warn(`No enrollment found for course ${courseId}, returning 0`);
-    return 0;
+  if (!courseProgress) {
+    console.warn(`No progress found for course ${courseId}`);
+    return { totalScore: 0, examCount: 0, lastActivity: null };
   }
 
-  // Return the progress percentage (0-100)
-  const progress = courseEnrollment.progress || 0;
-  console.log(`Found course progress: ${progress}%`);
-  
-  return progress;
+  return extractExamScores(courseProgress);
 }
 
 Deno.serve(async (req) => {
@@ -169,12 +270,12 @@ Deno.serve(async (req) => {
 
     console.log('Extracted data:', { userId, courseId, username, email });
 
-    // Get LearnWorlds access token and fetch course progress
-    console.log('Fetching course progress from LearnWorlds API...');
+    // Get LearnWorlds access token and fetch exam scores
+    console.log('Fetching exam scores from LearnWorlds API...');
     const accessToken = await getLearnWorldsAccessToken();
-    const courseScore = await getUserCourseProgress(accessToken, userId, courseId);
+    const examResult = await getUserExamScores(accessToken, userId, courseId);
 
-    console.log('Course score retrieved:', courseScore);
+    console.log('Exam scores retrieved:', examResult);
 
     // Fetch current user data from leaderboard_cache
     const { data: existingUser, error: fetchError } = await supabase
@@ -194,8 +295,8 @@ Deno.serve(async (req) => {
     const currentTotalScore = existingUser?.total_score || 0;
     const currentExamCount = existingUser?.exam_count || 0;
     
-    const newTotalScore = currentTotalScore + courseScore;
-    const newExamCount = currentExamCount + 1;
+    const newTotalScore = currentTotalScore + examResult.totalScore;
+    const newExamCount = currentExamCount + examResult.examCount;
     const newAverageScore = newExamCount > 0 ? newTotalScore / newExamCount : 0;
 
     console.log('Calculated updates:', {
