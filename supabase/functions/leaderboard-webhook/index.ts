@@ -56,13 +56,13 @@ interface ExamScoreResult {
 async function getLearnWorldsAccessToken(): Promise<string> {
   const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID');
   const clientSecret = Deno.env.get('LEARNWORLDS_CLIENT_SECRET');
-  const subdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN');
+  const baseUrl = Deno.env.get('LEARNWORLDS_BASE_URL');
 
-  if (!clientId || !clientSecret || !subdomain) {
+  if (!clientId || !clientSecret || !baseUrl) {
     throw new Error('Missing LearnWorlds OAuth credentials');
   }
 
-  const tokenUrl = `https://${subdomain}.learnworlds.com/oauth2/access_token`;
+  const tokenUrl = `${baseUrl}/oauth2/access_token`;
   
   const response = await fetch(tokenUrl, {
     method: 'POST',
