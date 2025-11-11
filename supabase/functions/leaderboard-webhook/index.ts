@@ -57,42 +57,67 @@ async function getLearnWorldsAccessToken(): Promise<string> {
   const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID');
   const clientSecret = Deno.env.get('LEARNWORLDS_CLIENT_SECRET');
   const baseUrl = Deno.env.get('LEARNWORLDS_BASE_URL');
+  const subdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN');
+  const presetToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN');
 
-  if (!clientId || !clientSecret || !baseUrl) {
-    throw new Error('Missing LearnWorlds OAuth credentials (CLIENT_ID, CLIENT_SECRET, or BASE_URL)');
+  // 0) If a static access token is configured, use it
+  if (presetToken && presetToken.trim()) {
+    console.log('Using preset LEARNWORLDS_ACCESS_TOKEN');
+    return presetToken.trim();
   }
 
-  // OAuth endpoint is at the school's custom domain root (not /admin/api)
-  const oauthBase = baseUrl.replace(/\/admin\/api\/?$/, '');
-  const tokenUrl = `${oauthBase}/oauth2/access_token`;
-  console.log('Requesting LW access token from:', tokenUrl);
-  
+  if (!clientId || !clientSecret) {
+    throw new Error('Missing LearnWorlds credentials: LEARNWORLDS_CLIENT_ID or LEARNWORLDS_CLIENT_SECRET');
+  }
+
   const basic = 'Basic ' + btoa(`${clientId}:${clientSecret}`);
-  const response = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': basic,
-      'Accept': 'application/json',
-    },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-    }),
-  });
-  const raw = await response.text();
 
-  if (!response.ok) {
-    console.error('LearnWorlds OAuth error:', raw);
-    throw new Error(`Failed to get LearnWorlds access token: ${response.status}`);
+  async function tryToken(url: string) {
+    console.log('Requesting LW access token from:', url);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': basic,
+        'Accept': 'application/json',
+      },
+      body: new URLSearchParams({ grant_type: 'client_credentials' }),
+    });
+
+    const raw = await res.text();
+    if (!res.ok) {
+      console.error('LearnWorlds OAuth error:', res.status, raw);
+      return null;
+    }
+
+    try {
+      const data = JSON.parse(raw);
+      if (data && data.access_token) return String(data.access_token);
+      console.error('OAuth JSON missing access_token:', raw);
+      return null;
+    } catch (e) {
+      console.error('Unexpected OAuth response (not JSON):', raw);
+      return null;
+    }
   }
 
-  try {
-    const data = JSON.parse(raw);
-    return data.access_token;
-  } catch (e) {
-    console.error('Unexpected OAuth response:', raw);
-    throw e;
+  // 1) Try official learnworlds.com domain if subdomain provided
+  if (subdomain && subdomain.trim()) {
+    const slug = subdomain.trim().split('.')[0];
+    const url = `https://${slug}.learnworlds.com/oauth2/access_token`;
+    const token = await tryToken(url);
+    if (token) return token;
   }
+
+  // 2) Fallback to custom domain root derived from LEARNWORLDS_BASE_URL
+  if (baseUrl && baseUrl.trim()) {
+    const root = baseUrl.replace(/\/$/, '').replace(/\/admin\/api\/?$/, '');
+    const url = `${root}/oauth2/access_token`;
+    const token = await tryToken(url);
+    if (token) return token;
+  }
+
+  throw new Error('Failed to acquire LearnWorlds access token from all endpoints');
 }
 
 async function makeLearnWorldsRequest(
