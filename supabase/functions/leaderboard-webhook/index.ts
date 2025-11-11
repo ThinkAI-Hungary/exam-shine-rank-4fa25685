@@ -62,8 +62,11 @@ async function getLearnWorldsAccessToken(): Promise<string> {
     throw new Error('Missing LearnWorlds OAuth credentials');
   }
 
-  // OAuth token endpoint is at the school root, not under /admin/api
-  const oauthBase = baseUrl.replace(/\/admin\/api\/?$/, '');
+  // Prefer official LearnWorlds domain for OAuth if subdomain is provided
+  const subdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN');
+  const oauthBase = subdomain
+    ? `https://${subdomain}.learnworlds.com`
+    : baseUrl.replace(/\/admin\/api\/?$/, '');
   const tokenUrl = `${oauthBase}/oauth2/access_token`;
   console.log('Requesting LW access token from:', tokenUrl);
   const response = await fetch(tokenUrl, {
@@ -103,7 +106,12 @@ async function makeLearnWorldsRequest(
     try {
       console.log(`API request (attempt ${attempt}/${retries}):`, url);
       
-      const response = await fetch(url, {
+      const requestUrl = new URL(url);
+      if (!requestUrl.searchParams.has('client_id')) {
+        requestUrl.searchParams.set('client_id', clientId);
+      }
+
+      const response = await fetch(requestUrl.toString(), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
