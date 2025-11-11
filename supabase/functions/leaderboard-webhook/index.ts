@@ -91,6 +91,12 @@ async function makeLearnWorldsRequest(
   accessToken: string,
   retries = 3
 ): Promise<any> {
+  const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID');
+  
+  if (!clientId) {
+    throw new Error('Missing LEARNWORLDS_CLIENT_ID');
+  }
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       console.log(`API request (attempt ${attempt}/${retries}):`, url);
@@ -99,6 +105,7 @@ async function makeLearnWorldsRequest(
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
+          'Lw-Client': clientId,
           'Accept': 'application/json',
         },
       });
