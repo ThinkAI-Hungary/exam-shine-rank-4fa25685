@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.upload-leaderboard]
 verify_jwt = false
+
+[functions.leaderboard-webhook]
+verify_jwt = false
