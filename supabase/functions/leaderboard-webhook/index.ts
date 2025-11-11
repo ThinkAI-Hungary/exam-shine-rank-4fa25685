@@ -62,8 +62,10 @@ async function getLearnWorldsAccessToken(): Promise<string> {
     throw new Error('Missing LearnWorlds OAuth credentials');
   }
 
-  const tokenUrl = `${baseUrl}/oauth2/access_token`;
-  
+  // OAuth token endpoint is at the school root, not under /admin/api
+  const oauthBase = baseUrl.replace(/\/admin\/api\/?$/, '');
+  const tokenUrl = `${oauthBase}/oauth2/access_token`;
+  console.log('Requesting LW access token from:', tokenUrl);
   const response = await fetch(tokenUrl, {
     method: 'POST',
     headers: {
