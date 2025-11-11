@@ -63,7 +63,9 @@ async function getLearnWorldsAccessToken(): Promise<string> {
   }
 
   // OAuth endpoint MUST use the .learnworlds.com domain, NOT custom domains
-  const tokenUrl = `https://${subdomain}.learnworlds.com/oauth2/access_token`;
+  const rawSub = subdomain.trim();
+  const schoolSlug = rawSub.includes('.') ? rawSub.split('.')[0] : rawSub;
+  const tokenUrl = `https://${schoolSlug}.learnworlds.com/oauth2/access_token`;
   console.log('Requesting LW access token from:', tokenUrl);
   const response = await fetch(tokenUrl, {
     method: 'POST',
