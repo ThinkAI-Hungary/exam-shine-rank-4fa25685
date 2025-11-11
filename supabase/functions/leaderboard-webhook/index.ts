@@ -5,29 +5,122 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface WebhookPayload {
-  event: string;
-  user?: {
-    id: string;
-    username?: string;
-    email?: string;
-    first_name?: string;
-    last_name?: string;
+interface LearnWorldsWebhookPayload {
+  version: number;
+  type: string;
+  trigger: string;
+  school_id: string;
+  data: {
+    completed_at?: number;
+    manually_completed?: boolean;
+    course?: {
+      id: string;
+      title?: string;
+      [key: string]: any;
+    };
+    user?: {
+      id: string;
+      username?: string;
+      email?: string;
+      first_name?: string;
+      last_name?: string;
+      [key: string]: any;
+    };
+    [key: string]: any;
   };
-  exam?: {
-    id: string;
-    title?: string;
-    score?: number;
-    total_points?: number;
-    percentage?: number;
-  };
-  course?: {
-    id: string;
-    title?: string;
-  };
-  timestamp?: string;
-  // LearnWorlds may send different structures - log everything to discover format
   [key: string]: any;
+}
+
+interface LearnWorldsEnrollment {
+  id: string;
+  progress: number; // percentage 0-100
+  course_id: string;
+  completed: boolean;
+  [key: string]: any;
+}
+
+async function getLearnWorldsAccessToken(): Promise<string> {
+  const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID');
+  const clientSecret = Deno.env.get('LEARNWORLDS_CLIENT_SECRET');
+  const subdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN');
+
+  if (!clientId || !clientSecret || !subdomain) {
+    throw new Error('Missing LearnWorlds OAuth credentials');
+  }
+
+  const tokenUrl = `https://${subdomain}.learnworlds.com/oauth2/access_token`;
+  
+  const response = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'client_credentials',
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('LearnWorlds OAuth error:', errorText);
+    throw new Error(`Failed to get LearnWorlds access token: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+async function getUserCourseProgress(
+  accessToken: string,
+  userId: string,
+  courseId: string
+): Promise<number> {
+  const baseUrl = Deno.env.get('LEARNWORLDS_BASE_URL');
+  
+  if (!baseUrl) {
+    throw new Error('Missing LEARNWORLDS_BASE_URL');
+  }
+
+  // Try to get user enrollments to find the course progress
+  const enrollmentsUrl = `${baseUrl}/v2/users/${userId}/enrollments`;
+  
+  console.log('Fetching user enrollments from:', enrollmentsUrl);
+
+  const response = await fetch(enrollmentsUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Accept': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('LearnWorlds API error:', errorText);
+    throw new Error(`Failed to fetch user enrollments: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('LearnWorlds API response:', JSON.stringify(data, null, 2));
+
+  // Find the enrollment for the specific course
+  const enrollments = data.data || data;
+  const courseEnrollment = Array.isArray(enrollments)
+    ? enrollments.find((e: LearnWorldsEnrollment) => e.course_id === courseId)
+    : null;
+
+  if (!courseEnrollment) {
+    console.warn(`No enrollment found for course ${courseId}, returning 0`);
+    return 0;
+  }
+
+  // Return the progress percentage (0-100)
+  const progress = courseEnrollment.progress || 0;
+  console.log(`Found course progress: ${progress}%`);
+  
+  return progress;
 }
 
 Deno.serve(async (req) => {
@@ -37,41 +130,51 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('=== Webhook received ===');
+    console.log('=== LearnWorlds Course Completion Webhook received ===');
     console.log('Method:', req.method);
     console.log('Headers:', Object.fromEntries(req.headers.entries()));
 
-    const payload: WebhookPayload = await req.json();
+    const payload: LearnWorldsWebhookPayload = await req.json();
     console.log('Payload:', JSON.stringify(payload, null, 2));
+
+    // Check if this is a course completion event
+    if (payload.trigger !== 'course_completed') {
+      console.log('Ignoring non-course-completion event:', payload.trigger);
+      return new Response(
+        JSON.stringify({ message: 'Event ignored - not a course completion' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Extract user data (adjust field names based on actual webhook structure)
-    const userId = payload.user?.id || payload.userId || payload.user_id;
-    const username = payload.user?.username || 
-                     `${payload.user?.first_name || ''} ${payload.user?.last_name || ''}`.trim() || 
-                     payload.username;
-    const email = payload.user?.email || payload.email;
-    
-    // Extract exam score (adjust based on actual webhook structure)
-    const examScore = payload.exam?.score || 
-                      payload.score || 
-                      payload.exam?.total_points || 
-                      payload.points || 
-                      0;
+    // Extract user and course data from LearnWorlds webhook
+    const userId = payload.data?.user?.id;
+    const courseId = payload.data?.course?.id;
+    const username = payload.data?.user?.username || 
+                     `${payload.data?.user?.first_name || ''} ${payload.data?.user?.last_name || ''}`.trim() ||
+                     'Unknown';
+    const email = payload.data?.user?.email;
 
-    if (!userId) {
-      console.error('No user_id found in webhook payload');
+    if (!userId || !courseId) {
+      console.error('Missing user_id or course_id in webhook payload');
       return new Response(
-        JSON.stringify({ error: 'Missing user_id in payload' }),
+        JSON.stringify({ error: 'Missing user_id or course_id in payload' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Extracted data:', { userId, username, email, examScore });
+    console.log('Extracted data:', { userId, courseId, username, email });
+
+    // Get LearnWorlds access token and fetch course progress
+    console.log('Fetching course progress from LearnWorlds API...');
+    const accessToken = await getLearnWorldsAccessToken();
+    const courseScore = await getUserCourseProgress(accessToken, userId, courseId);
+
+    console.log('Course score retrieved:', courseScore);
 
     // Fetch current user data from leaderboard_cache
     const { data: existingUser, error: fetchError } = await supabase
@@ -91,7 +194,7 @@ Deno.serve(async (req) => {
     const currentTotalScore = existingUser?.total_score || 0;
     const currentExamCount = existingUser?.exam_count || 0;
     
-    const newTotalScore = currentTotalScore + examScore;
+    const newTotalScore = currentTotalScore + courseScore;
     const newExamCount = currentExamCount + 1;
     const newAverageScore = newExamCount > 0 ? newTotalScore / newExamCount : 0;
 
@@ -167,9 +270,10 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error processing webhook:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: errorMessage,
         details: 'Check edge function logs for more information'
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
