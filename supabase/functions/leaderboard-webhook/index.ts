@@ -67,26 +67,32 @@ async function getLearnWorldsAccessToken(): Promise<string> {
   const schoolSlug = rawSub.includes('.') ? rawSub.split('.')[0] : rawSub;
   const tokenUrl = `https://${schoolSlug}.learnworlds.com/oauth2/access_token`;
   console.log('Requesting LW access token from:', tokenUrl);
+  const basic = 'Basic ' + btoa(`${clientId}:${clientSecret}`);
   const response = await fetch(tokenUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': basic,
+      'Accept': 'application/json',
     },
     body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
       grant_type: 'client_credentials',
     }),
   });
+  const raw = await response.text();
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('LearnWorlds OAuth error:', errorText);
+    console.error('LearnWorlds OAuth error:', raw);
     throw new Error(`Failed to get LearnWorlds access token: ${response.status}`);
   }
 
-  const data = await response.json();
-  return data.access_token;
+  try {
+    const data = JSON.parse(raw);
+    return data.access_token;
+  } catch (e) {
+    console.error('Unexpected OAuth response:', raw);
+    throw e;
+  }
 }
 
 async function makeLearnWorldsRequest(
