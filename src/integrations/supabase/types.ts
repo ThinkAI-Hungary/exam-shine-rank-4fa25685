@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      exam_results: {
+        Row: {
+          completed_at: string
+          course_id: string
+          course_title: string
+          created_at: string
+          email: string | null
+          exam_id: string
+          exam_title: string
+          id: string
+          score: number
+          user_id: string
+          username: string
+        }
+        Insert: {
+          completed_at: string
+          course_id: string
+          course_title: string
+          created_at?: string
+          email?: string | null
+          exam_id: string
+          exam_title: string
+          id?: string
+          score?: number
+          user_id: string
+          username: string
+        }
+        Update: {
+          completed_at?: string
+          course_id?: string
+          course_title?: string
+          created_at?: string
+          email?: string | null
+          exam_id?: string
+          exam_title?: string
+          id?: string
+          score?: number
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
+      }
       leaderboard_cache: {
         Row: {
           average_score: number | null

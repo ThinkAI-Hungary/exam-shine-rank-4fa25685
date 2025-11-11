@@ -5,6 +5,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Token cache to avoid unnecessary API calls
+let cachedToken: string | null = null;
+let tokenExpiresAt: number = 0;
+
 interface LearnWorldsWebhookPayload {
   version: number;
   type: string;
@@ -47,10 +51,18 @@ interface CourseProgress {
   [key: string]: any;
 }
 
+interface ExamDetail {
+  examId: string;
+  examTitle: string;
+  score: number;
+  completedAt: string | null;
+}
+
 interface ExamScoreResult {
   totalScore: number;
   examCount: number;
   lastActivity: string | null;
+  exams: ExamDetail[];
 }
 
 async function getLearnWorldsAccessToken(): Promise<string> {
@@ -64,6 +76,13 @@ async function getLearnWorldsAccessToken(): Promise<string> {
   if (presetToken && presetToken.trim()) {
     console.log('Using preset LEARNWORLDS_ACCESS_TOKEN');
     return presetToken.trim();
+  }
+
+  // Check if we have a valid cached token
+  const now = Date.now();
+  if (cachedToken && tokenExpiresAt > now) {
+    console.log('Using cached access token');
+    return cachedToken;
   }
 
   if (!clientId || !clientSecret) {
@@ -106,7 +125,13 @@ async function getLearnWorldsAccessToken(): Promise<string> {
     const slug = subdomain.trim().split('.')[0];
     const url = `https://${slug}.learnworlds.com/oauth2/access_token`;
     const token = await tryToken(url);
-    if (token) return token;
+    if (token) {
+      // Cache token for 55 minutes (tokens typically expire in 1 hour)
+      cachedToken = token;
+      tokenExpiresAt = Date.now() + (55 * 60 * 1000);
+      console.log('Token cached, expires in 55 minutes');
+      return token;
+    }
   }
 
   // 2) Fallback to custom domain root derived from LEARNWORLDS_BASE_URL
@@ -114,7 +139,13 @@ async function getLearnWorldsAccessToken(): Promise<string> {
     const root = baseUrl.replace(/\/$/, '').replace(/\/admin\/api\/?$/, '');
     const url = `${root}/oauth2/access_token`;
     const token = await tryToken(url);
-    if (token) return token;
+    if (token) {
+      // Cache token for 55 minutes
+      cachedToken = token;
+      tokenExpiresAt = Date.now() + (55 * 60 * 1000);
+      console.log('Token cached, expires in 55 minutes');
+      return token;
+    }
   }
 
   throw new Error('Failed to acquire LearnWorlds access token from all endpoints');
@@ -193,9 +224,10 @@ function extractExamScores(courseProgress: CourseProgress): ExamScoreResult {
   let totalScore = 0;
   let examCount = 0;
   let lastActivity: string | null = null;
+  const exams: ExamDetail[] = [];
 
   if (!courseProgress.activities || !Array.isArray(courseProgress.activities)) {
-    return { totalScore: 0, examCount: 0, lastActivity: null };
+    return { totalScore: 0, examCount: 0, lastActivity: null, exams: [] };
   }
 
   for (const activity of courseProgress.activities) {
@@ -229,6 +261,14 @@ function extractExamScores(courseProgress: CourseProgress): ExamScoreResult {
           totalScore += numericScore;
           examCount += 1;
           
+          // Store individual exam details
+          exams.push({
+            examId: activity.id,
+            examTitle: activity.title || 'Untitled Exam',
+            score: numericScore,
+            completedAt: activity.completed_at || null,
+          });
+          
           console.log(`Exam "${activity.title || activity.id}": ${numericScore}%`);
         }
       }
@@ -236,7 +276,7 @@ function extractExamScores(courseProgress: CourseProgress): ExamScoreResult {
   }
 
   console.log(`Extracted ${examCount} exam scores, total: ${totalScore}`);
-  return { totalScore, examCount, lastActivity };
+  return { totalScore, examCount, lastActivity, exams };
 }
 
 async function getUserExamScores(
@@ -264,10 +304,49 @@ async function getUserExamScores(
 
   if (!courseProgress) {
     console.warn(`No progress found for course ${courseId}`);
-    return { totalScore: 0, examCount: 0, lastActivity: null };
+    return { totalScore: 0, examCount: 0, lastActivity: null, exams: [] };
   }
 
   return extractExamScores(courseProgress);
+}
+
+async function storeExamResults(
+  supabase: any,
+  userId: string,
+  username: string,
+  email: string | null,
+  courseId: string,
+  courseTitle: string,
+  exams: ExamDetail[]
+): Promise<void> {
+  if (exams.length === 0) {
+    console.log('No exams to store');
+    return;
+  }
+
+  console.log(`Storing ${exams.length} exam results for user ${userId}`);
+
+  for (const exam of exams) {
+    const { error } = await supabase
+      .from('exam_results')
+      .insert({
+        user_id: userId,
+        username,
+        email,
+        course_id: courseId,
+        course_title: courseTitle,
+        exam_id: exam.examId,
+        exam_title: exam.examTitle,
+        score: exam.score,
+        completed_at: exam.completedAt || new Date().toISOString(),
+      });
+
+    if (error) {
+      console.error(`Error storing exam result for ${exam.examTitle}:`, error);
+    } else {
+      console.log(`Stored exam result: ${exam.examTitle} - ${exam.score}%`);
+    }
+  }
 }
 
 Deno.serve(async (req) => {
@@ -301,6 +380,7 @@ Deno.serve(async (req) => {
     // Extract user and course data from LearnWorlds webhook
     const userId = payload.data?.user?.id;
     const courseId = payload.data?.course?.id;
+    const courseTitle = payload.data?.course?.title || 'Unknown Course';
     const username = payload.data?.user?.username || 
                      `${payload.data?.user?.first_name || ''} ${payload.data?.user?.last_name || ''}`.trim() ||
                      'Unknown';
@@ -322,6 +402,17 @@ Deno.serve(async (req) => {
     const examResult = await getUserExamScores(accessToken, userId, courseId);
 
     console.log('Exam scores retrieved:', examResult);
+
+    // Store individual exam results
+    await storeExamResults(
+      supabase,
+      userId,
+      username,
+      email || null,
+      courseId,
+      courseTitle,
+      examResult.exams
+    );
 
     // Fetch current user data from leaderboard_cache
     const { data: existingUser, error: fetchError } = await supabase
