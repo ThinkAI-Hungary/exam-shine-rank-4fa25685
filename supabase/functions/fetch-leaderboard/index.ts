@@ -295,17 +295,30 @@ async function fetchAllCourseProgress(
 }
 
 // ============= DATA AGGREGATION =============
-function extractExamScores(progress: CourseProgress, userId: string, courseId: string): { score: number; count: number; lastActivity: string | null } {
+interface ExamResult {
+  exam_id: string;
+  exam_title: string;
+  score: number;
+  completed_at: string;
+  course_id: string;
+  course_title: string;
+}
+
+function extractExamScores(progress: CourseProgress, userId: string, username: string, email: string | null, courseId: string): { score: number; count: number; lastActivity: string | null; exams: ExamResult[] } {
   let totalScore = 0;
   let examCount = 0;
   let lastActivity: string | null = null;
+  const exams: ExamResult[] = [];
 
   if (!progress.activities || !Array.isArray(progress.activities)) {
     console.log(`[User ${userId}] [Course ${courseId}] No activities array found`);
-    return { score: 0, count: 0, lastActivity: null };
+    return { score: 0, count: 0, lastActivity: null, exams: [] };
   }
 
   console.log(`[User ${userId}] [Course ${courseId}] Inspecting ${progress.activities.length} activities`);
+  
+  const courseTitle = courseId; // Course title not available in progress object
+  
   
   for (const activity of progress.activities) {
     console.log(`[User ${userId}] [Course ${courseId}] Activity:`, JSON.stringify({
@@ -323,22 +336,32 @@ function extractExamScores(progress: CourseProgress, userId: string, courseId: s
       activity.status === 'completed' &&
       typeof activity.score === 'number'
     ) {
-      console.log(`[User ${userId}] [Course ${courseId}] ✓ EXAM FOUND: score=${activity.score}`);
+      const completedAt = normalizeTimestamp(activity.completed_at);
+      console.log(`[User ${userId}] [Course ${courseId}] ✓ EXAM FOUND: score=${activity.score}, title=${activity.title}`);
       totalScore += activity.score;
       examCount++;
 
+      // Store exam result
+      if (completedAt) {
+        exams.push({
+          exam_id: String(activity.id || `${courseId}-${activity.title}`),
+          exam_title: activity.title || 'Untitled Exam',
+          score: activity.score,
+          completed_at: completedAt,
+          course_id: courseId,
+          course_title: courseTitle,
+        });
+      }
+
       // Track most recent activity
-      if (activity.completed_at) {
-        const activityTime = normalizeTimestamp(activity.completed_at);
-        if (activityTime && (!lastActivity || activityTime > lastActivity)) {
-          lastActivity = activityTime;
-        }
+      if (completedAt && (!lastActivity || completedAt > lastActivity)) {
+        lastActivity = completedAt;
       }
     }
   }
 
   console.log(`[User ${userId}] [Course ${courseId}] Exam extraction complete: ${examCount} exams, ${totalScore} total score`);
-  return { score: totalScore, count: examCount, lastActivity };
+  return { score: totalScore, count: examCount, lastActivity, exams };
 }
 
 function normalizeTimestamp(timestamp: string | number | null | undefined): string | null {
@@ -373,7 +396,8 @@ async function aggregateUserData(
   clientId: string,
   rateLimiter: RateLimiter,
   courseIds: string[],
-  apiCallTracker: { count: number }
+  apiCallTracker: { count: number },
+  allExamResults: ExamResult[]
 ): Promise<AggregatedUserData> {
   const userId = String(user.id);
   const username = user.username || user.name || user.email?.split('@')[0] || 'Unknown';
@@ -416,9 +440,19 @@ async function aggregateUserData(
     });
     
     if (detailedProgress) {
-      const examData = extractExamScores(detailedProgress, userId, courseId);
+      const examData = extractExamScores(detailedProgress, userId, username, email, courseId);
       totalScore += examData.score;
       totalExams += examData.count;
+      
+      // Collect exam results for bulk insert
+      for (const exam of examData.exams) {
+        allExamResults.push({
+          ...exam,
+          user_id: userId,
+          username,
+          email,
+        } as any);
+      }
       
       if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
         latestActivity = examData.lastActivity;
@@ -606,6 +640,7 @@ serve(async (req) => {
     console.log('Aggregating exam scores for users...');
     const batchSize = 3;
     const leaderboardData: AggregatedUserData[] = [];
+    const allExamResults: any[] = [];
 
     for (let i = 0; i < uniqueUsers.length; i += batchSize) {
       const batch = uniqueUsers.slice(i, i + batchSize);
@@ -649,9 +684,19 @@ serve(async (req) => {
               });
               
               if (detailedProgress) {
-                const examData = extractExamScores(detailedProgress, userId, courseId);
+                const examData = extractExamScores(detailedProgress, userId, username, email, courseId);
                 totalScore += examData.score;
                 totalExams += examData.count;
+                
+                // Collect exam results
+                for (const exam of examData.exams) {
+                  allExamResults.push({
+                    ...exam,
+                    user_id: userId,
+                    username,
+                    email,
+                  });
+                }
                 
                 if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
                   latestActivity = examData.lastActivity;
@@ -673,7 +718,7 @@ serve(async (req) => {
             };
           } else {
             // Full refresh: Use per-course progress fetch
-            return aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, filterCourseIds, apiCallTracker);
+            return aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, filterCourseIds, apiCallTracker, allExamResults);
           }
         })
       );
@@ -693,6 +738,40 @@ serve(async (req) => {
       } else {
         console.log(`Batch upserted: ${batchResults.length} records`);
       }
+    }
+
+    // Step 3.5: Insert all exam results into exam_results table
+    if (allExamResults.length > 0) {
+      console.log(`Inserting ${allExamResults.length} exam results into database...`);
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      
+      // First, clear existing exam results for processed users if this is a selective refresh
+      if (isSelectiveRefresh && filterUserIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('exam_results')
+          .delete()
+          .in('user_id', filterUserIds);
+        if (deleteError) {
+          console.error('Error deleting old exam results:', deleteError);
+        } else {
+          console.log(`Cleared old exam results for ${filterUserIds.length} users`);
+        }
+      }
+      
+      // Insert new exam results
+      const { error: examInsertError } = await supabase
+        .from('exam_results')
+        .insert(allExamResults);
+      if (examInsertError) {
+        console.error('Error inserting exam results:', examInsertError);
+      } else {
+        console.log(`Successfully inserted ${allExamResults.length} exam results`);
+      }
+    } else {
+      console.log('No exam results to insert');
     }
 
     // Step 4: Re-rank ALL users in the database (critical for selective refresh)
