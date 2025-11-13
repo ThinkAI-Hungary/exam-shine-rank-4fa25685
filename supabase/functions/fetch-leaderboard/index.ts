@@ -403,6 +403,12 @@ async function aggregateUserData(
       continue;
     }
     
+    // Skip if not in allowed course list (when filtering is active)
+    if (courseIds.length > 0 && !courseIds.includes(courseId)) {
+      console.log(`[User ${userId}] Skipping course ${courseId} (not in filter list)`);
+      continue;
+    }
+    
     // Fetch detailed progress for this specific course to get activities
     const detailedProgress = await rateLimiter.run(() => {
       apiCallTracker.count++;
@@ -458,7 +464,12 @@ serve(async (req) => {
     const limitUsers = Number(options?.options?.limitUsers ?? 0);
     const limitCourses = Number(options?.options?.limitCourses ?? 0);
     const filterUserIds: string[] = Array.isArray(options?.options?.userIds) ? options.options.userIds.map(String) : [];
+    const filterCourseIds: string[] = Array.isArray(options?.options?.courseIds) ? options.options.courseIds.map(String) : [];
     const isSelectiveRefresh = filterUserIds.length > 0;
+    
+    if (filterCourseIds.length > 0) {
+      console.log(`COURSE FILTER: Only processing courses: ${filterCourseIds.join(', ')}`);
+    }
 
     if (isSelectiveRefresh) {
       console.log(`SELECTIVE REFRESH: Processing ${filterUserIds.length} specific user(s)`);
@@ -564,13 +575,31 @@ serve(async (req) => {
             let totalExams = 0;
             let latestActivity: string | null = null;
             
-            for (const progress of allProgress) {
-              const examData = extractExamScores(progress, userId, 'unknown');
-              totalScore += examData.score;
-              totalExams += examData.count;
+            // Filter to only allowed courses (when course filter is active)
+            const filteredProgress = filterCourseIds.length > 0
+              ? allProgress.filter(p => p.course_id && filterCourseIds.includes(p.course_id))
+              : allProgress;
+            
+            console.log(`[User ${userId}] Processing ${filteredProgress.length}/${allProgress.length} courses after filter`);
+            
+            for (const courseProgress of filteredProgress) {
+              const courseId = courseProgress.course_id;
+              if (!courseId) continue;
               
-              if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
-                latestActivity = examData.lastActivity;
+              // Fetch detailed progress for this course to get activities
+              const detailedProgress = await rateLimiter.run(() => {
+                apiCallTracker.count++;
+                return fetchCourseProgress(baseUrl, userId, courseId, accessToken, clientId);
+              });
+              
+              if (detailedProgress) {
+                const examData = extractExamScores(detailedProgress, userId, courseId);
+                totalScore += examData.score;
+                totalExams += examData.count;
+                
+                if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
+                  latestActivity = examData.lastActivity;
+                }
               }
             }
             
@@ -588,7 +617,7 @@ serve(async (req) => {
             };
           } else {
             // Full refresh: Use per-course progress fetch
-            return aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, courseIds, apiCallTracker);
+            return aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, filterCourseIds, apiCallTracker);
           }
         })
       );
