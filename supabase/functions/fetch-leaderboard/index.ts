@@ -674,6 +674,15 @@ serve(async (req) => {
             
             console.log(`[User ${userId}] Processing ${filteredProgress.length}/${allProgress.length} courses after filter`);
             
+            // DEBUG: Log all course IDs for this user
+            if (filteredProgress.length > 0) {
+              console.log(`[User ${userId}] Filtered course IDs:`, filteredProgress.map(p => p.course_id).join(', '));
+            }
+            if (allProgress.length > 0 && username.includes('Benke')) {
+              console.log(`[DEBUG Benke Viktor] ALL course IDs:`, allProgress.map(p => p.course_id).join(', '));
+            }
+            
+            
             for (const courseProgress of filteredProgress) {
               const courseId = courseProgress.course_id;
               if (!courseId) continue;
