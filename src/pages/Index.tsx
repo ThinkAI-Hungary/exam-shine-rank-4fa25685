@@ -71,6 +71,13 @@ const Index = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    const startTime = Date.now();
+    let logData: any = {
+      user_identifier: 'Anonymous',
+      is_selective_refresh: !!selectedUserId,
+      selected_user_id: selectedUserId,
+    };
+    
     try {
       const body = selectedUserId 
         ? { options: { userIds: [selectedUserId], limitUsers: 0, limitCourses: 0 } }
@@ -79,6 +86,10 @@ const Index = () => {
       const { data, error } = await supabase.functions.invoke('fetch-leaderboard', { body });
       
       if (error) throw error;
+      
+      // Log success
+      logData.api_calls = data?.apiCalls || 0;
+      await supabase.from('refresh_logs').insert(logData);
       
       const message = selectedUserId 
         ? `Selected user refreshed! (${data?.apiCalls || '?'} API calls)`
@@ -89,6 +100,15 @@ const Index = () => {
       
       await fetchLeaderboard();
     } catch (error: any) {
+      // Log error
+      logData.error_message = error?.message || 'Unknown error';
+      logData.api_calls = 0;
+      try {
+        await supabase.from('refresh_logs').insert(logData);
+      } catch (logError) {
+        console.error('Failed to log refresh error:', logError);
+      }
+      
       toast.error("Failed to refresh leaderboard");
       console.error(error);
     } finally {

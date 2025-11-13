@@ -95,6 +95,36 @@ export type Database = {
         }
         Relationships: []
       }
+      refresh_logs: {
+        Row: {
+          api_calls: number | null
+          error_message: string | null
+          id: string
+          is_selective_refresh: boolean
+          selected_user_id: string | null
+          timestamp: string
+          user_identifier: string | null
+        }
+        Insert: {
+          api_calls?: number | null
+          error_message?: string | null
+          id?: string
+          is_selective_refresh?: boolean
+          selected_user_id?: string | null
+          timestamp?: string
+          user_identifier?: string | null
+        }
+        Update: {
+          api_calls?: number | null
+          error_message?: string | null
+          id?: string
+          is_selective_refresh?: boolean
+          selected_user_id?: string | null
+          timestamp?: string
+          user_identifier?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
