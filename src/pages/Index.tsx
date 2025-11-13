@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
 import { Trophy, Code, RefreshCw, Upload } from "lucide-react";
 import Leaderboard from "@/components/Leaderboard";
 import { toast } from "sonner";
@@ -12,6 +13,8 @@ import Papa from "papaparse";
 interface LeaderboardEntry {
   rank: number;
   username: string;
+  user_id: string;
+  email: string | null;
   total_score: number;
   exam_count: number;
   average_score: number;
@@ -22,6 +25,8 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [apiCallsUsed, setApiCallsUsed] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const embedCode = `<iframe 
@@ -48,6 +53,8 @@ const Index = () => {
       const formattedData: LeaderboardEntry[] = (data || []).map((item: any) => ({
         rank: item.rank,
         username: item.username,
+        user_id: item.user_id,
+        email: item.email,
         total_score: item.total_score,
         exam_count: item.exam_count,
         average_score: item.average_score,
@@ -65,11 +72,21 @@ const Index = () => {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('fetch-leaderboard');
+      const body = selectedUserId 
+        ? { options: { userIds: [selectedUserId], limitUsers: 0, limitCourses: 0 } }
+        : { options: { limitUsers: 0, limitCourses: 0 } };
+      
+      const { data, error } = await supabase.functions.invoke('fetch-leaderboard', { body });
       
       if (error) throw error;
       
-      toast.success("Leaderboard refreshed from LearnWorlds!");
+      const message = selectedUserId 
+        ? `Selected user refreshed! (${data?.apiCalls || '?'} API calls)`
+        : `Full leaderboard refreshed! (${data?.apiCalls || '?'} API calls)`;
+      
+      toast.success(message);
+      if (data?.apiCalls) setApiCallsUsed(data.apiCalls);
+      
       await fetchLeaderboard();
     } catch (error: any) {
       toast.error("Failed to refresh leaderboard");
@@ -147,7 +164,7 @@ const Index = () => {
               <p className="text-xs text-muted-foreground">All-time top performers</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center flex-wrap">
             <input
               ref={fileInputRef}
               type="file"
@@ -164,6 +181,20 @@ const Index = () => {
               <Upload className={`w-4 h-4 mr-2 ${uploading ? 'animate-pulse' : ''}`} />
               {uploading ? 'Uploading...' : 'Upload CSV'}
             </Button>
+            <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
+              <SelectTrigger className="w-[250px]">
+                <SelectValue placeholder="Select user (or all)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">🌐 All Users (Full Refresh)</SelectItem>
+                <SelectSeparator />
+                {leaderboard.map((entry) => (
+                  <SelectItem key={entry.user_id} value={entry.user_id}>
+                    {entry.username} {entry.email && `(${entry.email})`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button 
               variant="outline" 
               size="sm" 
@@ -171,8 +202,18 @@ const Index = () => {
               disabled={refreshing}
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'Refresh Data' : 'Refresh Data'}
+              {refreshing 
+                ? 'Refreshing...' 
+                : selectedUserId 
+                  ? 'Refresh Selected User' 
+                  : 'Refresh All Users'
+              }
             </Button>
+            {apiCallsUsed && (
+              <span className="text-xs text-muted-foreground">
+                Last: {apiCallsUsed} API calls
+              </span>
+            )}
             <Dialog>
               <DialogTrigger asChild>
                 <Button variant="default" size="sm">

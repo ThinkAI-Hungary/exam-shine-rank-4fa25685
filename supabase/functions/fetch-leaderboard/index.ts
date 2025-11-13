@@ -423,6 +423,13 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // API call counter
+  let apiCallCount = 0;
+  const makeTrackedRequest = async (url: string, accessToken: string, clientId: string) => {
+    apiCallCount++;
+    return makeLearnWorldsRequest(url, accessToken, clientId);
+  };
+
   try {
     console.log('=== Starting Leaderboard Fetch ===');
 
@@ -431,9 +438,16 @@ serve(async (req) => {
     if (req.method === 'POST') {
       try { options = await req.json(); } catch (_) { /* no-op */ }
     }
-    const limitUsers = Number(options?.options?.limitUsers ?? 10);
-    const limitCourses = Number(options?.options?.limitCourses ?? 8);
+    const limitUsers = Number(options?.options?.limitUsers ?? 0);
+    const limitCourses = Number(options?.options?.limitCourses ?? 0);
     const filterUserIds: string[] = Array.isArray(options?.options?.userIds) ? options.options.userIds.map(String) : [];
+    const isSelectiveRefresh = filterUserIds.length > 0;
+
+    if (isSelectiveRefresh) {
+      console.log(`SELECTIVE REFRESH: Processing ${filterUserIds.length} specific user(s)`);
+    } else {
+      console.log(`FULL REFRESH: Processing all users`);
+    }
 
     // Get configuration
     const apiBase = Deno.env.get('LEARNWORLDS_BASE_URL');
@@ -451,23 +465,42 @@ serve(async (req) => {
     // Initialize rate limiter
     const rateLimiter = new RateLimiter(2); // Reduce concurrency to reduce 429s
 
-    // Step 1: Fetch all courses
-    let courseIds = await fetchAllCourses(baseUrl, accessToken, clientId);
-    if (courseIds.length === 0) {
-      console.warn('No courses found');
-      return new Response(
-        JSON.stringify({ success: true, leaderboard: [], count: 0, message: 'No courses found' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    if (limitCourses > 0) courseIds = courseIds.slice(0, limitCourses);
+    // Optimization: For selective refresh, skip fetching all courses and all users
+    let courseIds: string[] = [];
+    let users: LearnWorldsUser[] = [];
 
-    // Step 2: Fetch all users
-    let users = await fetchAllUsers(baseUrl, accessToken, clientId);
-    if (filterUserIds.length > 0) {
-      users = users.filter(u => filterUserIds.includes(String(u.id)));
+    if (isSelectiveRefresh) {
+      // For selective refresh: fetch only the specific users
+      console.log('Fetching specific users for selective refresh...');
+      for (const userId of filterUserIds) {
+        try {
+          const url = `${baseUrl}/v2/users/${userId}`;
+          const userData = await makeTrackedRequest(url, accessToken, clientId);
+          users.push(userData);
+        } catch (error) {
+          console.warn(`Failed to fetch user ${userId}:`, error);
+        }
+      }
+      // For selective refresh, we'll use the all-courses progress endpoint per user (1 call per user)
+      // So we don't need to fetch all courses upfront
+    } else {
+      // Full refresh: fetch all courses and all users
+      courseIds = await fetchAllCourses(baseUrl, accessToken, clientId);
+      apiCallCount++; // Count the courses fetch
+      
+      if (courseIds.length === 0) {
+        console.warn('No courses found');
+        return new Response(
+          JSON.stringify({ success: true, leaderboard: [], count: 0, message: 'No courses found', apiCalls: apiCallCount }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (limitCourses > 0) courseIds = courseIds.slice(0, limitCourses);
+
+      users = await fetchAllUsers(baseUrl, accessToken, clientId);
+      apiCallCount++; // Count the users fetch
+      if (limitUsers > 0) users = users.slice(0, limitUsers);
     }
-    if (limitUsers > 0) users = users.slice(0, limitUsers);
     
     if (users.length === 0) {
       console.warn('No users found');
@@ -494,9 +527,60 @@ serve(async (req) => {
       const batch = uniqueUsers.slice(i, i + batchSize);
       console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueUsers.length / batchSize)} (users ${i + 1}-${Math.min(i + batchSize, uniqueUsers.length)})`);
       
+      // For selective refresh, use optimized single-call progress fetch
       const batchResults = await Promise.all(
-        batch.map(user => aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, courseIds))
+        batch.map(async (user) => {
+          if (isSelectiveRefresh) {
+            // Optimized: Use all-courses progress endpoint (1 API call per user)
+            const userId = String(user.id);
+            const username = user.username || user.name || user.email?.split('@')[0] || 'Unknown';
+            const email = user.email || null;
+            
+            console.log(`\n=== Processing User (Selective): ${username} (${userId}) ===`);
+            
+            const allProgress = await rateLimiter.run(() => {
+              apiCallCount++;
+              return fetchAllCourseProgress(baseUrl, userId, accessToken, clientId);
+            });
+            
+            let totalScore = 0;
+            let totalExams = 0;
+            let latestActivity: string | null = null;
+            
+            for (const progress of allProgress) {
+              const examData = extractExamScores(progress, userId, 'unknown');
+              totalScore += examData.score;
+              totalExams += examData.count;
+              
+              if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
+                latestActivity = examData.lastActivity;
+              }
+            }
+            
+            const averageScore = totalExams > 0 ? totalScore / totalExams : 0;
+            console.log(`[User ${userId}] FINAL: ${totalExams} exams, ${totalScore} total score, ${averageScore.toFixed(1)} avg`);
+            
+            return {
+              user_id: userId,
+              username,
+              email,
+              total_score: totalScore,
+              exam_count: totalExams,
+              average_score: Math.round(averageScore * 10) / 10,
+              last_activity: latestActivity,
+            };
+          } else {
+            // Full refresh: Use per-course progress fetch
+            return aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, courseIds);
+          }
+        })
       );
+      
+      // Track API calls for the full refresh path
+      if (!isSelectiveRefresh) {
+        apiCallCount += batchResults.length * courseIds.length;
+      }
+      
       leaderboardData.push(...batchResults);
 
       // Upsert partial batch to DB to avoid timeouts
@@ -514,34 +598,47 @@ serve(async (req) => {
       }
     }
 
-    // Step 4: Sort and rank
-    const rankedData = leaderboardData
-      .sort((a, b) => b.total_score - a.total_score)
-      .map((entry, index) => ({
+    // Step 4: Re-rank ALL users in the database (critical for selective refresh)
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Fetch ALL users from database to calculate proper ranks
+    const { data: allUsersData, error: fetchError } = await supabase
+      .from('leaderboard_cache')
+      .select('*')
+      .order('total_score', { ascending: false });
+
+    if (fetchError) {
+      console.error('Error fetching all users for ranking:', fetchError);
+    } else if (allUsersData && allUsersData.length > 0) {
+      // Assign ranks based on total_score (highest score = rank 1)
+      const rankedData = allUsersData.map((entry, index) => ({
         ...entry,
         rank: index + 1,
       }));
 
-    // Final write: upsert ranked data with rank
-    if (rankedData.length > 0) {
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
-      const { error: finalUpsertError } = await supabase
+      // Update ranks for all users
+      const { error: rankUpdateError } = await supabase
         .from('leaderboard_cache')
         .upsert(rankedData, { onConflict: 'user_id' });
-      if (finalUpsertError) {
-        console.error('Database final upsert error:', finalUpsertError);
+      
+      if (rankUpdateError) {
+        console.error('Error updating ranks:', rankUpdateError);
+      } else {
+        console.log(`Successfully ranked ${rankedData.length} users`);
       }
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        leaderboard: rankedData,
-        count: rankedData.length,
+        leaderboard: leaderboardData,
+        count: leaderboardData.length,
         limits: { limitUsers, limitCourses },
+        apiCalls: apiCallCount,
+        isSelectiveRefresh,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
