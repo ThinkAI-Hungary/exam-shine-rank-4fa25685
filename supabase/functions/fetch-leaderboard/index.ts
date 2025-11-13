@@ -419,6 +419,7 @@ async function aggregateUserData(
   let latestActivity: string | null = null;
   
   // Step 2: For each course, fetch detailed progress with activities (1 API call per course)
+  let cachedEnrollments: Enrollment[] | null = null;
   for (const courseProgress of allProgress) {
     const courseId = courseProgress.course_id;
     
@@ -457,6 +458,40 @@ async function aggregateUserData(
       
       if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
         latestActivity = examData.lastActivity;
+      }
+    } else if (courseIds.length > 0) {
+      // Fallback: try enrollment product_ids
+      if (!cachedEnrollments) {
+        cachedEnrollments = await rateLimiter.run(() => {
+          apiCallTracker.count++;
+          return fetchUserEnrollments(baseUrl, userId, accessToken, clientId);
+        });
+        console.log(`[User ${userId}] Fallback enrollments: ${cachedEnrollments.length}`);
+      }
+      for (const enr of cachedEnrollments) {
+        if (!enr?.product_id) continue;
+        const altProgress = await rateLimiter.run(() => {
+          apiCallTracker.count++;
+          return fetchCourseProgress(baseUrl, userId, String(enr.product_id), accessToken, clientId);
+        });
+        if (altProgress?.activities && altProgress.activities.length > 0) {
+          console.log(`[User ${userId}] Fallback matched course ${courseId} -> ${enr.product_id}`);
+          const examData = extractExamScores(altProgress, userId, username, email, String(enr.product_id));
+          totalScore += examData.score;
+          totalExams += examData.count;
+          for (const exam of examData.exams) {
+            allExamResults.push({
+              ...exam,
+              user_id: userId,
+              username,
+              email,
+            } as any);
+          }
+          if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
+            latestActivity = examData.lastActivity;
+          }
+          break;
+        }
       }
     }
   }
@@ -682,6 +717,7 @@ serve(async (req) => {
               console.log(`[DEBUG Benke Viktor] ALL course IDs:`, allProgress.map(p => p.course_id).join(', '));
             }
             
+            let cachedEnrollments: Enrollment[] | null = null;
             
             for (const courseProgress of filteredProgress) {
               const courseId = courseProgress.course_id;
@@ -710,6 +746,35 @@ serve(async (req) => {
                 
                 if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
                   latestActivity = examData.lastActivity;
+                }
+              } else {
+                // Fallback: try enrollment product_ids in case progress endpoint expects a different ID
+                if (!cachedEnrollments) {
+                  cachedEnrollments = await rateLimiter.run(() => {
+                    apiCallTracker.count++;
+                    return fetchUserEnrollments(baseUrl, userId, accessToken, clientId);
+                  });
+                  console.log(`[User ${userId}] Fallback enrollments: ${cachedEnrollments.length}`);
+                }
+                for (const enr of cachedEnrollments) {
+                  if (!enr?.product_id) continue;
+                  const altProgress = await rateLimiter.run(() => {
+                    apiCallTracker.count++;
+                    return fetchCourseProgress(baseUrl, userId, String(enr.product_id), accessToken, clientId);
+                  });
+                  if (altProgress?.activities && altProgress.activities.length > 0) {
+                    console.log(`[User ${userId}] Fallback matched course ${courseId} -> ${enr.product_id}`);
+                    const examData = extractExamScores(altProgress, userId, username, email, String(enr.product_id));
+                    totalScore += examData.score;
+                    totalExams += examData.count;
+                    for (const exam of examData.exams) {
+                      allExamResults.push({ ...exam, user_id: userId, username, email });
+                    }
+                    if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
+                      latestActivity = examData.lastActivity;
+                    }
+                    break;
+                  }
                 }
               }
             }
