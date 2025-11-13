@@ -380,46 +380,29 @@ async function aggregateUserData(
 
   console.log(`\n=== Processing User: ${username} (${userId}) ===`);
   
-  // OPTIMIZATION: Fetch user enrollments first to only process enrolled courses
-  const enrollments = await rateLimiter.run(() => {
-    apiCallTracker.count++; // Track enrollment fetch
-    return fetchUserEnrollments(baseUrl, userId, accessToken, clientId);
+  // Fetch all course progress in a single API call (more efficient than per-course fetches)
+  const allProgress = await rateLimiter.run(() => {
+    apiCallTracker.count++;
+    return fetchAllCourseProgress(baseUrl, userId, accessToken, clientId);
   });
   
-  // Filter to only course enrollments and extract course IDs
-  const enrolledCourseIds = enrollments
-    .filter(e => e.product_type === 'course')
-    .map(e => e.product_id);
-  
-  console.log(`[User ${userId}] Found ${enrolledCourseIds.length} enrolled courses out of ${courseIds.length} total courses`);
-
   let totalScore = 0;
   let totalExams = 0;
   let latestActivity: string | null = null;
-  let coursesProcessed = 0;
-
-  // Only fetch progress for enrolled courses
-  for (const courseId of enrolledCourseIds) {
-    const progress = await rateLimiter.run(() => {
-      apiCallTracker.count++; // Track each course progress fetch
-      return fetchCourseProgress(baseUrl, userId, courseId, accessToken, clientId);
-    });
-
-    if (progress) {
-      coursesProcessed++;
-      const examData = extractExamScores(progress, userId, courseId);
-      totalScore += examData.score;
-      totalExams += examData.count;
-
-      if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
-        latestActivity = examData.lastActivity;
-      }
+  
+  // Process all courses with progress data
+  for (const progress of allProgress) {
+    const examData = extractExamScores(progress, userId, 'course');
+    totalScore += examData.score;
+    totalExams += examData.count;
+    
+    if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
+      latestActivity = examData.lastActivity;
     }
   }
-
+  
   const averageScore = totalExams > 0 ? totalScore / totalExams : 0;
-
-  console.log(`[User ${userId}] Processed ${coursesProcessed}/${enrolledCourseIds.length} enrolled courses. FINAL: ${totalExams} exams, ${totalScore} total score, ${averageScore.toFixed(1)} avg`);
+  console.log(`[User ${userId}] FINAL: ${totalExams} exams, ${totalScore} total score, ${averageScore.toFixed(1)} avg`);
 
   return {
     user_id: userId,
