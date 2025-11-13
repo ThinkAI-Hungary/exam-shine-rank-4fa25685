@@ -30,6 +30,7 @@ interface ExamActivity {
 }
 
 interface CourseProgress {
+  course_id?: string;
   activities?: ExamActivity[];
 }
 
@@ -380,24 +381,42 @@ async function aggregateUserData(
 
   console.log(`\n=== Processing User: ${username} (${userId}) ===`);
   
-  // Fetch all course progress in a single API call (more efficient than per-course fetches)
+  // Step 1: Fetch all course progress to get list of courses (1 API call)
   const allProgress = await rateLimiter.run(() => {
     apiCallTracker.count++;
     return fetchAllCourseProgress(baseUrl, userId, accessToken, clientId);
   });
   
+  console.log(`[User ${userId}] Found ${allProgress.length} courses with progress`);
+  
   let totalScore = 0;
   let totalExams = 0;
   let latestActivity: string | null = null;
   
-  // Process all courses with progress data
-  for (const progress of allProgress) {
-    const examData = extractExamScores(progress, userId, 'course');
-    totalScore += examData.score;
-    totalExams += examData.count;
+  // Step 2: For each course, fetch detailed progress with activities (1 API call per course)
+  for (const courseProgress of allProgress) {
+    const courseId = courseProgress.course_id;
     
-    if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
-      latestActivity = examData.lastActivity;
+    // Skip if no course_id
+    if (!courseId) {
+      console.log(`[User ${userId}] Skipping progress entry without course_id`);
+      continue;
+    }
+    
+    // Fetch detailed progress for this specific course to get activities
+    const detailedProgress = await rateLimiter.run(() => {
+      apiCallTracker.count++;
+      return fetchCourseProgress(baseUrl, userId, courseId, accessToken, clientId);
+    });
+    
+    if (detailedProgress) {
+      const examData = extractExamScores(detailedProgress, userId, courseId);
+      totalScore += examData.score;
+      totalExams += examData.count;
+      
+      if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
+        latestActivity = examData.lastActivity;
+      }
     }
   }
   
