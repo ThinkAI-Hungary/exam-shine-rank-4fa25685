@@ -371,7 +371,8 @@ async function aggregateUserData(
   accessToken: string,
   clientId: string,
   rateLimiter: RateLimiter,
-  courseIds: string[]
+  courseIds: string[],
+  apiCallTracker: { count: number }
 ): Promise<AggregatedUserData> {
   const userId = String(user.id);
   const username = user.username || user.name || user.email?.split('@')[0] || 'Unknown';
@@ -380,9 +381,10 @@ async function aggregateUserData(
   console.log(`\n=== Processing User: ${username} (${userId}) ===`);
   
   // OPTIMIZATION: Fetch user enrollments first to only process enrolled courses
-  const enrollments = await rateLimiter.run(() =>
-    fetchUserEnrollments(baseUrl, userId, accessToken, clientId)
-  );
+  const enrollments = await rateLimiter.run(() => {
+    apiCallTracker.count++; // Track enrollment fetch
+    return fetchUserEnrollments(baseUrl, userId, accessToken, clientId);
+  });
   
   // Filter to only course enrollments and extract course IDs
   const enrolledCourseIds = enrollments
@@ -398,9 +400,10 @@ async function aggregateUserData(
 
   // Only fetch progress for enrolled courses
   for (const courseId of enrolledCourseIds) {
-    const progress = await rateLimiter.run(() =>
-      fetchCourseProgress(baseUrl, userId, courseId, accessToken, clientId)
-    );
+    const progress = await rateLimiter.run(() => {
+      apiCallTracker.count++; // Track each course progress fetch
+      return fetchCourseProgress(baseUrl, userId, courseId, accessToken, clientId);
+    });
 
     if (progress) {
       coursesProcessed++;
@@ -435,10 +438,10 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // API call counter
-  let apiCallCount = 0;
+  // API call counter (using object to pass by reference)
+  const apiCallTracker = { count: 0 };
   const makeTrackedRequest = async (url: string, accessToken: string, clientId: string) => {
-    apiCallCount++;
+    apiCallTracker.count++;
     return makeLearnWorldsRequest(url, accessToken, clientId);
   };
 
@@ -498,19 +501,19 @@ serve(async (req) => {
     } else {
       // Full refresh: fetch all courses and all users
       courseIds = await fetchAllCourses(baseUrl, accessToken, clientId);
-      apiCallCount++; // Count the courses fetch
+      apiCallTracker.count++; // Count the courses fetch
       
       if (courseIds.length === 0) {
         console.warn('No courses found');
         return new Response(
-          JSON.stringify({ success: true, leaderboard: [], count: 0, message: 'No courses found', apiCalls: apiCallCount }),
+          JSON.stringify({ success: true, leaderboard: [], count: 0, message: 'No courses found', apiCalls: apiCallTracker.count }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       if (limitCourses > 0) courseIds = courseIds.slice(0, limitCourses);
 
       users = await fetchAllUsers(baseUrl, accessToken, clientId);
-      apiCallCount++; // Count the users fetch
+      apiCallTracker.count++; // Count the users fetch
       if (limitUsers > 0) users = users.slice(0, limitUsers);
     }
     
@@ -551,7 +554,7 @@ serve(async (req) => {
             console.log(`\n=== Processing User (Selective): ${username} (${userId}) ===`);
             
             const allProgress = await rateLimiter.run(() => {
-              apiCallCount++;
+              apiCallTracker.count++;
               return fetchAllCourseProgress(baseUrl, userId, accessToken, clientId);
             });
             
@@ -583,15 +586,10 @@ serve(async (req) => {
             };
           } else {
             // Full refresh: Use per-course progress fetch
-            return aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, courseIds);
+            return aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, courseIds, apiCallTracker);
           }
         })
       );
-      
-      // Track API calls for the full refresh path
-      if (!isSelectiveRefresh) {
-        apiCallCount += batchResults.length * courseIds.length;
-      }
       
       leaderboardData.push(...batchResults);
 
@@ -649,7 +647,7 @@ serve(async (req) => {
         leaderboard: leaderboardData,
         count: leaderboardData.length,
         limits: { limitUsers, limitCourses },
-        apiCalls: apiCallCount,
+        apiCalls: apiCallTracker.count,
         isSelectiveRefresh,
       }),
       {
