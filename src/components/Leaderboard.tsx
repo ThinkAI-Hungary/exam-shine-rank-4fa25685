@@ -9,6 +9,7 @@ interface LeaderboardEntry {
   total_score: number;
   exam_count: number;
   average_score: number;
+  score_source?: 'exact' | 'estimated';
 }
 
 interface LeaderboardProps {
@@ -63,8 +64,11 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                 </TableCell>
                 <TableCell className="font-medium">{entry.username}</TableCell>
                 <TableCell className="text-right">
-                  <Badge variant="secondary" className="font-mono">
+                  <Badge variant={entry.score_source === 'estimated' ? 'outline' : 'secondary'} className="font-mono">
                     {entry.total_score.toLocaleString()}
+                    {entry.score_source === 'estimated' && (
+                      <span className="ml-1 text-xs opacity-70">(est)</span>
+                    )}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right text-muted-foreground">
