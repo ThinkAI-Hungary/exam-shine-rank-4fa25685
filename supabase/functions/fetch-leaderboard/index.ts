@@ -378,14 +378,26 @@ async function aggregateUserData(
   const email = user.email || null;
 
   console.log(`\n=== Processing User: ${username} (${userId}) ===`);
-  console.log(`[User ${userId}] Fetching progress for ${courseIds.length} courses`);
+  
+  // OPTIMIZATION: Fetch user enrollments first to only process enrolled courses
+  const enrollments = await rateLimiter.run(() =>
+    fetchUserEnrollments(baseUrl, userId, accessToken, clientId)
+  );
+  
+  // Filter to only course enrollments and extract course IDs
+  const enrolledCourseIds = enrollments
+    .filter(e => e.product_type === 'course')
+    .map(e => e.product_id);
+  
+  console.log(`[User ${userId}] Found ${enrolledCourseIds.length} enrolled courses out of ${courseIds.length} total courses`);
 
   let totalScore = 0;
   let totalExams = 0;
   let latestActivity: string | null = null;
   let coursesProcessed = 0;
 
-  for (const courseId of courseIds) {
+  // Only fetch progress for enrolled courses
+  for (const courseId of enrolledCourseIds) {
     const progress = await rateLimiter.run(() =>
       fetchCourseProgress(baseUrl, userId, courseId, accessToken, clientId)
     );
@@ -404,7 +416,7 @@ async function aggregateUserData(
 
   const averageScore = totalExams > 0 ? totalScore / totalExams : 0;
 
-  console.log(`[User ${userId}] Processed ${coursesProcessed}/${courseIds.length} courses. FINAL: ${totalExams} exams, ${totalScore} total score, ${averageScore.toFixed(1)} avg`);
+  console.log(`[User ${userId}] Processed ${coursesProcessed}/${enrolledCourseIds.length} enrolled courses. FINAL: ${totalExams} exams, ${totalScore} total score, ${averageScore.toFixed(1)} avg`);
 
   return {
     user_id: userId,
