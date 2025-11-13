@@ -42,6 +42,7 @@ interface AggregatedUserData {
   exam_count: number;
   average_score: number;
   last_activity: string | null;
+  score_source?: 'exact' | 'estimated';
 }
 
 // ============= RATE LIMITING =============
@@ -303,6 +304,28 @@ interface ExamResult {
   completed_at: string;
   course_id: string;
   course_title: string;
+  score_source?: 'exact' | 'estimated';
+}
+
+/**
+ * Count completed assessments from progress_per_section_unit
+ */
+function countCompletedAssessments(progressData: any): number {
+  let assessmentCount = 0;
+  
+  if (progressData.progress_per_section_unit && Array.isArray(progressData.progress_per_section_unit)) {
+    for (const section of progressData.progress_per_section_unit) {
+      if (section.units && Array.isArray(section.units)) {
+        for (const unit of section.units) {
+          if (unit.unit_type === 'assessmentV2' && unit.unit_status === 'completed') {
+            assessmentCount++;
+          }
+        }
+      }
+    }
+  }
+  
+  return assessmentCount;
 }
 
 function extractExamScores(progress: CourseProgress, userId: string, username: string, email: string | null, courseId: string): { score: number; count: number; lastActivity: string | null; exams: ExamResult[] } {
@@ -522,13 +545,31 @@ async function aggregateUserData(
       if (!matchedFromEnrollments) {
         const avg = Number((courseProgress as any).average_score_rate ?? 0);
         if (avg > 0) {
-          totalScore += avg;
-          totalExams += 1;
+          // Enhanced fallback: count completed assessments
+          const completedExamCount = countCompletedAssessments(courseProgress);
+          
+          if (completedExamCount > 0) {
+            // Use counted exams with average score
+            const estimatedTotal = avg * completedExamCount;
+            totalScore += estimatedTotal;
+            totalExams += completedExamCount;
+            
+            console.log(
+              `[User ${userId}] ESTIMATED from ${completedExamCount} assessments: ` +
+              `course=${courseId}, avg=${avg}%, total=${estimatedTotal}`
+            );
+          } else {
+            // Last resort: use average_score_rate with 1 exam assumption
+            totalScore += avg;
+            totalExams += 1;
+            
+            console.log(`[User ${userId}] Derived score from progress (no activities): course=${courseId}, avg=${avg}`);
+          }
+          
           const derivedTs = normalizeTimestamp((courseProgress as any).completed_at);
           if (derivedTs && (!latestActivity || derivedTs > latestActivity)) {
             latestActivity = derivedTs;
           }
-          console.log(`[User ${userId}] Derived score from progress (no activities): course=${courseId}, avg=${avg}`);
         }
       }
     }
@@ -545,6 +586,7 @@ async function aggregateUserData(
     exam_count: totalExams,
     average_score: Math.round(averageScore * 10) / 10,
     last_activity: latestActivity,
+    score_source: (allExamResults.length > 0 ? 'exact' : 'estimated') as 'exact' | 'estimated',
   };
 }
 
@@ -845,13 +887,31 @@ serve(async (req) => {
                 if (!matchedFromEnrollments) {
                   const avg = Number((courseProgress as any).average_score_rate ?? 0);
                   if (avg > 0) {
-                    totalScore += avg;
-                    totalExams += 1;
+                    // Enhanced fallback: count completed assessments
+                    const completedExamCount = countCompletedAssessments(courseProgress);
+                    
+                    if (completedExamCount > 0) {
+                      // Use counted exams with average score
+                      const estimatedTotal = avg * completedExamCount;
+                      totalScore += estimatedTotal;
+                      totalExams += completedExamCount;
+                      
+                      console.log(
+                        `[User ${userId}] ESTIMATED from ${completedExamCount} assessments: ` +
+                        `course=${courseId}, avg=${avg}%, total=${estimatedTotal}`
+                      );
+                    } else {
+                      // Last resort: use average_score_rate with 1 exam assumption
+                      totalScore += avg;
+                      totalExams += 1;
+                      
+                      console.log(`[User ${userId}] Derived score from progress (no activities): course=${courseId}, avg=${avg}`);
+                    }
+                    
                     const derivedTs = normalizeTimestamp((courseProgress as any).completed_at);
                     if (derivedTs && (!latestActivity || derivedTs > latestActivity)) {
                       latestActivity = derivedTs;
                     }
-                    console.log(`[User ${userId}] Derived score from progress (no activities): course=${courseId}, avg=${avg}`);
                   }
                 }
               }
@@ -868,6 +928,7 @@ serve(async (req) => {
               exam_count: totalExams,
               average_score: Math.round(averageScore * 10) / 10,
               last_activity: latestActivity,
+              score_source: (allExamResults.length > 0 ? 'exact' : 'estimated') as 'exact' | 'estimated',
             };
           } else {
             // Full refresh: Use per-course progress fetch
