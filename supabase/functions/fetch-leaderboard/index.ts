@@ -615,7 +615,7 @@ serve(async (req) => {
       if (filterCourseIds.length === 0) {
         console.warn(`No courses matched title filter "${courseTitleContains}"`);
       } else {
-        console.log(`Resolved courseTitleContains to IDs: ${filterCourseIds.join(', ')}`);
+        console.log(`✅ RESOLVED TITLE "${courseTitleContains}" TO ${filterCourseIds.length} COURSE(S): ${filterCourseIds.join(', ')}`);
       }
     }
 
