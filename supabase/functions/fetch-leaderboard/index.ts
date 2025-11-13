@@ -468,6 +468,7 @@ async function aggregateUserData(
         });
         console.log(`[User ${userId}] Fallback enrollments: ${cachedEnrollments.length}`);
       }
+      let matchedFromEnrollments = false;
       for (const enr of cachedEnrollments) {
         if (!enr?.product_id) continue;
         const altProgress = await rateLimiter.run(() => {
@@ -490,7 +491,20 @@ async function aggregateUserData(
           if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
             latestActivity = examData.lastActivity;
           }
+          matchedFromEnrollments = true;
           break;
+        }
+      }
+      if (!matchedFromEnrollments) {
+        const avg = Number((courseProgress as any).average_score_rate ?? 0);
+        if (avg > 0) {
+          totalScore += avg;
+          totalExams += 1;
+          const derivedTs = normalizeTimestamp((courseProgress as any).completed_at);
+          if (derivedTs && (!latestActivity || derivedTs > latestActivity)) {
+            latestActivity = derivedTs;
+          }
+          console.log(`[User ${userId}] Derived score from progress (no activities): course=${courseId}, avg=${avg}`);
         }
       }
     }
@@ -756,6 +770,7 @@ serve(async (req) => {
                   });
                   console.log(`[User ${userId}] Fallback enrollments: ${cachedEnrollments.length}`);
                 }
+                let matchedFromEnrollments = false;
                 for (const enr of cachedEnrollments) {
                   if (!enr?.product_id) continue;
                   const altProgress = await rateLimiter.run(() => {
@@ -773,7 +788,20 @@ serve(async (req) => {
                     if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
                       latestActivity = examData.lastActivity;
                     }
+                    matchedFromEnrollments = true;
                     break;
+                  }
+                }
+                if (!matchedFromEnrollments) {
+                  const avg = Number((courseProgress as any).average_score_rate ?? 0);
+                  if (avg > 0) {
+                    totalScore += avg;
+                    totalExams += 1;
+                    const derivedTs = normalizeTimestamp((courseProgress as any).completed_at);
+                    if (derivedTs && (!latestActivity || derivedTs > latestActivity)) {
+                      latestActivity = derivedTs;
+                    }
+                    console.log(`[User ${userId}] Derived score from progress (no activities): course=${courseId}, avg=${avg}`);
                   }
                 }
               }
