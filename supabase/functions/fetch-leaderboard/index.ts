@@ -453,6 +453,49 @@ serve(async (req) => {
     return makeLearnWorldsRequest(url, accessToken, clientId);
   };
 
+  // Helper to resolve course IDs by matching title substring (case-insensitive)
+  const fetchCourseIdsByTitleSubstring = async (
+    baseUrl: string,
+    term: string,
+    accessToken: string,
+    clientId: string
+  ): Promise<string[]> => {
+    const ids: string[] = [];
+    let page = 1;
+    let hasMore = true;
+    const needle = term.toLowerCase();
+
+    while (hasMore) {
+      const url = `${baseUrl}/v2/courses?page=${page}&per_page=50`;
+      try {
+        const data = await makeTrackedRequest(url, accessToken, clientId);
+        const courses = data.data || data || [];
+        if (!Array.isArray(courses) || courses.length === 0) {
+          hasMore = false;
+        } else {
+          for (const c of courses) {
+            const title = String(c.title || c.name || '').toLowerCase();
+            if (title.includes(needle)) {
+              const id = c.id || c.course_id;
+              if (id && !ids.includes(id)) ids.push(id);
+            }
+          }
+          page++;
+          if (page > 20) {
+            console.warn('Reached course page limit while title-matching');
+            hasMore = false;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed fetching courses page for title match:', e);
+        hasMore = false;
+      }
+    }
+
+    console.log(`Course title filter matched ${ids.length} course IDs for "${term}": ${JSON.stringify(ids)}`);
+    return ids;
+  };
+
   try {
     console.log('=== Starting Leaderboard Fetch ===');
 
@@ -464,11 +507,14 @@ serve(async (req) => {
     const limitUsers = Number(options?.options?.limitUsers ?? 0);
     const limitCourses = Number(options?.options?.limitCourses ?? 0);
     const filterUserIds: string[] = Array.isArray(options?.options?.userIds) ? options.options.userIds.map(String) : [];
-    const filterCourseIds: string[] = Array.isArray(options?.options?.courseIds) ? options.options.courseIds.map(String) : [];
+    let filterCourseIds: string[] = Array.isArray(options?.options?.courseIds) ? options.options.courseIds.map(String) : [];
+    const courseTitleContains: string = typeof options?.options?.courseTitleContains === 'string' ? String(options.options.courseTitleContains) : '';
     const isSelectiveRefresh = filterUserIds.length > 0;
     
     if (filterCourseIds.length > 0) {
       console.log(`COURSE FILTER: Only processing courses: ${filterCourseIds.join(', ')}`);
+    } else if (courseTitleContains) {
+      console.log(`COURSE TITLE FILTER: Matching courses with title containing: "${courseTitleContains}"`);
     }
 
     if (isSelectiveRefresh) {
@@ -492,6 +538,16 @@ serve(async (req) => {
 
     // Initialize rate limiter
     const rateLimiter = new RateLimiter(2); // Reduce concurrency to reduce 429s
+
+    // Resolve course title filter to concrete IDs if needed
+    if (filterCourseIds.length === 0 && courseTitleContains) {
+      filterCourseIds = await fetchCourseIdsByTitleSubstring(baseUrl, courseTitleContains, accessToken, clientId);
+      if (filterCourseIds.length === 0) {
+        console.warn(`No courses matched title filter "${courseTitleContains}"`);
+      } else {
+        console.log(`Resolved courseTitleContains to IDs: ${filterCourseIds.join(', ')}`);
+      }
+    }
 
     // Optimization: For selective refresh, skip fetching all courses and all users
     let courseIds: string[] = [];
