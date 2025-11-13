@@ -74,8 +74,8 @@ async function makeLearnWorldsRequest(
   clientId: string,
   opts: { maxRetries?: number; baseDelayMs?: number } = {}
 ): Promise<any> {
-  const maxRetries = opts.maxRetries ?? 5;
-  const baseDelayMs = opts.baseDelayMs ?? 800; // start under 1s
+  const maxRetries = opts.maxRetries ?? 2;
+  const baseDelayMs = opts.baseDelayMs ?? 500; // keep small to avoid timeouts
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const start = Date.now();
@@ -108,9 +108,10 @@ async function makeLearnWorldsRequest(
     // Handle rate limit
     if (resp.status === 429 && attempt < maxRetries) {
       const retryAfter = Number(resp.headers.get('Retry-After'));
-      const backoff = Number.isFinite(retryAfter) && retryAfter > 0
+      const rawBackoff = Number.isFinite(retryAfter) && retryAfter > 0
         ? retryAfter * 1000
         : baseDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * 300);
+      const backoff = Math.min(rawBackoff, 1500); // clamp to 1.5s max to avoid timeouts
       const text = await resp.text();
       console.warn(`429 Too Many Requests for ${url}. Waiting ${backoff}ms before retry. Body: ${text}`);
       await new Promise(r => setTimeout(r, backoff));
