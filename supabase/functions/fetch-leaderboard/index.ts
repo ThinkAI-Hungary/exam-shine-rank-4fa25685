@@ -359,6 +359,7 @@ function countCompletedAssessments(progressData: any): number {
 /**
  * Extract exam scores from course grades endpoint data
  * The grades endpoint returns all users' grades for a course
+ * Each entry in data[] is a single grade/exam result
  */
 function extractExamScoresFromGrades(
   gradesData: any,
@@ -374,66 +375,59 @@ function extractExamScoresFromGrades(
     return { score: 0, count: 0, lastActivity: null, exams: [] };
   }
   
-  // Find this user's grades in the data
-  const userGrades = gradesData.data.find((entry: any) => String(entry.user_id) === userId);
+  // Filter all grade entries for this user (each entry is one exam)
+  const userGradeEntries = gradesData.data.filter((entry: any) => String(entry.user_id) === userId);
   
-  if (!userGrades) {
+  if (userGradeEntries.length === 0) {
     console.log(`[User ${userId}] [Course ${courseId}] User not found in grades data`);
     return { score: 0, count: 0, lastActivity: null, exams: [] };
   }
   
-  console.log(`[User ${userId}] [Course ${courseId}] Found user grades:`, JSON.stringify({
-    keys: Object.keys(userGrades),
-    hasAssessments: !!userGrades.assessments,
-    assessmentCount: Array.isArray(userGrades.assessments) ? userGrades.assessments.length : 'N/A'
-  }));
+  console.log(`[User ${userId}] [Course ${courseId}] Found ${userGradeEntries.length} grade entries for user`);
   
   let totalScore = 0;
   let examCount = 0;
   let lastActivity: string | null = null;
   const exams: ExamResult[] = [];
-  const courseTitle = userGrades.course_title || userGrades.course_name || courseId;
   
-  // Parse assessments/exams from the grades data
-  if (userGrades.assessments && Array.isArray(userGrades.assessments)) {
-    for (const assessment of userGrades.assessments) {
-      console.log(`[User ${userId}] [Course ${courseId}] Assessment:`, JSON.stringify({
-        id: assessment.id,
-        title: assessment.title || assessment.name,
-        type: assessment.type,
-        score: assessment.score,
-        grade: assessment.grade,
-        completed_at: assessment.completed_at
-      }));
+  // Process each grade entry (each is one exam/assessment)
+  for (const gradeEntry of userGradeEntries) {
+    console.log(`[User ${userId}] [Course ${courseId}] Grade entry:`, JSON.stringify({
+      id: gradeEntry.id,
+      grade: gradeEntry.grade,
+      learningUnit: gradeEntry.learningUnit?.title || gradeEntry.learningUnit?.name,
+      created: gradeEntry.created,
+      submittedTimestamp: gradeEntry.submittedTimestamp
+    }));
+    
+    // Extract score from the grade field
+    const score = typeof gradeEntry.grade === 'number' ? gradeEntry.grade : null;
+    
+    if (score !== null) {
+      const completedAt = normalizeTimestamp(gradeEntry.submittedTimestamp || gradeEntry.created || gradeEntry.modified);
+      const examTitle = gradeEntry.learningUnit?.title || gradeEntry.learningUnit?.name || 'Untitled Exam';
       
-      // Check if this is a valid exam/assessment with a score
-      const score = typeof assessment.score === 'number' ? assessment.score : 
-                    typeof assessment.grade === 'number' ? assessment.grade : null;
+      console.log(`[User ${userId}] [Course ${courseId}] ✓ EXAM FOUND (from grades): score=${score}, title=${examTitle}`);
       
-      if (score !== null) {
-        const completedAt = normalizeTimestamp(assessment.completed_at || assessment.submitted_at);
-        console.log(`[User ${userId}] [Course ${courseId}] ✓ EXAM FOUND (from grades): score=${score}, title=${assessment.title || assessment.name}`);
+      totalScore += score;
+      examCount++;
+      
+      if (completedAt) {
+        exams.push({
+          exam_id: String(gradeEntry.id || `${courseId}-${examTitle}`),
+          exam_title: examTitle,
+          score: score,
+          completed_at: completedAt,
+          course_id: courseId,
+          course_title: courseId, // Course title not in grade entry
+          user_id: userId,
+          username: username,
+          email: email,
+          score_source: 'exact',
+        });
         
-        totalScore += score;
-        examCount++;
-        
-        if (completedAt) {
-          exams.push({
-            exam_id: String(assessment.id || assessment.assessment_id || `${courseId}-${assessment.title}`),
-            exam_title: assessment.title || assessment.name || 'Untitled Exam',
-            score: score,
-            completed_at: completedAt,
-            course_id: courseId,
-            course_title: courseTitle,
-            user_id: userId,
-            username: username,
-            email: email,
-            score_source: 'exact',
-          });
-          
-          if (!lastActivity || completedAt > lastActivity) {
-            lastActivity = completedAt;
-          }
+        if (!lastActivity || completedAt > lastActivity) {
+          lastActivity = completedAt;
         }
       }
     }
