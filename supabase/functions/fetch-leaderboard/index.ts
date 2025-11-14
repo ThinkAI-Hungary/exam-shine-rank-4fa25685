@@ -400,8 +400,14 @@ function extractExamScoresFromGrades(
       submittedTimestamp: gradeEntry.submittedTimestamp
     }));
     
-    // Extract score from the grade field
-    const score = typeof gradeEntry.grade === 'number' ? gradeEntry.grade : null;
+    // Extract score from the grade field (number or numeric string)
+    let score: number | null = null;
+    if (typeof gradeEntry.grade === 'number') {
+      score = gradeEntry.grade;
+    } else if (typeof gradeEntry.grade === 'string') {
+      const parsed = parseFloat(gradeEntry.grade);
+      score = isNaN(parsed) ? null : parsed;
+    }
     
     if (score !== null) {
       const completedAt = normalizeTimestamp(gradeEntry.submittedTimestamp || gradeEntry.created || gradeEntry.modified);
@@ -1134,10 +1140,22 @@ serve(async (req) => {
         }
       }
       
-      // Insert new exam results
+      // Insert new exam results (omit non-existent columns like score_source)
+      const sanitizedExamResults = allExamResults.map((e) => ({
+        exam_id: e.exam_id,
+        exam_title: e.exam_title,
+        score: e.score,
+        completed_at: e.completed_at,
+        course_id: e.course_id,
+        course_title: e.course_title,
+        user_id: e.user_id,
+        username: e.username,
+        email: e.email ?? null,
+      }));
+
       const { error: examInsertError } = await supabase
         .from('exam_results')
-        .insert(allExamResults);
+        .insert(sanitizedExamResults);
       if (examInsertError) {
         console.error('Error inserting exam results:', examInsertError);
       } else {
