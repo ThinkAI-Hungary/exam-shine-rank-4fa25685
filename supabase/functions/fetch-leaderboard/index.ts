@@ -327,6 +327,9 @@ interface ExamResult {
   completed_at: string;
   course_id: string;
   course_title: string;
+  user_id: string;
+  username: string;
+  email: string | null;
   score_source?: 'exact' | 'estimated';
 }
 
@@ -420,6 +423,9 @@ function extractExamScoresFromGrades(
             completed_at: completedAt,
             course_id: courseId,
             course_title: courseTitle,
+            user_id: userId,
+            username: username,
+            email: email,
             score_source: 'exact',
           });
           
@@ -481,6 +487,9 @@ function extractExamScores(progress: CourseProgress, userId: string, username: s
           completed_at: completedAt,
           course_id: courseId,
           course_title: courseTitle,
+          user_id: userId,
+          username: username,
+          email: email,
         });
       }
 
