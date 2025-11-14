@@ -4,6 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
 
 // ============= TYPES =============
@@ -856,18 +858,23 @@ serve(async (req) => {
       // For selective refresh, we'll use the all-courses progress endpoint per user (1 call per user)
       // So we don't need to fetch all courses upfront
     } else {
-      // Full refresh: fetch all courses and all users
-      courseIds = await fetchAllCourses(baseUrl, accessToken, clientId);
-      apiCallTracker.count++; // Count the courses fetch
-      
-      if (courseIds.length === 0) {
-        console.warn('No courses found');
-        return new Response(
-          JSON.stringify({ success: true, leaderboard: [], count: 0, message: 'No courses found', apiCalls: apiCallTracker.count }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      // Full refresh: fetch users and only the filtered courses (if provided)
+      if (filterCourseIds.length > 0) {
+        courseIds = filterCourseIds;
+        console.log(`Using filtered course IDs (${courseIds.length}): ${courseIds.join(', ')}`);
+      } else {
+        // No filter provided -> fetch all courses
+        courseIds = await fetchAllCourses(baseUrl, accessToken, clientId);
+        apiCallTracker.count++; // Count the courses fetch
+        if (courseIds.length === 0) {
+          console.warn('No courses found');
+          return new Response(
+            JSON.stringify({ success: true, leaderboard: [], count: 0, message: 'No courses found', apiCalls: apiCallTracker.count }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        if (limitCourses > 0) courseIds = courseIds.slice(0, limitCourses);
       }
-      if (limitCourses > 0) courseIds = courseIds.slice(0, limitCourses);
 
       users = await fetchAllUsers(baseUrl, accessToken, clientId);
       apiCallTracker.count++; // Count the users fetch
