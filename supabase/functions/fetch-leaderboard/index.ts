@@ -253,7 +253,7 @@ async function fetchCourseProgress(
   clientId: string
 ): Promise<CourseProgress | null> {
   try {
-    const url = `${baseUrl}/v2/users/${userId}/progress/${courseId}`;
+    const url = `${baseUrl}/v2/users/${userId}/courses/${courseId}/progress`;
     const data = await makeLearnWorldsRequest(url, accessToken, clientId);
     console.log(`[User ${userId}] [Course ${courseId}] Progress data structure:`, JSON.stringify({
       hasActivities: !!data?.activities,
@@ -296,6 +296,29 @@ async function fetchAllCourseProgress(
   }
 }
 
+async function fetchCourseGrades(
+  baseUrl: string,
+  courseId: string,
+  accessToken: string,
+  clientId: string
+): Promise<any> {
+  try {
+    const url = `${baseUrl}/v2/courses/${courseId}/grades`;
+    console.log(`[Course ${courseId}] Fetching all grades from: ${url}`);
+    const data = await makeLearnWorldsRequest(url, accessToken, clientId);
+    console.log(`[Course ${courseId}] Grades response structure:`, JSON.stringify({
+      hasData: !!data,
+      dataKeys: data ? Object.keys(data) : [],
+      dataLength: Array.isArray(data?.data) ? data.data.length : 'N/A',
+      sampleEntry: data?.data?.[0] ? Object.keys(data.data[0]) : []
+    }));
+    return data;
+  } catch (error) {
+    console.warn(`Failed to fetch grades for course ${courseId}:`, error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
 // ============= DATA AGGREGATION =============
 interface ExamResult {
   exam_id: string;
@@ -326,6 +349,90 @@ function countCompletedAssessments(progressData: any): number {
   }
   
   return assessmentCount;
+}
+
+/**
+ * Extract exam scores from course grades endpoint data
+ * The grades endpoint returns all users' grades for a course
+ */
+function extractExamScoresFromGrades(
+  gradesData: any,
+  userId: string,
+  username: string,
+  email: string | null,
+  courseId: string
+): { score: number; count: number; lastActivity: string | null; exams: ExamResult[] } {
+  console.log(`[User ${userId}] [Course ${courseId}] Extracting exam scores from grades data`);
+  
+  if (!gradesData || !gradesData.data || !Array.isArray(gradesData.data)) {
+    console.log(`[User ${userId}] [Course ${courseId}] No grades data found`);
+    return { score: 0, count: 0, lastActivity: null, exams: [] };
+  }
+  
+  // Find this user's grades in the data
+  const userGrades = gradesData.data.find((entry: any) => String(entry.user_id) === userId);
+  
+  if (!userGrades) {
+    console.log(`[User ${userId}] [Course ${courseId}] User not found in grades data`);
+    return { score: 0, count: 0, lastActivity: null, exams: [] };
+  }
+  
+  console.log(`[User ${userId}] [Course ${courseId}] Found user grades:`, JSON.stringify({
+    keys: Object.keys(userGrades),
+    hasAssessments: !!userGrades.assessments,
+    assessmentCount: Array.isArray(userGrades.assessments) ? userGrades.assessments.length : 'N/A'
+  }));
+  
+  let totalScore = 0;
+  let examCount = 0;
+  let lastActivity: string | null = null;
+  const exams: ExamResult[] = [];
+  const courseTitle = userGrades.course_title || userGrades.course_name || courseId;
+  
+  // Parse assessments/exams from the grades data
+  if (userGrades.assessments && Array.isArray(userGrades.assessments)) {
+    for (const assessment of userGrades.assessments) {
+      console.log(`[User ${userId}] [Course ${courseId}] Assessment:`, JSON.stringify({
+        id: assessment.id,
+        title: assessment.title || assessment.name,
+        type: assessment.type,
+        score: assessment.score,
+        grade: assessment.grade,
+        completed_at: assessment.completed_at
+      }));
+      
+      // Check if this is a valid exam/assessment with a score
+      const score = typeof assessment.score === 'number' ? assessment.score : 
+                    typeof assessment.grade === 'number' ? assessment.grade : null;
+      
+      if (score !== null) {
+        const completedAt = normalizeTimestamp(assessment.completed_at || assessment.submitted_at);
+        console.log(`[User ${userId}] [Course ${courseId}] ✓ EXAM FOUND (from grades): score=${score}, title=${assessment.title || assessment.name}`);
+        
+        totalScore += score;
+        examCount++;
+        
+        if (completedAt) {
+          exams.push({
+            exam_id: String(assessment.id || assessment.assessment_id || `${courseId}-${assessment.title}`),
+            exam_title: assessment.title || assessment.name || 'Untitled Exam',
+            score: score,
+            completed_at: completedAt,
+            course_id: courseId,
+            course_title: courseTitle,
+            score_source: 'exact',
+          });
+          
+          if (!lastActivity || completedAt > lastActivity) {
+            lastActivity = completedAt;
+          }
+        }
+      }
+    }
+  }
+  
+  console.log(`[User ${userId}] [Course ${courseId}] Grades extraction complete: ${examCount} exams, ${totalScore} total score`);
+  return { score: totalScore, count: examCount, lastActivity, exams };
 }
 
 function extractExamScores(progress: CourseProgress, userId: string, username: string, email: string | null, courseId: string): { score: number; count: number; lastActivity: string | null; exams: ExamResult[] } {
@@ -421,7 +528,8 @@ async function aggregateUserData(
   rateLimiter: RateLimiter,
   courseIds: string[],
   apiCallTracker: { count: number },
-  allExamResults: ExamResult[]
+  allExamResults: ExamResult[],
+  courseGradesCache: Map<string, any>
 ): Promise<AggregatedUserData> {
   const userId = String(user.id);
   const username = user.username || user.name || user.email?.split('@')[0] || 'Unknown';
@@ -482,14 +590,35 @@ async function aggregateUserData(
       continue;
     }
     
-    // Fetch detailed progress for this specific course to get activities
-    const detailedProgress = await rateLimiter.run(() => {
-      apiCallTracker.count++;
-      return fetchCourseProgress(baseUrl, userId, courseId, accessToken, clientId);
-    });
+    // Try to get exam scores from grades cache first (more efficient and accurate)
+    let examData: { score: number; count: number; lastActivity: string | null; exams: ExamResult[] } = { 
+      score: 0, 
+      count: 0, 
+      lastActivity: null, 
+      exams: [] 
+    };
+    const gradesData = courseGradesCache.get(courseId);
     
-    if (detailedProgress) {
-      const examData = extractExamScores(detailedProgress, userId, username, email, courseId);
+    if (gradesData) {
+      console.log(`[User ${userId}] [Course ${courseId}] Trying grades cache first`);
+      examData = extractExamScoresFromGrades(gradesData, userId, username, email, courseId);
+    }
+    
+    // If no exam data from grades, fall back to detailed progress endpoint
+    if (examData.count === 0) {
+      console.log(`[User ${userId}] [Course ${courseId}] Falling back to detailed progress endpoint`);
+      const detailedProgress = await rateLimiter.run(() => {
+        apiCallTracker.count++;
+        return fetchCourseProgress(baseUrl, userId, courseId, accessToken, clientId);
+      });
+      
+      if (detailedProgress) {
+        examData = extractExamScores(detailedProgress, userId, username, email, courseId);
+      }
+    }
+    
+    // Add exam data to totals
+    if (examData.count > 0) {
       totalScore += examData.score;
       totalExams += examData.count;
       
@@ -752,7 +881,27 @@ serve(async (req) => {
       console.log(`Deduplicated users: ${users.length} -> ${uniqueUsers.length}`);
     }
 
-    // Step 3: Process users in small batches and upsert incrementally
+    // Step 3: Fetch course grades for all courses (more efficient than per-user calls)
+    console.log('Fetching course grades...');
+    const courseGradesCache = new Map<string, any>();
+    
+    if (courseIds.length > 0) {
+      for (const courseId of courseIds) {
+        const grades = await rateLimiter.run(() => {
+          apiCallTracker.count++;
+          return fetchCourseGrades(baseUrl, courseId, accessToken, clientId);
+        });
+        
+        if (grades) {
+          courseGradesCache.set(courseId, grades);
+          console.log(`[Course ${courseId}] Cached grades for ${grades?.data?.length || 0} users`);
+        }
+      }
+    }
+    
+    console.log(`Cached grades for ${courseGradesCache.size} courses`);
+
+    // Step 4: Process users in small batches and upsert incrementally
     console.log('Aggregating exam scores for users...');
     const batchSize = 3;
     const leaderboardData: AggregatedUserData[] = [];
@@ -932,7 +1081,7 @@ serve(async (req) => {
             };
           } else {
             // Full refresh: Use per-course progress fetch
-            return aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, filterCourseIds, apiCallTracker, allExamResults);
+            return aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, filterCourseIds, apiCallTracker, allExamResults, courseGradesCache);
           }
         })
       );
