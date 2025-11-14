@@ -97,8 +97,25 @@ const Index = () => {
       
       toast.success(message);
       if (data?.apiCalls) setApiCallsUsed(data.apiCalls);
+
+      // Immediately show results from the function response
+      if (Array.isArray(data?.leaderboard)) {
+        const immediate = [...data.leaderboard]
+          .sort((a: any, b: any) => (b.total_score ?? 0) - (a.total_score ?? 0))
+          .map((item: any, idx: number) => ({
+            rank: idx + 1,
+            username: item.username,
+            user_id: item.user_id,
+            email: item.email ?? null,
+            total_score: item.total_score ?? 0,
+            exam_count: item.exam_count ?? 0,
+            average_score: typeof item.average_score === 'number' ? Math.round(item.average_score * 10) / 10 : 0,
+          }));
+        setLeaderboard(immediate);
+      }
       
-      await fetchLeaderboard();
+      // Refresh from DB in the background (to get persisted ranks)
+      setTimeout(() => { fetchLeaderboard(); }, 1500);
     } catch (error: any) {
       // Log error
       logData.error_message = error?.message || 'Unknown error';
