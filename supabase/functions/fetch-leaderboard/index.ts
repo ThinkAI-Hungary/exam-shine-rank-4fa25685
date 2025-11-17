@@ -855,8 +855,12 @@ serve(async (req) => {
           console.warn(`Failed to fetch user ${userId}:`, error);
         }
       }
-      // For selective refresh, we'll use the all-courses progress endpoint per user (1 call per user)
-      // So we don't need to fetch all courses upfront
+      // For selective refresh, also fetch all courses to use course grades endpoint
+      // This is more reliable than the progress endpoint which doesn't always return activities
+      console.log('Fetching all courses for selective refresh...');
+      courseIds = await fetchAllCourses(baseUrl, accessToken, clientId);
+      apiCallTracker.count++;
+      console.log(`Fetched ${courseIds.length} courses for selective refresh`);
     } else {
       // Full refresh: fetch users and only the filtered courses (if provided)
       if (filterCourseIds.length > 0) {
@@ -931,154 +935,35 @@ serve(async (req) => {
       const batchResults = await Promise.all(
         batch.map(async (user) => {
           if (isSelectiveRefresh) {
-            // Optimized: Use all-courses progress endpoint (1 API call per user)
+            // Use course grades (same as full refresh) - more reliable than progress endpoint
             const userId = String(user.id);
             const username = user.username || user.name || user.email?.split('@')[0] || 'Unknown';
             const email = user.email || null;
             
             console.log(`\n=== Processing User (Selective): ${username} (${userId}) ===`);
             
-            const allProgress = await rateLimiter.run(() => {
-              apiCallTracker.count++;
-              return fetchAllCourseProgress(baseUrl, userId, accessToken, clientId);
-            });
-            
-            console.log(`[User ${userId}] All-courses progress count: ${allProgress.length}`);
-            
-            // ENHANCED LOGGING: Inspect full progress structure (selective refresh)
-            if (allProgress.length > 0) {
-              const sampleProgress = allProgress[0];
-              console.log(`[User ${userId}] Progress sample keys: ${JSON.stringify(Object.keys(sampleProgress))}`);
-              
-              // Log full structure for debugging
-              if (username.includes('Benke') || allProgress.length <= 3) {
-                console.log(`[User ${userId}] FULL PROGRESS SAMPLE:\n${JSON.stringify(sampleProgress, null, 2)}`);
-              }
-              
-              // Specifically examine progress_per_section_unit
-              if ('progress_per_section_unit' in sampleProgress) {
-                console.log(`[User ${userId}] progress_per_section_unit type: ${typeof sampleProgress.progress_per_section_unit}`);
-                console.log(`[User ${userId}] progress_per_section_unit structure:\n${JSON.stringify(sampleProgress.progress_per_section_unit, null, 2)}`);
-              } else {
-                console.log(`[User ${userId}] ⚠️ progress_per_section_unit field NOT FOUND in progress data`);
-              }
-              
-              // Check for any fields that might contain exam/activity data
-              const possibleActivityFields = ['activities', 'assessments', 'exams', 'units', 'sections', 'progress_per_section_unit'];
-              const foundFields = possibleActivityFields.filter(field => field in sampleProgress);
-              console.log(`[User ${userId}] Found potential activity fields: ${foundFields.join(', ') || 'NONE'}`);
-            }
-            
             let totalScore = 0;
             let totalExams = 0;
             let latestActivity: string | null = null;
             
-            // Filter to only allowed courses (when course filter is active)
-            const filteredProgress = filterCourseIds.length > 0
-              ? allProgress.filter(p => p.course_id && filterCourseIds.includes(p.course_id))
-              : allProgress;
-            
-            console.log(`[User ${userId}] Processing ${filteredProgress.length}/${allProgress.length} courses after filter`);
-            
-            // DEBUG: Log all course IDs for this user
-            if (filteredProgress.length > 0) {
-              console.log(`[User ${userId}] Filtered course IDs:`, filteredProgress.map(p => p.course_id).join(', '));
-            }
-            if (allProgress.length > 0 && username.includes('Benke')) {
-              console.log(`[DEBUG Benke Viktor] ALL course IDs:`, allProgress.map(p => p.course_id).join(', '));
-            }
-            
-            let cachedEnrollments: Enrollment[] | null = null;
-            
-            for (const courseProgress of filteredProgress) {
-              const courseId = courseProgress.course_id;
-              if (!courseId) continue;
+            // Use course grades cache (already fetched above)
+            for (const [courseId, gradesData] of courseGradesCache.entries()) {
+              const examData = extractExamScoresFromGrades(gradesData, userId, username, email, courseId);
+              totalScore += examData.score;
+              totalExams += examData.count;
               
-              // Fetch detailed progress for this course to get activities
-              const detailedProgress = await rateLimiter.run(() => {
-                apiCallTracker.count++;
-                return fetchCourseProgress(baseUrl, userId, courseId, accessToken, clientId);
-              });
+              // Collect exam results
+              for (const exam of examData.exams) {
+                allExamResults.push({
+                  ...exam,
+                  user_id: userId,
+                  username,
+                  email,
+                });
+              }
               
-              if (detailedProgress) {
-                const examData = extractExamScores(detailedProgress, userId, username, email, courseId);
-                totalScore += examData.score;
-                totalExams += examData.count;
-                
-                // Collect exam results
-                for (const exam of examData.exams) {
-                  allExamResults.push({
-                    ...exam,
-                    user_id: userId,
-                    username,
-                    email,
-                  });
-                }
-                
-                if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
-                  latestActivity = examData.lastActivity;
-                }
-              } else {
-                // Fallback: try enrollment product_ids in case progress endpoint expects a different ID
-                if (!cachedEnrollments) {
-                  cachedEnrollments = await rateLimiter.run(() => {
-                    apiCallTracker.count++;
-                    return fetchUserEnrollments(baseUrl, userId, accessToken, clientId);
-                  });
-                  console.log(`[User ${userId}] Fallback enrollments: ${cachedEnrollments.length}`);
-                }
-                let matchedFromEnrollments = false;
-                for (const enr of cachedEnrollments) {
-                  if (!enr?.product_id) continue;
-                  const altProgress = await rateLimiter.run(() => {
-                    apiCallTracker.count++;
-                    return fetchCourseProgress(baseUrl, userId, String(enr.product_id), accessToken, clientId);
-                  });
-                  if (altProgress?.activities && altProgress.activities.length > 0) {
-                    console.log(`[User ${userId}] Fallback matched course ${courseId} -> ${enr.product_id}`);
-                    const examData = extractExamScores(altProgress, userId, username, email, String(enr.product_id));
-                    totalScore += examData.score;
-                    totalExams += examData.count;
-                    for (const exam of examData.exams) {
-                      allExamResults.push({ ...exam, user_id: userId, username, email });
-                    }
-                    if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
-                      latestActivity = examData.lastActivity;
-                    }
-                    matchedFromEnrollments = true;
-                    break;
-                  }
-                }
-                if (!matchedFromEnrollments) {
-                  const avg = Number((courseProgress as any).average_score_rate ?? 0);
-                  if (avg > 0) {
-                    // Enhanced fallback: count completed assessments
-                    const completedExamCount = countCompletedAssessments(courseProgress);
-                    
-                    if (completedExamCount > 0) {
-                      // Use counted exams with average score
-                      const estimatedTotal = avg * completedExamCount;
-                      totalScore += estimatedTotal;
-                      totalExams += completedExamCount;
-                      
-                      console.log(
-                        `[User ${userId}] ESTIMATED from ${completedExamCount} assessments: ` +
-                        `course=${courseId}, avg=${avg}%, total=${estimatedTotal}`
-                      );
-                    } else {
-                      // Last resort: use average_score_rate with 1 exam assumption
-                      totalScore += avg;
-                      totalExams += 1;
-                      
-                      console.log(`[User ${userId}] Derived score from progress (no activities): course=${courseId}, avg=${avg}`);
-                    }
-                    
-                    const derivedTs = normalizeTimestamp((courseProgress as any).completed_at);
-                    if (derivedTs && (!latestActivity || derivedTs > latestActivity)) {
-                      latestActivity = derivedTs;
-                    }
-                  }
-                }
+              if (examData.lastActivity && (!latestActivity || examData.lastActivity > latestActivity)) {
+                latestActivity = examData.lastActivity;
               }
             }
             
