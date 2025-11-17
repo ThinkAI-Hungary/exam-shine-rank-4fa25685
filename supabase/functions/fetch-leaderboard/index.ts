@@ -1112,22 +1112,9 @@ serve(async (req) => {
     );
     
     if (allExamResults.length > 0) {
-      console.log(`\nInserting ${allExamResults.length} exam results into database...`);
+      console.log(`\nUpserting ${allExamResults.length} exam results into database...`);
       
-      // First, clear existing exam results for processed users if this is a selective refresh
-      if (isSelectiveRefresh && filterUserIds.length > 0) {
-        const { error: deleteError } = await supabase
-          .from('exam_results')
-          .delete()
-          .in('user_id', filterUserIds);
-        if (deleteError) {
-          console.error('Error deleting old exam results:', deleteError);
-        } else {
-          console.log(`Cleared old exam results for ${filterUserIds.length} users`);
-        }
-      }
-      
-      // Insert new exam results (omit non-existent columns like score_source)
+      // Upsert exam results (omit non-existent columns like score_source)
       const sanitizedExamResults = allExamResults.map((e) => ({
         exam_id: e.exam_id,
         exam_title: e.exam_title,
@@ -1142,14 +1129,16 @@ serve(async (req) => {
 
       const { error: examInsertError } = await supabase
         .from('exam_results')
-        .insert(sanitizedExamResults);
+        .upsert(sanitizedExamResults, {
+          onConflict: 'user_id,exam_id'
+        });
       if (examInsertError) {
-        console.error('Error inserting exam results:', examInsertError);
+        console.error('Error upserting exam results:', examInsertError);
       } else {
-        console.log(`Successfully inserted ${allExamResults.length} exam results`);
+        console.log(`Successfully upserted ${allExamResults.length} exam results`);
       }
     } else {
-      console.log('No exam results to insert');
+      console.log('No exam results to upsert');
     }
 
     // Step 4: Recalculate leaderboard_cache from exam_results (the source of truth)
