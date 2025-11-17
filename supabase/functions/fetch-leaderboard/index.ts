@@ -1093,7 +1093,6 @@ serve(async (req) => {
               exam_count: totalExams,
               average_score: Math.round(averageScore * 10) / 10,
               last_activity: latestActivity,
-              score_source: (allExamResults.length > 0 ? 'exact' : 'estimated') as 'exact' | 'estimated',
             };
           } else {
             // Full refresh: Use per-course progress fetch
@@ -1141,29 +1140,47 @@ serve(async (req) => {
       console.log('No exam results to upsert');
     }
 
-    // Step 3.5: Upsert user data (including tags) to users table
-    console.log('\nUpserting user data to users table...');
+    // Step 3.5: Fetch detailed user data (including tags) for ALL users
+    console.log('\nFetching detailed user data with tags...');
+    const usersWithTags: LearnWorldsUser[] = [];
+    
+    // Fetch detailed user data for all users in batches to get tags
+    const userBatchSize = 10;
+    for (let i = 0; i < uniqueUsers.length; i += userBatchSize) {
+      const userBatch = uniqueUsers.slice(i, i + userBatchSize);
+      console.log(`Fetching detailed data for batch ${Math.floor(i/userBatchSize) + 1}/${Math.ceil(uniqueUsers.length/userBatchSize)} (users ${i+1}-${Math.min(i+userBatchSize, uniqueUsers.length)})`);
+      
+      const batchResults = await Promise.all(
+        userBatch.map(async (user) => {
+          try {
+            const detail = await rateLimiter.run(() => {
+              apiCallTracker.count++;
+              const url = `${baseUrl}/v2/users/${user.id}`;
+              return makeTrackedRequest(url, accessToken, clientId);
+            });
+            const du = (detail || {}) as any;
+            const tags = Array.isArray(du.tags) ? du.tags : [];
+            const merged: LearnWorldsUser = {
+              id: String(user.id),
+              username: du.username ?? (user as any).username,
+              email: du.email ?? (user as any).email,
+              name: du.name ?? (user as any).name,
+              tags,
+            } as LearnWorldsUser;
+            return merged;
+          } catch (error) {
+            console.warn(`Failed to fetch detailed user ${user.id}:`, error);
+            return user; // fallback to basic user data
+          }
+        })
+      );
+      
+      usersWithTags.push(...batchResults);
+    }
 
-    // Enrich users missing tags by fetching individual user details
-    const enrichedUsers: LearnWorldsUser[] = await Promise.all(
-      uniqueUsers.map(async (user) => {
-        const hasTags = Array.isArray((user as any).tags) && (user as any).tags.length > 0;
-        if (hasTags) return user;
-        try {
-          const url = `${baseUrl}/v2/users/${user.id}`;
-          const detail = await rateLimiter.run(() => {
-            apiCallTracker.count++;
-            return makeTrackedRequest(url, accessToken, clientId);
-          });
-          return { ...user, tags: detail?.tags || [] } as LearnWorldsUser;
-        } catch (e) {
-          console.warn(`Failed to fetch details for user ${user.id}:`, e);
-          return user;
-        }
-      })
-    );
-
-    const userDataToUpsert = enrichedUsers.map((user) => ({
+    // Step 3.6: Upsert user data (including tags) to users table
+    console.log('\nUpserting user data with tags to users table...');
+    const userDataToUpsert = usersWithTags.map((user) => ({
       user_id: String(user.id),
       username: user.username || (user as any).name || (user as any).email?.split('@')[0] || 'Unknown',
       email: (user as any).email || null,
@@ -1181,7 +1198,7 @@ serve(async (req) => {
       if (userUpsertError) {
         console.error('Error upserting user data:', userUpsertError);
       } else {
-        console.log(`Successfully upserted ${userDataToUpsert.length} users with filtered tags`);
+        console.log(`Successfully upserted ${userDataToUpsert.length} users with complete tag data`);
       }
     }
 
