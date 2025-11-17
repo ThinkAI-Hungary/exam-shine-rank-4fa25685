@@ -64,7 +64,6 @@ export type Database = {
           id: string
           last_activity: string | null
           rank: number | null
-          score_source: string | null
           total_score: number | null
           updated_at: string
           user_id: string
@@ -77,7 +76,6 @@ export type Database = {
           id?: string
           last_activity?: string | null
           rank?: number | null
-          score_source?: string | null
           total_score?: number | null
           updated_at?: string
           user_id: string
@@ -90,7 +88,6 @@ export type Database = {
           id?: string
           last_activity?: string | null
           rank?: number | null
-          score_source?: string | null
           total_score?: number | null
           updated_at?: string
           user_id?: string
