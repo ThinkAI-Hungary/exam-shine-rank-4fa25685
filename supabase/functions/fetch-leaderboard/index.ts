@@ -1169,13 +1169,27 @@ serve(async (req) => {
       const username = userExams[0]?.username || 'Unknown';
       const email = userExams[0]?.email || null;
 
-      // Update leaderboard_cache with calculated values
-      const { error: updateError } = await supabase
-        .from('leaderboard_cache')
+      // Upsert user data into users table
+      const { error: userError } = await supabase
+        .from('users')
         .upsert({
           user_id: userId,
           username,
           email,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (userError) {
+        console.error(`Error upserting user ${userId} to users table:`, userError);
+      }
+
+      // Update leaderboard_cache with calculated values (only metrics, no user data)
+      const { error: updateError } = await supabase
+        .from('leaderboard_cache')
+        .upsert({
+          user_id: userId,
           total_score: totalScore,
           exam_count: examCount,
           average_score: averageScore,

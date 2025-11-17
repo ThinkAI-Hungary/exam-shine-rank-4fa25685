@@ -45,16 +45,19 @@ const Index = () => {
     try {
       const { data, error } = await supabase
         .from("leaderboard_cache")
-        .select("*")
+        .select(`
+          *,
+          users!inner(username, email)
+        `)
         .order("rank", { ascending: true });
 
       if (error) throw error;
 
       const formattedData: LeaderboardEntry[] = (data || []).map((item: any) => ({
         rank: item.rank,
-        username: item.username,
+        username: item.users.username,
         user_id: item.user_id,
-        email: item.email,
+        email: item.users.email,
         total_score: item.total_score,
         exam_count: item.exam_count,
         average_score: item.average_score,
@@ -98,23 +101,7 @@ const Index = () => {
       toast.success(message);
       if (data?.apiCalls) setApiCallsUsed(data.apiCalls);
 
-      // Immediately show results from the function response
-      if (Array.isArray(data?.leaderboard)) {
-        const immediate = [...data.leaderboard]
-          .sort((a: any, b: any) => (b.total_score ?? 0) - (a.total_score ?? 0))
-          .map((item: any, idx: number) => ({
-            rank: idx + 1,
-            username: item.username,
-            user_id: item.user_id,
-            email: item.email ?? null,
-            total_score: item.total_score ?? 0,
-            exam_count: item.exam_count ?? 0,
-            average_score: typeof item.average_score === 'number' ? Math.round(item.average_score * 10) / 10 : 0,
-          }));
-        setLeaderboard(immediate);
-      }
-      
-      // Refresh from DB in the background (to get persisted ranks)
+      // Fetch the updated data with JOIN to get user info
       setTimeout(() => { fetchLeaderboard(); }, 1500);
     } catch (error: any) {
       // Log error
