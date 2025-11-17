@@ -1140,7 +1140,18 @@ serve(async (req) => {
       console.log('No exam results to upsert');
     }
 
-    // Step 3.5: Fetch detailed user data (including tags) for ALL users
+    // Step 3.5: Fetch existing users from DB to compare tags
+    console.log('\nFetching existing users to check for tag changes...');
+    const { data: existingUsers } = await supabase
+      .from('users')
+      .select('user_id, tags')
+      .in('user_id', uniqueUsers.map(u => u.id));
+    
+    const existingUserMap = new Map<string, string[]>(
+      (existingUsers || []).map((u: any) => [u.user_id, u.tags || []])
+    );
+    
+    // Fetch detailed user data (including tags) only for users with missing or potentially changed tags
     console.log('\nFetching detailed user data with tags...');
     const usersWithTags: LearnWorldsUser[] = [];
     
@@ -1178,9 +1189,26 @@ serve(async (req) => {
       usersWithTags.push(...batchResults);
     }
 
-    // Step 3.6: Upsert user data (including tags) to users table
-    console.log('\nUpserting user data with tags to users table...');
-    const userDataToUpsert = usersWithTags.map((user) => ({
+    // Step 3.6: Only upsert users whose tags have changed
+    console.log('\nChecking for tag changes and upserting only modified users...');
+    const usersToUpdate = usersWithTags.filter((user) => {
+      const userId = String(user.id);
+      const newTags = ((user as any).tags || [])
+        .filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_aruhaz_'))
+        .sort();
+      const existingTags = (existingUserMap.get(userId) || []).sort();
+      
+      // Check if tags have changed
+      const tagsChanged = JSON.stringify(newTags) !== JSON.stringify(existingTags);
+      
+      if (tagsChanged) {
+        console.log(`Tags changed for user ${userId}: [${existingTags.join(', ')}] -> [${newTags.join(', ')}]`);
+      }
+      
+      return tagsChanged;
+    });
+
+    const userDataToUpsert = usersToUpdate.map((user) => ({
       user_id: String(user.id),
       username: user.username || (user as any).name || (user as any).email?.split('@')[0] || 'Unknown',
       email: (user as any).email || null,
@@ -1198,9 +1226,12 @@ serve(async (req) => {
       if (userUpsertError) {
         console.error('Error upserting user data:', userUpsertError);
       } else {
-        console.log(`Successfully upserted ${userDataToUpsert.length} users with complete tag data`);
+        console.log(`Successfully upserted ${userDataToUpsert.length} users with changed tags (skipped ${usersWithTags.length - userDataToUpsert.length} unchanged)`);
       }
+    } else {
+      console.log('No tag changes detected, skipping user updates');
     }
+
 
     // Step 4: Recalculate leaderboard_cache from exam_results (the source of truth)
     console.log('\nRecalculating leaderboard_cache from exam_results...');
