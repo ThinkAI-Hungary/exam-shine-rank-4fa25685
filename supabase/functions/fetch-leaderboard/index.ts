@@ -1140,11 +1140,24 @@ serve(async (req) => {
         continue;
       }
 
-      // Calculate totals from exam_results
-      const totalScore = userExams.reduce((sum, exam) => sum + (exam.score || 0), 0);
-      const examCount = userExams.length;
+      // Deduplicate retaken exams - keep only the latest attempt for each exam
+      // Use exam_title instead of exam_id since retakes may have different IDs
+      const examMap = new Map<string, any>();
+      for (const exam of userExams) {
+        const examKey = `${exam.course_id}-${exam.exam_title}`;
+        if (!examMap.has(examKey)) {
+          examMap.set(examKey, exam);
+        }
+      }
+      
+      const uniqueExams = Array.from(examMap.values());
+      console.log(`[User ${userId}] Deduplication: ${userExams.length} total attempts -> ${uniqueExams.length} unique exams`);
+
+      // Calculate totals from deduplicated exam_results
+      const totalScore = uniqueExams.reduce((sum, exam) => sum + (exam.score || 0), 0);
+      const examCount = uniqueExams.length;
       const averageScore = examCount > 0 ? totalScore / examCount : 0;
-      const lastActivity = userExams[0]?.completed_at || null;
+      const lastActivity = uniqueExams[0]?.completed_at || null;
 
       // Update leaderboard_cache with calculated values (only metrics, no user data)
       const { error: updateError } = await supabase
@@ -1172,12 +1185,12 @@ serve(async (req) => {
     const { data: allUsersData, error: fetchError } = await supabase
       .from('leaderboard_cache')
       .select('*')
-      .order('total_score', { ascending: false });
+      .order('average_score', { ascending: false });
 
     if (fetchError) {
       console.error('Error fetching all users for ranking:', fetchError);
     } else if (allUsersData && allUsersData.length > 0) {
-      // Assign ranks based on total_score (highest score = rank 1)
+      // Assign ranks based on average_score (highest score = rank 1)
       const rankedData = allUsersData.map((entry, index) => ({
         ...entry,
         rank: index + 1,
