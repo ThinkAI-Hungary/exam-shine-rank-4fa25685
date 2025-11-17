@@ -87,7 +87,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_leaderboard_cache_user"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       refresh_logs: {
         Row: {
