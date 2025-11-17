@@ -1143,11 +1143,31 @@ serve(async (req) => {
 
     // Step 3.5: Upsert user data (including tags) to users table
     console.log('\nUpserting user data to users table...');
-    const userDataToUpsert = uniqueUsers.map(user => ({
+
+    // Enrich users missing tags by fetching individual user details
+    const enrichedUsers: LearnWorldsUser[] = await Promise.all(
+      uniqueUsers.map(async (user) => {
+        const hasTags = Array.isArray((user as any).tags) && (user as any).tags.length > 0;
+        if (hasTags) return user;
+        try {
+          const url = `${baseUrl}/v2/users/${user.id}`;
+          const detail = await rateLimiter.run(() => {
+            apiCallTracker.count++;
+            return makeTrackedRequest(url, accessToken, clientId);
+          });
+          return { ...user, tags: detail?.tags || [] } as LearnWorldsUser;
+        } catch (e) {
+          console.warn(`Failed to fetch details for user ${user.id}:`, e);
+          return user;
+        }
+      })
+    );
+
+    const userDataToUpsert = enrichedUsers.map((user) => ({
       user_id: String(user.id),
-      username: user.username || user.name || user.email?.split('@')[0] || 'Unknown',
-      email: user.email || null,
-      tags: (user.tags || []).filter((tag: string) => tag.startsWith('cf_aruhaz_')),
+      username: user.username || (user as any).name || (user as any).email?.split('@')[0] || 'Unknown',
+      email: (user as any).email || null,
+      tags: ((user as any).tags || []).filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_aruhaz_')),
       updated_at: new Date().toISOString(),
     }));
 
