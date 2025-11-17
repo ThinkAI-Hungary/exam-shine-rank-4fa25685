@@ -387,6 +387,7 @@ Deno.serve(async (req) => {
                      `${payload.data?.user?.first_name || ''} ${payload.data?.user?.last_name || ''}`.trim() ||
                      'Unknown';
     const email = payload.data?.user?.email;
+    const tags = payload.data?.user?.tags || [];
 
     if (!userId || !courseId) {
       console.error('Missing user_id or course_id in webhook payload');
@@ -457,6 +458,7 @@ Deno.serve(async (req) => {
         user_id: userId,
         username,
         email: email || null,
+        tags: tags,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id'

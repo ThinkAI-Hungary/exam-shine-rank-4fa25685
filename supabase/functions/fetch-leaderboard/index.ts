@@ -14,6 +14,7 @@ interface LearnWorldsUser {
   username?: string;
   email?: string;
   name?: string;
+  tags?: string[];
 }
 
 interface Enrollment {
@@ -544,8 +545,9 @@ async function aggregateUserData(
   const userId = String(user.id);
   const username = user.username || user.name || user.email?.split('@')[0] || 'Unknown';
   const email = user.email || null;
+  const tags = user.tags || [];
 
-  console.log(`\n=== Processing User: ${username} (${userId}) ===`);
+  console.log(`\n=== Processing User: ${username} (${userId}), Tags: ${JSON.stringify(tags)} ===`);
   
   // Step 1: Fetch all course progress to get list of courses (1 API call)
   const allProgress = await rateLimiter.run(() => {
@@ -1139,6 +1141,30 @@ serve(async (req) => {
       console.log('No exam results to upsert');
     }
 
+    // Step 3.5: Upsert user data (including tags) to users table
+    console.log('\nUpserting user data to users table...');
+    const userDataToUpsert = uniqueUsers.map(user => ({
+      user_id: String(user.id),
+      username: user.username || user.name || user.email?.split('@')[0] || 'Unknown',
+      email: user.email || null,
+      tags: user.tags || [],
+      updated_at: new Date().toISOString(),
+    }));
+
+    if (userDataToUpsert.length > 0) {
+      const { error: userUpsertError } = await supabase
+        .from('users')
+        .upsert(userDataToUpsert, {
+          onConflict: 'user_id'
+        });
+      
+      if (userUpsertError) {
+        console.error('Error upserting user data:', userUpsertError);
+      } else {
+        console.log(`Successfully upserted ${userDataToUpsert.length} users with tags`);
+      }
+    }
+
     // Step 4: Recalculate leaderboard_cache from exam_results (the source of truth)
     console.log('\nRecalculating leaderboard_cache from exam_results...');
     const uniqueUserIds = [...new Set(leaderboardData.map(u => u.user_id))];
@@ -1169,7 +1195,7 @@ serve(async (req) => {
       const username = userExams[0]?.username || 'Unknown';
       const email = userExams[0]?.email || null;
 
-      // Upsert user data into users table
+      // Upsert user data into users table (keep tags if they exist)
       const { error: userError } = await supabase
         .from('users')
         .upsert({
@@ -1178,7 +1204,8 @@ serve(async (req) => {
           email,
           updated_at: new Date().toISOString(),
         }, {
-          onConflict: 'user_id'
+          onConflict: 'user_id',
+          ignoreDuplicates: false
         });
 
       if (userError) {
