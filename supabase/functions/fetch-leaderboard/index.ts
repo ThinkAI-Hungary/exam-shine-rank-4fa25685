@@ -1147,7 +1147,7 @@ serve(async (req) => {
       user_id: String(user.id),
       username: user.username || user.name || user.email?.split('@')[0] || 'Unknown',
       email: user.email || null,
-      tags: user.tags || [],
+      tags: (user.tags || []).filter((tag: string) => tag.startsWith('cf_aruhaz_')),
       updated_at: new Date().toISOString(),
     }));
 
@@ -1161,7 +1161,7 @@ serve(async (req) => {
       if (userUpsertError) {
         console.error('Error upserting user data:', userUpsertError);
       } else {
-        console.log(`Successfully upserted ${userDataToUpsert.length} users with tags`);
+        console.log(`Successfully upserted ${userDataToUpsert.length} users with filtered tags`);
       }
     }
 
@@ -1192,25 +1192,6 @@ serve(async (req) => {
       const examCount = userExams.length;
       const averageScore = examCount > 0 ? totalScore / examCount : 0;
       const lastActivity = userExams[0]?.completed_at || null;
-      const username = userExams[0]?.username || 'Unknown';
-      const email = userExams[0]?.email || null;
-
-      // Upsert user data into users table (keep tags if they exist)
-      const { error: userError } = await supabase
-        .from('users')
-        .upsert({
-          user_id: userId,
-          username,
-          email,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id',
-          ignoreDuplicates: false
-        });
-
-      if (userError) {
-        console.error(`Error upserting user ${userId} to users table:`, userError);
-      }
 
       // Update leaderboard_cache with calculated values (only metrics, no user data)
       const { error: updateError } = await supabase

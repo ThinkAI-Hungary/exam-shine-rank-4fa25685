@@ -458,7 +458,7 @@ Deno.serve(async (req) => {
         user_id: userId,
         username,
         email: email || null,
-        tags: tags,
+        tags: tags.filter((tag: string) => tag.startsWith('cf_aruhaz_')),
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id'
