@@ -28,12 +28,25 @@ const Embed = () => {
     try {
       const { data, error } = await supabase
         .from("leaderboard_cache")
-        .select("*")
+        .select(`
+          *,
+          users!inner(username, email)
+        `)
         .order("rank", { ascending: true })
         .limit(50);
 
       if (error) throw error;
-      setLeaderboard(data || []);
+      
+      const formattedData: LeaderboardEntry[] = (data || []).map((item: any) => ({
+        rank: item.rank,
+        username: item.users.username,
+        email: item.users.email,
+        total_score: item.total_score,
+        exam_count: item.exam_count,
+        average_score: item.average_score,
+      }));
+      
+      setLeaderboard(formattedData);
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
     }

@@ -450,18 +450,33 @@ Deno.serve(async (req) => {
       averageScore
     });
 
-    // Update leaderboard_cache with calculated values
-    const { error: upsertError } = await supabase
-      .from('leaderboard_cache')
+    // Upsert user data into users table
+    const { error: userError } = await supabase
+      .from('users')
       .upsert({
         user_id: userId,
         username,
         email: email || null,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id'
+      });
+
+    if (userError) {
+      console.error('Error upserting user to users table:', userError);
+    } else {
+      console.log('User data upserted successfully');
+    }
+
+    // Update leaderboard_cache with calculated values (only metrics, no user data)
+    const { error: upsertError } = await supabase
+      .from('leaderboard_cache')
+      .upsert({
+        user_id: userId,
         total_score: totalScore,
         exam_count: examCount,
         average_score: averageScore,
         last_activity: lastActivity,
-        score_source: 'exact',
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id'

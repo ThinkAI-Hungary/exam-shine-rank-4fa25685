@@ -59,7 +59,6 @@ export type Database = {
       leaderboard_cache: {
         Row: {
           average_score: number | null
-          email: string | null
           exam_count: number | null
           id: string
           last_activity: string | null
@@ -67,11 +66,9 @@ export type Database = {
           total_score: number | null
           updated_at: string
           user_id: string
-          username: string
         }
         Insert: {
           average_score?: number | null
-          email?: string | null
           exam_count?: number | null
           id?: string
           last_activity?: string | null
@@ -79,11 +76,9 @@ export type Database = {
           total_score?: number | null
           updated_at?: string
           user_id: string
-          username: string
         }
         Update: {
           average_score?: number | null
-          email?: string | null
           exam_count?: number | null
           id?: string
           last_activity?: string | null
@@ -91,7 +86,6 @@ export type Database = {
           total_score?: number | null
           updated_at?: string
           user_id?: string
-          username?: string
         }
         Relationships: []
       }
@@ -122,6 +116,33 @@ export type Database = {
           selected_user_id?: string | null
           timestamp?: string
           user_identifier?: string | null
+        }
+        Relationships: []
+      }
+      users: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          tags: string[] | null
+          updated_at: string | null
+          user_id: string
+          username: string
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id: string
+          username: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+          user_id?: string
+          username?: string
         }
         Relationships: []
       }
