@@ -329,7 +329,7 @@ async function storeExamResults(
   for (const exam of exams) {
     const { error } = await supabase
       .from('exam_results')
-      .insert({
+      .upsert({
         user_id: userId,
         username,
         email,
@@ -339,12 +339,14 @@ async function storeExamResults(
         exam_title: exam.examTitle,
         score: exam.score,
         completed_at: exam.completedAt || new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,exam_id'
       });
 
     if (error) {
-      console.error(`Error storing exam result for ${exam.examTitle}:`, error);
+      console.error(`Error upserting exam result for ${exam.examTitle}:`, error);
     } else {
-      console.log(`Stored exam result: ${exam.examTitle} - ${exam.score}%`);
+      console.log(`Upserted exam result: ${exam.examTitle} - ${exam.score}%`);
     }
   }
 }
