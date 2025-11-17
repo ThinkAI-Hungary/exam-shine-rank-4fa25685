@@ -1103,29 +1103,16 @@ serve(async (req) => {
       );
       
       leaderboardData.push(...batchResults);
-
-      // Upsert partial batch to DB to avoid timeouts
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
-      const { error: upsertError } = await supabase
-        .from('leaderboard_cache')
-        .upsert(batchResults, { onConflict: 'user_id' });
-      if (upsertError) {
-        console.error('Database upsert error (batch):', upsertError);
-      } else {
-        console.log(`Batch upserted: ${batchResults.length} records`);
-      }
     }
 
-    // Step 3.5: Insert all exam results into exam_results table
+    // Step 3: Insert all exam results into exam_results table (source of truth)
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+    
     if (allExamResults.length > 0) {
-      console.log(`Inserting ${allExamResults.length} exam results into database...`);
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
+      console.log(`\nInserting ${allExamResults.length} exam results into database...`);
       
       // First, clear existing exam results for processed users if this is a selective refresh
       if (isSelectiveRefresh && filterUserIds.length > 0) {
@@ -1165,12 +1152,61 @@ serve(async (req) => {
       console.log('No exam results to insert');
     }
 
-    // Step 4: Re-rank ALL users in the database (critical for selective refresh)
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // Step 4: Recalculate leaderboard_cache from exam_results (the source of truth)
+    console.log('\nRecalculating leaderboard_cache from exam_results...');
+    const uniqueUserIds = [...new Set(leaderboardData.map(u => u.user_id))];
+    
+    for (const userId of uniqueUserIds) {
+      // Get all exam results for this user
+      const { data: userExams, error: examsError } = await supabase
+        .from('exam_results')
+        .select('*')
+        .eq('user_id', userId)
+        .order('completed_at', { ascending: false });
 
+      if (examsError) {
+        console.error(`Error fetching exam results for user ${userId}:`, examsError);
+        continue;
+      }
+
+      if (!userExams || userExams.length === 0) {
+        console.log(`No exam results found for user ${userId}, skipping`);
+        continue;
+      }
+
+      // Calculate totals from exam_results
+      const totalScore = userExams.reduce((sum, exam) => sum + (exam.score || 0), 0);
+      const examCount = userExams.length;
+      const averageScore = examCount > 0 ? totalScore / examCount : 0;
+      const lastActivity = userExams[0]?.completed_at || null;
+      const username = userExams[0]?.username || 'Unknown';
+      const email = userExams[0]?.email || null;
+
+      // Update leaderboard_cache with calculated values
+      const { error: updateError } = await supabase
+        .from('leaderboard_cache')
+        .upsert({
+          user_id: userId,
+          username,
+          email,
+          total_score: totalScore,
+          exam_count: examCount,
+          average_score: averageScore,
+          last_activity: lastActivity,
+          score_source: 'exact',
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (updateError) {
+        console.error(`Error updating leaderboard_cache for user ${userId}:`, updateError);
+      } else {
+        console.log(`Updated leaderboard_cache for user ${userId}: ${totalScore} points from ${examCount} exams`);
+      }
+    }
+
+    // Step 5: Re-rank ALL users in the database (critical for selective refresh)
     // Fetch ALL users from database to calculate proper ranks
     const { data: allUsersData, error: fetchError } = await supabase
       .from('leaderboard_cache')

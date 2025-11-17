@@ -403,7 +403,7 @@ Deno.serve(async (req) => {
 
     console.log('Exam scores retrieved:', examResult);
 
-    // Store individual exam results
+    // Store individual exam results in exam_results table (source of truth)
     await storeExamResults(
       supabase,
       userId,
@@ -414,56 +414,63 @@ Deno.serve(async (req) => {
       examResult.exams
     );
 
-    // Fetch current user data from leaderboard_cache
-    const { data: existingUser, error: fetchError } = await supabase
-      .from('leaderboard_cache')
+    // Recalculate user's totals from exam_results (the source of truth)
+    console.log('Recalculating totals from exam_results for user:', userId);
+    
+    const { data: userExams, error: examsError } = await supabase
+      .from('exam_results')
       .select('*')
       .eq('user_id', userId)
-      .maybeSingle();
+      .order('completed_at', { ascending: false });
 
-    if (fetchError) {
-      console.error('Error fetching existing user:', fetchError);
-      throw fetchError;
+    if (examsError) {
+      console.error('Error fetching exam results:', examsError);
+      throw examsError;
     }
 
-    console.log('Existing user data:', existingUser);
+    if (!userExams || userExams.length === 0) {
+      console.warn('No exam results found for user after insertion');
+      return new Response(
+        JSON.stringify({ error: 'No exam results found' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Calculate updated values
-    const currentTotalScore = existingUser?.total_score || 0;
-    const currentExamCount = existingUser?.exam_count || 0;
-    
-    const newTotalScore = currentTotalScore + examResult.totalScore;
-    const newExamCount = currentExamCount + examResult.examCount;
-    const newAverageScore = newExamCount > 0 ? newTotalScore / newExamCount : 0;
+    // Calculate totals from all exam results
+    const totalScore = userExams.reduce((sum, exam) => sum + (exam.score || 0), 0);
+    const examCount = userExams.length;
+    const averageScore = examCount > 0 ? totalScore / examCount : 0;
+    const lastActivity = userExams[0]?.completed_at || new Date().toISOString();
 
-    console.log('Calculated updates:', {
-      newTotalScore,
-      newExamCount,
-      newAverageScore
+    console.log('Calculated totals from exam_results:', {
+      totalScore,
+      examCount,
+      averageScore
     });
 
-    // Upsert user data
+    // Update leaderboard_cache with calculated values
     const { error: upsertError } = await supabase
       .from('leaderboard_cache')
       .upsert({
         user_id: userId,
-        username: username || existingUser?.username || 'Unknown',
-        email: email || existingUser?.email || null,
-        total_score: newTotalScore,
-        exam_count: newExamCount,
-        average_score: newAverageScore,
-        last_activity: new Date().toISOString(),
+        username,
+        email: email || null,
+        total_score: totalScore,
+        exam_count: examCount,
+        average_score: averageScore,
+        last_activity: lastActivity,
+        score_source: 'exact',
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id'
       });
 
     if (upsertError) {
-      console.error('Error upserting user data:', upsertError);
+      console.error('Error updating leaderboard_cache:', upsertError);
       throw upsertError;
     }
 
-    console.log('User data upserted successfully');
+    console.log('Leaderboard_cache updated successfully');
 
     // Recalculate ranks for all users
     const { data: allUsers, error: rankError } = await supabase
@@ -500,7 +507,7 @@ Deno.serve(async (req) => {
         success: true, 
         message: 'Webhook processed successfully',
         updated_user: userId,
-        new_score: newTotalScore,
+        new_score: totalScore,
         new_rank: 'recalculated'
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
