@@ -44,7 +44,6 @@ interface AggregatedUserData {
   exam_count: number;
   average_score: number;
   last_activity: string | null;
-  score_source?: 'exact' | 'estimated';
 }
 
 // ============= RATE LIMITING =============
@@ -726,7 +725,6 @@ async function aggregateUserData(
     exam_count: totalExams,
     average_score: Math.round(averageScore * 10) / 10,
     last_activity: latestActivity,
-    score_source: (allExamResults.length > 0 ? 'exact' : 'estimated') as 'exact' | 'estimated',
   };
 }
 
@@ -1182,7 +1180,6 @@ serve(async (req) => {
           exam_count: examCount,
           average_score: averageScore,
           last_activity: lastActivity,
-          score_source: 'exact',
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'user_id'
