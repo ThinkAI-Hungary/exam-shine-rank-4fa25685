@@ -243,21 +243,6 @@ const Index = () => {
                 ))}
               </SelectContent>
             </Select>
-            
-            <Select value={selectedTag || "all"} onValueChange={(value) => setSelectedTag(value === "all" ? null : value)}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Filter by tag" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Tags</SelectItem>
-                {availableTags.length > 0 && <SelectSeparator />}
-                {availableTags.map((tag) => (
-                  <SelectItem key={tag} value={tag}>
-                    {tag}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Button 
               variant="outline" 
               size="sm" 
@@ -311,11 +296,31 @@ const Index = () => {
         ) : (
           <div className="max-w-5xl mx-auto">
             <Card className="shadow-card">
-              <CardHeader className="text-center">
-                <CardTitle className="text-3xl font-bold">Top Performers</CardTitle>
-                <CardDescription>
-                  Ranked by total points earned across all courses
-                </CardDescription>
+              <CardHeader className="text-center space-y-4">
+                <div>
+                  <CardTitle className="text-3xl font-bold">Top Performers</CardTitle>
+                  <CardDescription>
+                    Ranked by total points earned across all courses
+                  </CardDescription>
+                </div>
+                {availableTags.length > 0 && (
+                  <div className="flex justify-center">
+                    <Select value={selectedTag || "all"} onValueChange={(value) => setSelectedTag(value === "all" ? null : value)}>
+                      <SelectTrigger className="w-[250px]">
+                        <SelectValue placeholder="Filter by tag" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Tags</SelectItem>
+                        <SelectSeparator />
+                        {availableTags.map((tag) => (
+                          <SelectItem key={tag} value={tag}>
+                            {tag}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
                 <Leaderboard entries={filteredLeaderboard} isEmbedded />
