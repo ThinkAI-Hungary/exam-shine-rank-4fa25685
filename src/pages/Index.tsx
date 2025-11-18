@@ -18,15 +18,19 @@ interface LeaderboardEntry {
   total_score: number;
   exam_count: number;
   average_score: number;
+  tags: string[];
 }
 
 const Index = () => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [filteredLeaderboard, setFilteredLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [apiCallsUsed, setApiCallsUsed] = useState<number | null>(null);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const embedCode = `<iframe 
@@ -47,7 +51,7 @@ const Index = () => {
         .from("leaderboard_cache")
         .select(`
           *,
-          users!inner(username, email)
+          users!inner(username, email, tags)
         `)
         .order("rank", { ascending: true });
 
@@ -61,9 +65,18 @@ const Index = () => {
         total_score: item.total_score,
         exam_count: item.exam_count,
         average_score: item.average_score,
+        tags: item.users.tags || [],
       }));
 
       setLeaderboard(formattedData);
+      setFilteredLeaderboard(formattedData);
+      
+      // Extract unique tags
+      const tags = new Set<string>();
+      formattedData.forEach(entry => {
+        entry.tags.forEach(tag => tags.add(tag));
+      });
+      setAvailableTags(Array.from(tags).sort());
     } catch (error: any) {
       toast.error("Failed to load leaderboard");
       console.error(error);
@@ -71,6 +84,17 @@ const Index = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedTag) {
+      const filtered = leaderboard.filter(entry => 
+        entry.tags.includes(selectedTag)
+      );
+      setFilteredLeaderboard(filtered);
+    } else {
+      setFilteredLeaderboard(leaderboard);
+    }
+  }, [selectedTag, leaderboard]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -219,6 +243,21 @@ const Index = () => {
                 ))}
               </SelectContent>
             </Select>
+            
+            <Select value={selectedTag || "all"} onValueChange={(value) => setSelectedTag(value === "all" ? null : value)}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Filter by tag" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Tags</SelectItem>
+                {availableTags.length > 0 && <SelectSeparator />}
+                {availableTags.map((tag) => (
+                  <SelectItem key={tag} value={tag}>
+                    {tag}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button 
               variant="outline" 
               size="sm" 
@@ -279,7 +318,7 @@ const Index = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Leaderboard entries={leaderboard} isEmbedded />
+                <Leaderboard entries={filteredLeaderboard} isEmbedded />
               </CardContent>
             </Card>
           </div>

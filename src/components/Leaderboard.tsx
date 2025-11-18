@@ -10,6 +10,7 @@ interface LeaderboardEntry {
   exam_count: number;
   average_score: number;
   score_source?: 'exact' | 'estimated';
+  tags?: string[];
 }
 
 interface LeaderboardProps {
@@ -62,7 +63,20 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                     {getRankIcon(entry.rank)}
                   </div>
                 </TableCell>
-                <TableCell className="font-medium">{entry.username}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span>{entry.username}</span>
+                    {entry.tags && entry.tags.length > 0 && (
+                      <div className="flex gap-1 flex-wrap">
+                        {entry.tags.map((tag, idx) => (
+                          <Badge key={idx} variant="outline" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="text-right">
                   <Badge variant={entry.score_source === 'estimated' ? 'outline' : 'secondary'} className="font-mono">
                     {entry.total_score.toLocaleString()}
