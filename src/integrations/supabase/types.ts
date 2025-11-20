@@ -407,12 +407,39 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_exam_performance: {
+        Args: { p_end_date: string; p_start_date: string; p_user_id: string }
+        Returns: number
+      }
+      calculate_training_activity: {
+        Args: { p_end_date: string; p_start_date: string; p_user_id: string }
+        Returns: number
+      }
+      calculate_years_of_service: {
+        Args: { p_as_of_date?: string; p_user_id: string }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      update_all_users_performance_metrics: {
+        Args: {
+          p_evaluation_period?: Database["public"]["Enums"]["evaluation_period"]
+        }
+        Returns: number
+      }
+      update_user_performance_metrics: {
+        Args: {
+          p_evaluation_period: Database["public"]["Enums"]["evaluation_period"]
+          p_period_end?: string
+          p_period_start?: string
+          p_user_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {
