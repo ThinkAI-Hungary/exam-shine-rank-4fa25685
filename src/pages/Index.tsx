@@ -5,12 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
-import { Trophy, Code, RefreshCw, Upload, LogOut } from "lucide-react";
+import { Trophy, Code, RefreshCw, Upload } from "lucide-react";
 import Leaderboard from "@/components/Leaderboard";
 import { toast } from "sonner";
 import Papa from "papaparse";
-import { useNavigate } from "react-router-dom";
-import type { User } from "@supabase/supabase-js";
 
 interface LeaderboardEntry {
   rank: number;
@@ -33,10 +31,7 @@ const Index = () => {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [apiCallsUsed, setApiCallsUsed] = useState<number | null>(null);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const navigate = useNavigate();
 
   const embedCode = `<iframe 
   src="${window.location.origin}/embed" 
@@ -47,42 +42,7 @@ const Index = () => {
 ></iframe>`;
 
   useEffect(() => {
-    // Check auth state
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          // Check if user is admin
-          const { data: roles } = await supabase
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', session.user.id);
-          
-          setIsAdmin(roles?.some(r => r.role === 'admin') ?? false);
-        } else {
-          setIsAdmin(false);
-        }
-      }
-    );
-
-    // Check initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        const { data: roles } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', session.user.id);
-        
-        setIsAdmin(roles?.some(r => r.role === 'admin') ?? false);
-      }
-    });
-
     fetchLeaderboard();
-
-    return () => subscription.unsubscribe();
   }, []);
 
   const fetchLeaderboard = async () => {
@@ -137,15 +97,10 @@ const Index = () => {
   }, [selectedTag, leaderboard]);
 
   const handleRefresh = async () => {
-    if (!isAdmin) {
-      toast.error("Only admins can refresh the leaderboard");
-      return;
-    }
-
     setRefreshing(true);
     const startTime = Date.now();
     let logData: any = {
-      user_identifier: user?.email || 'Anonymous',
+      user_identifier: 'Anonymous',
       is_selective_refresh: !!selectedUserId,
       selected_user_id: selectedUserId,
     };
@@ -190,11 +145,6 @@ const Index = () => {
   };
 
   const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!isAdmin) {
-      toast.error("Only admins can upload CSV files");
-      return;
-    }
-
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -247,10 +197,26 @@ const Index = () => {
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    toast.success("Logged out successfully");
-  };
+  const CsvUploadButton = () => (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv"
+        onChange={handleCsvUpload}
+        className="hidden"
+      />
+      <Button 
+        variant="outline" 
+        size="sm" 
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploading}
+      >
+        <Upload className={`w-4 h-4 mr-2 ${uploading ? 'animate-pulse' : ''}`} />
+        {uploading ? 'Uploading...' : 'Upload CSV'}
+      </Button>
+    </>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
@@ -268,35 +234,8 @@ const Index = () => {
             </div>
           </div>
           <div className="flex gap-2 items-center flex-wrap">
-            {!user && (
-              <Button 
-                variant="default" 
-                size="sm" 
-                onClick={() => navigate('/auth')}
-              >
-                Admin Login
-              </Button>
-            )}
-            
-            {isAdmin && (
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  onChange={handleCsvUpload}
-                  className="hidden"
-                />
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                >
-                  <Upload className={`w-4 h-4 mr-2 ${uploading ? 'animate-pulse' : ''}`} />
-                  {uploading ? 'Uploading...' : 'Upload CSV'}
-                </Button>
-                <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
+            <CsvUploadButton />
+            <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
                   <SelectTrigger className="w-[250px]">
                     <SelectValue placeholder="Select user (or all)" />
                   </SelectTrigger>
@@ -329,8 +268,6 @@ const Index = () => {
                     Last: {apiCallsUsed} API calls
                   </span>
                 )}
-              </>
-            )}
             
             <Dialog>
               <DialogTrigger asChild>
@@ -354,17 +291,6 @@ const Index = () => {
                 />
               </DialogContent>
             </Dialog>
-            
-            {user && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleLogout}
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
-            )}
           </div>
         </div>
       </header>
