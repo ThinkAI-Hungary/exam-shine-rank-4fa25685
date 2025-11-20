@@ -56,13 +56,22 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
     const isMonthly = primaryBadge.badge_definitions.badge_type === 'monthly_star';
     const isCategory = primaryBadge.badge_definitions.badge_type === 'category';
     
+    // Shorten long badge names for compact view
+    const getCompactName = (name: string) => {
+      if (name === 'Starter Success') return 'Starter';
+      if (name === 'Training Champion') return 'Champion';
+      if (name === 'Exam Master of the Month') return 'Exam Master';
+      if (name.startsWith('Future ')) return name.replace('Future ', '🔜');
+      return name;
+    };
+    
     return (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Badge 
               variant={isCategory ? "default" : "secondary"}
-              className="flex items-center gap-1.5 px-3 py-1 font-medium"
+              className="flex items-center gap-1.5 px-2.5 py-1 font-medium"
               style={
                 isCategory ? {
                   backgroundColor: primaryBadge.badge_definitions.color,
@@ -79,8 +88,8 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                 }
               }
             >
-              <Icon className="w-4 h-4" />
-              <span className="text-xs font-semibold">{primaryBadge.badge_definitions.badge_name}</span>
+              <Icon className="w-3.5 h-3.5" />
+              <span className="text-xs font-semibold whitespace-nowrap">{getCompactName(primaryBadge.badge_definitions.badge_name)}</span>
             </Badge>
           </TooltipTrigger>
           <TooltipContent>
