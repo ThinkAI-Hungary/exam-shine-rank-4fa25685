@@ -72,7 +72,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                   borderColor: primaryBadge.badge_definitions.color,
                   color: '#000',
                   paddingLeft: '0.75rem',
-                  paddingRight: '0.5rem',
+                  paddingRight: '0.75rem',
                   paddingTop: '0.125rem',
                   paddingBottom: '0.125rem'
                 } : isMonthly ? {
@@ -80,7 +80,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                   borderColor: primaryBadge.badge_definitions.color,
                   color: '#fff',
                   paddingLeft: '0.75rem',
-                  paddingRight: '0.5rem',
+                  paddingRight: '0.75rem',
                   paddingTop: '0.125rem',
                   paddingBottom: '0.125rem'
                 } : {
@@ -88,7 +88,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                   borderColor: primaryBadge.badge_definitions.color,
                   color: primaryBadge.badge_definitions.color,
                   paddingLeft: '0.75rem',
-                  paddingRight: '0.5rem',
+                  paddingRight: '0.75rem',
                   paddingTop: '0.125rem',
                   paddingBottom: '0.125rem'
                 }
