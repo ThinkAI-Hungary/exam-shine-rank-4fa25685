@@ -67,41 +67,9 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const authHeader = req.headers.get('Authorization');
     
-    // Create client with service role for admin check
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // Verify user is authenticated and is an admin
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Authentication required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Invalid authentication' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Check if user is admin
-    const { data: roles } = await supabaseAdmin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id);
-
-    if (!roles?.some(r => r.role === 'admin')) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Admin access required' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // Create client with service role key
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: csvData } = await req.json() as { data: LeaderboardData[] };
 
@@ -151,7 +119,7 @@ serve(async (req) => {
 
     // Clear existing cache and insert new data
     console.log('Clearing existing leaderboard cache...');
-    const { error: deleteError } = await supabaseAdmin
+    const { error: deleteError } = await supabase
       .from('leaderboard_cache')
       .delete()
       .neq('id', '00000000-0000-0000-0000-000000000000');
@@ -162,7 +130,7 @@ serve(async (req) => {
     }
 
     console.log('Inserting new leaderboard data...');
-    const { error: insertError } = await supabaseAdmin
+    const { error: insertError } = await supabase
       .from('leaderboard_cache')
       .insert(rankedData);
 
