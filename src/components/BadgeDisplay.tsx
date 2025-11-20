@@ -38,7 +38,8 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
       Sparkles,
       GraduationCap,
     };
-    return iconMap[iconName] || Medal;
+    
+    return iconMap[iconName] || Star;
   };
 
   const activeBadges = badges.filter(b => !b.revoked_at && (showExpired || !b.expires_at || new Date(b.expires_at) > new Date()));
@@ -64,7 +65,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <TooltipTrigger asChild>
             <Badge 
               variant={isCategory ? "default" : "secondary"}
-              className="flex items-center gap-1 px-2 py-0.5 font-medium"
+              className="flex items-center gap-1.5 px-2.5 py-0.5 font-medium"
               style={
                 isCategory ? {
                   backgroundColor: primaryBadge.badge_definitions.color,
@@ -81,7 +82,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                 }
               }
             >
-              <Icon className="w-3 h-3 flex-shrink-0" />
+              <Icon className="w-4 h-4 flex-shrink-0" />
               <span className="text-xs font-semibold whitespace-nowrap leading-tight">
                 {primaryBadge.badge_definitions.badge_name}
               </span>
