@@ -72,7 +72,7 @@ const Embed = () => {
       <div className="max-w-5xl mx-auto">
         <div className="mb-4 text-center">
           <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Legjobb tanulók
+            Ranglista
           </h2>
           <p className="text-sm text-muted-foreground">Minden idők ranglistája</p>
         </div>
