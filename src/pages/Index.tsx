@@ -189,11 +189,10 @@ const Index = () => {
               <Trophy className="w-6 h-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                LearnWorlds Leaderboard
-              </h1>
-              <p className="text-xs text-muted-foreground">Minden idők legjobb teljesítői</p>
-            </div>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              LearnWorlds Leaderboard
+            </h1>
+          </div>
           </div>
           <div className="flex gap-2 items-center flex-wrap">
             
