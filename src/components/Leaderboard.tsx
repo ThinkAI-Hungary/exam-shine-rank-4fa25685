@@ -58,12 +58,12 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
-            <TableHead className="w-16 text-center">Rank</TableHead>
-            <TableHead>Learner</TableHead>
-            <TableHead>Badge</TableHead>
-            <TableHead className="text-right">Total Points</TableHead>
-            <TableHead className="text-right">Courses</TableHead>
-            <TableHead className="text-right">Avg Score</TableHead>
+            <TableHead className="w-16 text-center">Helyezés</TableHead>
+            <TableHead>Tanuló</TableHead>
+            <TableHead>Jelvény</TableHead>
+            <TableHead className="text-right">Összes pont</TableHead>
+            <TableHead className="text-right">Kurzusok</TableHead>
+            <TableHead className="text-right">Átlag pontszám</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -71,7 +71,7 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
             <TableRow>
               <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                 <Trophy className="w-10 h-10 mx-auto mb-2 text-muted-foreground/30" />
-                <p>No scores yet. Be the first to submit!</p>
+                <p>Még nincsenek pontszámok. Légy te az első!</p>
               </TableCell>
             </TableRow>
           ) : (
@@ -104,7 +104,7 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                   {entry.badges && entry.badges.length > 0 ? (
                     <BadgeDisplay badges={entry.badges} compact />
                   ) : (
-                    <span className="text-xs text-muted-foreground">No badge</span>
+                    <span className="text-xs text-muted-foreground">Nincs jelvény</span>
                   )}
                 </TableCell>
                 <TableCell className="text-right">
