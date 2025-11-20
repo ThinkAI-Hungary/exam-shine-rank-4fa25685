@@ -65,7 +65,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <TooltipTrigger asChild>
             <Badge 
               variant={isCategory ? "default" : "secondary"}
-              className="flex items-center gap-1 !px-0 pl-2 py-0.5 font-medium"
+              className="flex items-center gap-1 !px-0 pl-2.5 pr-0.5 py-0.5 font-medium"
               style={
                 isCategory ? {
                   backgroundColor: primaryBadge.badge_definitions.color,
