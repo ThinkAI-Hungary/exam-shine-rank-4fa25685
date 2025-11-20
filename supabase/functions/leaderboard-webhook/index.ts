@@ -413,8 +413,35 @@ Deno.serve(async (req) => {
       try {
         const userDetailsUrl = `${baseUrl}/v2/users/${userId}`;
         const userDetails = await makeLearnWorldsRequest(userDetailsUrl, accessToken);
-        munkaviszonyod_kezdete = userDetails?.munkaviszonyod_kezdete || userDetails?.custom_fields?.munkaviszonyod_kezdete || null;
-        console.log('User employment start date:', munkaviszonyod_kezdete);
+        
+        // Log user details structure
+        console.log('User details object fields:', JSON.stringify(Object.keys(userDetails)));
+        
+        // Try different possible field names for employment start date
+        if (userDetails?.munkaviszonyod_kezdete) {
+          munkaviszonyod_kezdete = userDetails.munkaviszonyod_kezdete;
+          console.log('Found munkaviszonyod_kezdete directly:', munkaviszonyod_kezdete);
+        } else if (userDetails?.custom_fields?.munkaviszonyod_kezdete) {
+          munkaviszonyod_kezdete = userDetails.custom_fields.munkaviszonyod_kezdete;
+          console.log('Found munkaviszonyod_kezdete in custom_fields:', munkaviszonyod_kezdete);
+        } else if (userDetails?.['cf_munkaviszonyod_kezdete']) {
+          munkaviszonyod_kezdete = userDetails['cf_munkaviszonyod_kezdete'];
+          console.log('Found cf_munkaviszonyod_kezdete:', munkaviszonyod_kezdete);
+        } else if (userDetails?.['munkaviszonyod kezdete']) {
+          munkaviszonyod_kezdete = userDetails['munkaviszonyod kezdete'];
+          console.log('Found munkaviszonyod kezdete (with space):', munkaviszonyod_kezdete);
+        } else {
+          // Log fields that might contain the date
+          const possibleDateFields = Object.keys(userDetails || {}).filter(key => 
+            key.toLowerCase().includes('munka') || key.toLowerCase().includes('kezd')
+          );
+          console.log('Possible employment date fields:', possibleDateFields);
+          if (possibleDateFields.length > 0) {
+            console.log('Field values:', JSON.stringify(possibleDateFields.map(k => ({ [k]: userDetails[k] }))));
+          } else {
+            console.log('No employment date field found. All user fields:', JSON.stringify(userDetails));
+          }
+        }
       } catch (error) {
         console.warn('Failed to fetch full user details:', error);
       }
