@@ -250,7 +250,7 @@ const Index = () => {
         disabled={uploading}
       >
         <Upload className={`w-4 h-4 mr-2 ${uploading ? 'animate-pulse' : ''}`} />
-        {uploading ? 'Uploading...' : 'Upload CSV'}
+        {uploading ? 'Feltöltés...' : 'CSV feltöltése'}
       </Button>
     </>
   );
@@ -267,17 +267,17 @@ const Index = () => {
               <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                 LearnWorlds Leaderboard
               </h1>
-              <p className="text-xs text-muted-foreground">All-time top performers</p>
+              <p className="text-xs text-muted-foreground">Minden idők legjobb teljesítői</p>
             </div>
           </div>
           <div className="flex gap-2 items-center flex-wrap">
             <CsvUploadButton />
             <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
                   <SelectTrigger className="w-[250px]">
-                    <SelectValue placeholder="Select user (or all)" />
+                    <SelectValue placeholder="Válassz felhasználót (vagy mindet)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">🌐 All Users (Full Refresh)</SelectItem>
+                    <SelectItem value="all">🌐 Összes felhasználó (Teljes frissítés)</SelectItem>
                     <SelectSeparator />
                     {leaderboard.map((entry) => (
                       <SelectItem key={entry.user_id} value={entry.user_id}>
@@ -294,15 +294,15 @@ const Index = () => {
                 >
                   <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
                   {refreshing 
-                    ? 'Refreshing...' 
+                    ? 'Frissítés...' 
                     : selectedUserId 
-                      ? 'Refresh Selected User' 
-                      : 'Refresh All Users'
+                      ? 'Kiválasztott felhasználó frissítése' 
+                      : 'Összes felhasználó frissítése'
                   }
                 </Button>
                 {apiCallsUsed && (
                   <span className="text-xs text-muted-foreground">
-                    Last: {apiCallsUsed} API calls
+                    Utolsó: {apiCallsUsed} API hívás
                   </span>
                 )}
             
@@ -310,14 +310,14 @@ const Index = () => {
               <DialogTrigger asChild>
                 <Button variant="default" size="sm">
                   <Code className="w-4 h-4 mr-2" />
-                  Embed Code
+                  Beágyazási kód
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Embed Leaderboard</DialogTitle>
+                  <DialogTitle>Ranglista beágyazása</DialogTitle>
                   <DialogDescription>
-                    Copy this code to embed the leaderboard on your website
+                    Másold ki ezt a kódot a ranglista weboldaladba történő beágyazásához
                   </DialogDescription>
                 </DialogHeader>
                 <Textarea 
@@ -335,23 +335,23 @@ const Index = () => {
       <main className="container mx-auto px-4 py-8">
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <div className="animate-pulse text-muted-foreground">Loading leaderboard...</div>
+            <div className="animate-pulse text-muted-foreground">Ranglista betöltése...</div>
           </div>
         ) : (
           <div className="max-w-5xl mx-auto">
             <Card className="shadow-card">
               <CardHeader className="text-center space-y-4">
                 <div>
-                  <CardTitle className="text-3xl font-bold">Top Performers</CardTitle>
+                  <CardTitle className="text-3xl font-bold">Legjobb teljesítők</CardTitle>
                   <CardDescription>
-                    Ranked by total points earned across all courses
+                    Az összes kurzuson szerzett összes pont alapján rangsorolva
                   </CardDescription>
                 </div>
                 {availableTags.length > 0 && (
                   <div className="flex justify-center">
                     <Select value={selectedTag || "all"} onValueChange={(value) => setSelectedTag(value === "all" ? null : value)}>
                       <SelectTrigger className="w-[250px]">
-                        <SelectValue placeholder="Filter by tag" />
+                        <SelectValue placeholder="Szűrés címke szerint" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Összes címke</SelectItem>

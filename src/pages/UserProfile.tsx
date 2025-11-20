@@ -121,11 +121,11 @@ const UserProfile = () => {
         <div className="max-w-6xl mx-auto">
           <Button variant="ghost" onClick={() => navigate('/')} className="mb-4">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Leaderboard
+            Vissza a ranglistához
           </Button>
           <Card>
             <CardContent className="p-8 text-center">
-              <p className="text-muted-foreground">User not found</p>
+              <p className="text-muted-foreground">Felhasználó nem található</p>
             </CardContent>
           </Card>
         </div>
@@ -140,7 +140,7 @@ const UserProfile = () => {
       <div className="max-w-6xl mx-auto space-y-6">
         <Button variant="ghost" onClick={() => navigate('/')} className="mb-4">
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Leaderboard
+          Vissza a ranglistához
         </Button>
 
         {/* User Header */}
@@ -173,8 +173,8 @@ const UserProfile = () => {
               {userData.start_of_empl && (
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
-                  <span>Started: {new Date(userData.start_of_empl).toLocaleDateString()}</span>
-                  <span>({yearsOfService.toFixed(1)} years)</span>
+                  <span>Kezdés: {new Date(userData.start_of_empl).toLocaleDateString()}</span>
+                  <span>({yearsOfService.toFixed(1)} év)</span>
                 </div>
               )}
               {userData.tags && userData.tags.length > 0 && (
@@ -195,13 +195,13 @@ const UserProfile = () => {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <Trophy className="w-4 h-4" />
-                  Exam Performance
+                  Vizsga teljesítmény
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{metrics.exam_performance_pct.toFixed(1)}%</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {metrics.successful_exams_count} of {metrics.total_exams_count} exams passed
+                  {metrics.successful_exams_count} / {metrics.total_exams_count} vizsga sikeres
                 </p>
               </CardContent>
             </Card>
@@ -210,13 +210,13 @@ const UserProfile = () => {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <Target className="w-4 h-4" />
-                  Training Activity
+                  Képzési aktivitás
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{metrics.training_activity_pct.toFixed(1)}%</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Participation rate
+                  Részvételi arány
                 </p>
               </CardContent>
             </Card>
@@ -225,13 +225,13 @@ const UserProfile = () => {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <TrendingUp className="w-4 h-4" />
-                  Overall Performance
+                  Összteljesítmény
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">{metrics.overall_performance_pct.toFixed(1)}%</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Average of both metrics
+                  Mindkét mutató átlaga
                 </p>
               </CardContent>
             </Card>
@@ -243,7 +243,7 @@ const UserProfile = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Trophy className="w-5 h-5" />
-              Badges
+              Jelvények
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -255,16 +255,16 @@ const UserProfile = () => {
         {userData.current_category && metrics && (
           <Card>
             <CardHeader>
-              <CardTitle>Category Progress</CardTitle>
+              <CardTitle>Kategória előrehaladás</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {userData.current_category === 'bronze' && yearsOfService < 5 && (
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span>Progress to Silver</span>
+                      <span>Előrehaladás ezüst felé</span>
                       <span className="text-muted-foreground">
-                        {yearsOfService.toFixed(1)} / 5 years
+                        {yearsOfService.toFixed(1)} / 5 év
                       </span>
                     </div>
                     <div className="w-full bg-muted rounded-full h-2">
@@ -274,16 +274,16 @@ const UserProfile = () => {
                       />
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Requirements: 5 years, 85% exam performance, 80% training activity
+                      Követelmények: 5 év, 85% vizsga teljesítmény, 80% képzési aktivitás
                     </p>
                   </div>
                 )}
                 {userData.current_category === 'silver' && yearsOfService < 10 && (
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span>Progress to Gold</span>
+                      <span>Előrehaladás arany felé</span>
                       <span className="text-muted-foreground">
-                        {yearsOfService.toFixed(1)} / 10 years
+                        {yearsOfService.toFixed(1)} / 10 év
                       </span>
                     </div>
                     <div className="w-full bg-muted rounded-full h-2">
@@ -293,7 +293,7 @@ const UserProfile = () => {
                       />
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Requirements: 10 years, 90% exam performance, 90% training activity
+                      Követelmények: 10 év, 90% vizsga teljesítmény, 90% képzési aktivitás
                     </p>
                   </div>
                 )}
