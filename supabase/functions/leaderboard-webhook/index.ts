@@ -402,6 +402,24 @@ Deno.serve(async (req) => {
     // Get LearnWorlds access token and fetch exam scores
     console.log('Fetching exam scores from LearnWorlds API...');
     const accessToken = await getLearnWorldsAccessToken();
+    
+    // Fetch full user details to get custom fields like munkaviszonyod_kezdete
+    console.log('Fetching full user details from LearnWorlds...');
+    const baseUrl = Deno.env.get('LEARNWORLDS_BASE_URL');
+    const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID');
+    let munkaviszonyod_kezdete: string | null = null;
+    
+    if (baseUrl && clientId) {
+      try {
+        const userDetailsUrl = `${baseUrl}/v2/users/${userId}`;
+        const userDetails = await makeLearnWorldsRequest(userDetailsUrl, accessToken);
+        munkaviszonyod_kezdete = userDetails?.munkaviszonyod_kezdete || userDetails?.custom_fields?.munkaviszonyod_kezdete || null;
+        console.log('User employment start date:', munkaviszonyod_kezdete);
+      } catch (error) {
+        console.warn('Failed to fetch full user details:', error);
+      }
+    }
+    
     const examResult = await getUserExamScores(accessToken, userId, courseId);
 
     console.log('Exam scores retrieved:', examResult);
@@ -459,6 +477,7 @@ Deno.serve(async (req) => {
         username,
         email: email || null,
         tags: tags.filter((tag: string) => tag.startsWith('cf_aruhaz_')),
+        start_of_empl: munkaviszonyod_kezdete ? new Date(munkaviszonyod_kezdete).toISOString() : null,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id'

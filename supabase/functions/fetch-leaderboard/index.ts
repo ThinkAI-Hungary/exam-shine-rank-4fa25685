@@ -15,6 +15,7 @@ interface LearnWorldsUser {
   email?: string;
   name?: string;
   tags?: string[];
+  munkaviszonyod_kezdete?: string;
 }
 
 interface Enrollment {
@@ -1063,15 +1064,15 @@ serve(async (req) => {
       console.log('No exam results to upsert');
     }
 
-    // Step 3.5: Fetch existing users from DB to compare tags
-    console.log('\nFetching existing users to check for tag changes...');
+    // Step 3.5: Fetch existing users from DB to compare tags and start_of_empl
+    console.log('\nFetching existing users to check for tag and employment date changes...');
     const { data: existingUsers } = await supabase
       .from('users')
-      .select('user_id, tags')
+      .select('user_id, tags, start_of_empl')
       .in('user_id', uniqueUsers.map(u => u.id));
     
-    const existingUserMap = new Map<string, string[]>(
-      (existingUsers || []).map((u: any) => [u.user_id, u.tags || []])
+    const existingUserMap = new Map<string, { tags: string[]; start_of_empl: string | null }>(
+      (existingUsers || []).map((u: any) => [u.user_id, { tags: u.tags || [], start_of_empl: u.start_of_empl || null }])
     );
     
     // Fetch detailed user data (including tags) only for users with missing or potentially changed tags
@@ -1094,12 +1095,14 @@ serve(async (req) => {
             });
             const du = (detail || {}) as any;
             const tags = Array.isArray(du.tags) ? du.tags : [];
+            const munkaviszonyod_kezdete = du.munkaviszonyod_kezdete || du.custom_fields?.munkaviszonyod_kezdete;
             const merged: LearnWorldsUser = {
               id: String(user.id),
               username: du.username ?? (user as any).username,
               email: du.email ?? (user as any).email,
               name: du.name ?? (user as any).name,
               tags,
+              munkaviszonyod_kezdete,
             } as LearnWorldsUser;
             return merged;
           } catch (error) {
@@ -1112,32 +1115,51 @@ serve(async (req) => {
       usersWithTags.push(...batchResults);
     }
 
-    // Step 3.6: Only upsert users whose tags have changed
-    console.log('\nChecking for tag changes and upserting only modified users...');
+    // Step 3.6: Only upsert users whose tags or employment date have changed
+    console.log('\nChecking for tag and employment date changes and upserting only modified users...');
     const usersToUpdate = usersWithTags.filter((user) => {
       const userId = String(user.id);
       const newTags = ((user as any).tags || [])
         .filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_aruhaz_'))
         .sort();
-      const existingTags = (existingUserMap.get(userId) || []).sort();
+      const existingData = existingUserMap.get(userId) || { tags: [], start_of_empl: null };
+      const existingTags = existingData.tags.sort();
+      
+      // Parse new employment date if available
+      const newStartOfEmpl = user.munkaviszonyod_kezdete 
+        ? new Date(user.munkaviszonyod_kezdete).toISOString()
+        : null;
       
       // Check if tags have changed
       const tagsChanged = JSON.stringify(newTags) !== JSON.stringify(existingTags);
       
+      // Check if employment date has changed
+      const emplDateChanged = newStartOfEmpl !== existingData.start_of_empl;
+      
       if (tagsChanged) {
         console.log(`Tags changed for user ${userId}: [${existingTags.join(', ')}] -> [${newTags.join(', ')}]`);
       }
+      if (emplDateChanged) {
+        console.log(`Employment date changed for user ${userId}: ${existingData.start_of_empl} -> ${newStartOfEmpl}`);
+      }
       
-      return tagsChanged;
+      return tagsChanged || emplDateChanged;
     });
 
-    const userDataToUpsert = usersToUpdate.map((user) => ({
-      user_id: String(user.id),
-      username: user.username || (user as any).name || (user as any).email?.split('@')[0] || 'Unknown',
-      email: (user as any).email || null,
-      tags: ((user as any).tags || []).filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_aruhaz_')),
-      updated_at: new Date().toISOString(),
-    }));
+    const userDataToUpsert = usersToUpdate.map((user) => {
+      const startOfEmpl = user.munkaviszonyod_kezdete 
+        ? new Date(user.munkaviszonyod_kezdete).toISOString()
+        : null;
+      
+      return {
+        user_id: String(user.id),
+        username: user.username || (user as any).name || (user as any).email?.split('@')[0] || 'Unknown',
+        email: (user as any).email || null,
+        tags: ((user as any).tags || []).filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_aruhaz_')),
+        start_of_empl: startOfEmpl,
+        updated_at: new Date().toISOString(),
+      };
+    });
 
     if (userDataToUpsert.length > 0) {
       const { error: userUpsertError } = await supabase
@@ -1149,10 +1171,10 @@ serve(async (req) => {
       if (userUpsertError) {
         console.error('Error upserting user data:', userUpsertError);
       } else {
-        console.log(`Successfully upserted ${userDataToUpsert.length} users with changed tags (skipped ${usersWithTags.length - userDataToUpsert.length} unchanged)`);
+        console.log(`Successfully upserted ${userDataToUpsert.length} users with changed data (skipped ${usersWithTags.length - userDataToUpsert.length} unchanged)`);
       }
     } else {
-      console.log('No tag changes detected, skipping user updates');
+      console.log('No changes detected in tags or employment dates, skipping user updates');
     }
 
 
