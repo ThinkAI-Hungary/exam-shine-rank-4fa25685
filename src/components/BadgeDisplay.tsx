@@ -48,8 +48,8 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
   const progressBadges = activeBadges.filter(b => b.badge_definitions.badge_type === 'progress');
 
   if (compact) {
-    // Show only the primary category badge
-    const primaryBadge = categoryBadges[0] || aspirantBadges[0];
+    // Show primary badge: category > aspirant > monthly > progress
+    const primaryBadge = categoryBadges[0] || aspirantBadges[0] || monthlyBadges[0] || progressBadges[0];
     if (!primaryBadge) return null;
 
     const Icon = getIcon(primaryBadge.badge_definitions.icon_name);
