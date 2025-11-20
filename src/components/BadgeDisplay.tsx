@@ -53,21 +53,34 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
     if (!primaryBadge) return null;
 
     const Icon = getIcon(primaryBadge.badge_definitions.icon_name);
+    const isMonthly = primaryBadge.badge_definitions.badge_type === 'monthly_star';
+    const isCategory = primaryBadge.badge_definitions.badge_type === 'category';
+    
     return (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Badge 
-              variant="secondary" 
-              className="flex items-center gap-1"
-              style={{ 
-                backgroundColor: `${primaryBadge.badge_definitions.color}20`,
-                borderColor: primaryBadge.badge_definitions.color,
-                color: primaryBadge.badge_definitions.color
-              }}
+              variant={isCategory ? "default" : "secondary"}
+              className="flex items-center gap-1.5 px-3 py-1 font-medium"
+              style={
+                isCategory ? {
+                  backgroundColor: primaryBadge.badge_definitions.color,
+                  borderColor: primaryBadge.badge_definitions.color,
+                  color: '#000'
+                } : isMonthly ? {
+                  backgroundColor: primaryBadge.badge_definitions.color,
+                  borderColor: primaryBadge.badge_definitions.color,
+                  color: '#fff'
+                } : {
+                  backgroundColor: `${primaryBadge.badge_definitions.color}30`,
+                  borderColor: primaryBadge.badge_definitions.color,
+                  color: primaryBadge.badge_definitions.color
+                }
+              }
             >
-              <Icon className="w-3 h-3" />
-              <span className="font-semibold">{primaryBadge.badge_definitions.badge_name}</span>
+              <Icon className="w-4 h-4" />
+              <span className="text-xs font-semibold">{primaryBadge.badge_definitions.badge_name}</span>
             </Badge>
           </TooltipTrigger>
           <TooltipContent>
