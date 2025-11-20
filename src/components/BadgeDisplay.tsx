@@ -1,4 +1,4 @@
-import { Medal, Award, Trophy, Star, Rocket, Target, Zap, Crown, TrendingUp } from "lucide-react";
+import { Medal, Award, Trophy, Star, Rocket, Target, Zap, Crown, TrendingUp, Sparkles, GraduationCap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -35,6 +35,8 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
       Zap,
       Crown,
       TrendingUp,
+      Sparkles,
+      GraduationCap,
     };
     return iconMap[iconName] || Medal;
   };
