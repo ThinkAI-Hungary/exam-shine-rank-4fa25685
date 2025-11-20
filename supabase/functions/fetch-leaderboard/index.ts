@@ -1102,9 +1102,9 @@ serve(async (req) => {
       const existingData = existingUserMap.get(userId) || { tags: [], start_of_empl: null };
       const existingTags = existingData.tags.sort();
       
-      // Parse new employment date if available
+      // Parse new employment date if available (convert to date format YYYY-MM-DD)
       const newStartOfEmpl = user.munkaviszonyod_kezdete 
-        ? new Date(user.munkaviszonyod_kezdete).toISOString()
+        ? new Date(user.munkaviszonyod_kezdete).toISOString().split('T')[0]
         : null;
       
       // Check if tags have changed
@@ -1125,7 +1125,7 @@ serve(async (req) => {
 
     const userDataToUpsert = usersToUpdate.map((user) => {
       const startOfEmpl = user.munkaviszonyod_kezdete 
-        ? new Date(user.munkaviszonyod_kezdete).toISOString()
+        ? new Date(user.munkaviszonyod_kezdete).toISOString().split('T')[0]  // Convert to YYYY-MM-DD format
         : null;
       
       return {

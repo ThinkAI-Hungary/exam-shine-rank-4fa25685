@@ -484,7 +484,7 @@ Deno.serve(async (req) => {
         username,
         email: email || null,
         tags: tags.filter((tag: string) => tag.startsWith('cf_aruhaz_')),
-        start_of_empl: munkaviszonyod_kezdete ? new Date(munkaviszonyod_kezdete).toISOString() : null,
+        start_of_empl: munkaviszonyod_kezdete ? new Date(munkaviszonyod_kezdete).toISOString().split('T')[0] : null,  // Convert to YYYY-MM-DD format
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id'
