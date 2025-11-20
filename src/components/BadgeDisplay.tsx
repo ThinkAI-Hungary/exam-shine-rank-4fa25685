@@ -65,32 +65,32 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <TooltipTrigger asChild>
             <Badge 
               variant={isCategory ? "default" : "secondary"}
-              className="flex items-center gap-1.5 font-medium"
+              className="flex items-center gap-1.5 font-medium !p-0"
               style={
                 isCategory ? {
                   backgroundColor: primaryBadge.badge_definitions.color,
                   borderColor: primaryBadge.badge_definitions.color,
                   color: '#000',
-                  paddingLeft: '0.625rem',
-                  paddingRight: '0.625rem',
-                  paddingTop: '0.125rem',
-                  paddingBottom: '0.125rem'
+                  paddingLeft: '0.625rem !important',
+                  paddingRight: '0.625rem !important',
+                  paddingTop: '0.125rem !important',
+                  paddingBottom: '0.125rem !important'
                 } : isMonthly ? {
                   backgroundColor: primaryBadge.badge_definitions.color,
                   borderColor: primaryBadge.badge_definitions.color,
                   color: '#fff',
-                  paddingLeft: '0.625rem',
-                  paddingRight: '0.625rem',
-                  paddingTop: '0.125rem',
-                  paddingBottom: '0.125rem'
+                  paddingLeft: '0.625rem !important',
+                  paddingRight: '0.625rem !important',
+                  paddingTop: '0.125rem !important',
+                  paddingBottom: '0.125rem !important'
                 } : {
                   backgroundColor: `${primaryBadge.badge_definitions.color}30`,
                   borderColor: primaryBadge.badge_definitions.color,
                   color: primaryBadge.badge_definitions.color,
-                  paddingLeft: '0.625rem',
-                  paddingRight: '0.625rem',
-                  paddingTop: '0.125rem',
-                  paddingBottom: '0.125rem'
+                  paddingLeft: '0.625rem !important',
+                  paddingRight: '0.625rem !important',
+                  paddingTop: '0.125rem !important',
+                  paddingBottom: '0.125rem !important'
                 }
               }
             >
