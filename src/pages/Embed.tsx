@@ -72,20 +72,20 @@ const Embed = () => {
       <div className="max-w-5xl mx-auto">
         <div className="mb-4 text-center">
           <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Top Learners
+            Legjobb tanulók
           </h2>
-          <p className="text-sm text-muted-foreground">All-time leaderboard</p>
+          <p className="text-sm text-muted-foreground">Minden idők ranglistája</p>
         </div>
         
         <div className="rounded-lg border overflow-hidden bg-card shadow-lg">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className="w-16 text-center">Rank</TableHead>
-                <TableHead>Learner</TableHead>
-                <TableHead className="text-right">Total Score</TableHead>
-                <TableHead className="text-right">Exams</TableHead>
-                <TableHead className="text-right">Avg Score</TableHead>
+                <TableHead className="w-16 text-center">Helyezés</TableHead>
+                <TableHead>Tanuló</TableHead>
+                <TableHead className="text-right">Összes pont</TableHead>
+                <TableHead className="text-right">Vizsgák</TableHead>
+                <TableHead className="text-right">Átlag pontszám</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -93,7 +93,7 @@ const Embed = () => {
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     <Trophy className="w-10 h-10 mx-auto mb-2 text-muted-foreground/30" />
-                    <p>No data available</p>
+                    <p>Nincs elérhető adat</p>
                   </TableCell>
                 </TableRow>
               ) : (
