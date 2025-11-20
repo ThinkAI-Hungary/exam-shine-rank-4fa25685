@@ -354,7 +354,7 @@ const Index = () => {
                         <SelectValue placeholder="Filter by tag" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Tags</SelectItem>
+                        <SelectItem value="all">Összes címke</SelectItem>
                         <SelectSeparator />
                         {availableTags.map((tag) => (
                           <SelectItem key={tag} value={tag}>

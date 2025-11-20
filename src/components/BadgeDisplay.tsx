@@ -65,34 +65,17 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <TooltipTrigger asChild>
             <Badge 
               variant={isCategory ? "default" : "secondary"}
-              className="flex items-center gap-1.5 font-medium !p-0"
-              style={
-                isCategory ? {
-                  backgroundColor: primaryBadge.badge_definitions.color,
-                  borderColor: primaryBadge.badge_definitions.color,
-                  color: '#000',
-                  paddingLeft: '0.5rem !important',
-                  paddingRight: '0.5rem !important',
-                  paddingTop: '0.125rem !important',
-                  paddingBottom: '0.125rem !important'
-                } : isMonthly ? {
-                  backgroundColor: primaryBadge.badge_definitions.color,
-                  borderColor: primaryBadge.badge_definitions.color,
-                  color: '#fff',
-                  paddingLeft: '0.5rem !important',
-                  paddingRight: '0.5rem !important',
-                  paddingTop: '0.125rem !important',
-                  paddingBottom: '0.125rem !important'
-                } : {
-                  backgroundColor: `${primaryBadge.badge_definitions.color}30`,
-                  borderColor: primaryBadge.badge_definitions.color,
-                  color: primaryBadge.badge_definitions.color,
-                  paddingLeft: '0.5rem !important',
-                  paddingRight: '0.5rem !important',
-                  paddingTop: '0.125rem !important',
-                  paddingBottom: '0.125rem !important'
-                }
-              }
+              className="flex items-center gap-1.5 font-medium"
+              style={{
+                backgroundColor: isCategory 
+                  ? primaryBadge.badge_definitions.color
+                  : isMonthly
+                  ? primaryBadge.badge_definitions.color
+                  : `${primaryBadge.badge_definitions.color}30`,
+                borderColor: primaryBadge.badge_definitions.color,
+                color: isCategory ? '#000' : isMonthly ? '#fff' : primaryBadge.badge_definitions.color,
+                padding: '0.125rem 0.5rem'
+              }}
             >
               <Icon className="w-4 h-4 flex-shrink-0" />
               <span className="text-xs font-semibold whitespace-nowrap leading-tight">
