@@ -267,7 +267,7 @@ const Index = () => {
             <Card className="shadow-card">
               <CardHeader className="text-center space-y-4">
                 <div>
-                  <CardTitle className="text-3xl font-bold">Legjobb teljesítők</CardTitle>
+                  <CardTitle className="text-3xl font-bold">Ranglista</CardTitle>
                   <CardDescription>
                     Az összes kurzuson szerzett átlag pontszám alapján rangsorolva
                   </CardDescription>
