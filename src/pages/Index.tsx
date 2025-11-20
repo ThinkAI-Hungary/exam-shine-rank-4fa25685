@@ -10,6 +10,21 @@ import Leaderboard from "@/components/Leaderboard";
 import { toast } from "sonner";
 import Papa from "papaparse";
 
+interface BadgeData {
+  id: string;
+  badge_definitions: {
+    badge_name: string;
+    badge_type: 'category' | 'monthly_star' | 'progress' | 'aspirant';
+    badge_level: string | null;
+    description: string;
+    icon_name: string;
+    color: string;
+  };
+  awarded_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
 interface LeaderboardEntry {
   rank: number;
   username: string;
@@ -19,6 +34,7 @@ interface LeaderboardEntry {
   exam_count: number;
   average_score: number;
   tags: string[];
+  badges?: BadgeData[];
 }
 
 const Index = () => {
@@ -57,6 +73,21 @@ const Index = () => {
 
       if (error) throw error;
 
+      // Fetch badges for all users
+      const userIds = (data || []).map((item: any) => item.user_id);
+      const { data: badgesData } = await supabase
+        .from('user_badges')
+        .select('*, badge_definitions(*)')
+        .in('user_id', userIds)
+        .is('revoked_at', null);
+
+      // Group badges by user_id
+      const badgesByUser = (badgesData || []).reduce((acc: any, badge: any) => {
+        if (!acc[badge.user_id]) acc[badge.user_id] = [];
+        acc[badge.user_id].push(badge);
+        return acc;
+      }, {});
+
       const formattedData: LeaderboardEntry[] = (data || []).map((item: any) => ({
         rank: item.rank,
         username: item.users.username,
@@ -66,6 +97,7 @@ const Index = () => {
         exam_count: item.exam_count,
         average_score: item.average_score,
         tags: item.users.tags || [],
+        badges: badgesByUser[item.user_id] || [],
       }));
 
       setLeaderboard(formattedData);
@@ -118,9 +150,14 @@ const Index = () => {
       logData.api_calls = data?.apiCalls || 0;
       await supabase.from('refresh_logs').insert(logData);
       
+      // Evaluate badges after fetching leaderboard data
+      console.log('Evaluating badges...');
+      const badgeParams = selectedUserId ? { user_id: selectedUserId } : {};
+      await supabase.functions.invoke('evaluate-badges', { body: badgeParams });
+      
       const message = selectedUserId 
         ? `Selected user refreshed! (${data?.apiCalls || '?'} API calls)`
-        : `Full leaderboard refreshed! (${data?.apiCalls || '?'} API calls)`;
+        : `Full leaderboard and badges refreshed! (${data?.apiCalls || '?'} API calls)`;
       
       toast.success(message);
       if (data?.apiCalls) setApiCallsUsed(data.apiCalls);
