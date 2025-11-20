@@ -403,7 +403,7 @@ Deno.serve(async (req) => {
     console.log('Fetching exam scores from LearnWorlds API...');
     const accessToken = await getLearnWorldsAccessToken();
     
-    // Fetch full user details to get custom fields like munkaviszonyod_kezdete
+    // Fetch full user details to get custom fields
     console.log('Fetching full user details from LearnWorlds...');
     const baseUrl = Deno.env.get('LEARNWORLDS_BASE_URL');
     const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID');
@@ -414,33 +414,13 @@ Deno.serve(async (req) => {
         const userDetailsUrl = `${baseUrl}/v2/users/${userId}`;
         const userDetails = await makeLearnWorldsRequest(userDetailsUrl, accessToken);
         
-        // Log user details structure
-        console.log('User details object fields:', JSON.stringify(Object.keys(userDetails)));
+        // Get employment start date from fields object
+        munkaviszonyod_kezdete = userDetails?.fields?.cf_munkaviszonyodkezdete || null;
         
-        // Try different possible field names for employment start date
-        if (userDetails?.munkaviszonyod_kezdete) {
-          munkaviszonyod_kezdete = userDetails.munkaviszonyod_kezdete;
-          console.log('Found munkaviszonyod_kezdete directly:', munkaviszonyod_kezdete);
-        } else if (userDetails?.custom_fields?.munkaviszonyod_kezdete) {
-          munkaviszonyod_kezdete = userDetails.custom_fields.munkaviszonyod_kezdete;
-          console.log('Found munkaviszonyod_kezdete in custom_fields:', munkaviszonyod_kezdete);
-        } else if (userDetails?.['cf_munkaviszonyod_kezdete']) {
-          munkaviszonyod_kezdete = userDetails['cf_munkaviszonyod_kezdete'];
-          console.log('Found cf_munkaviszonyod_kezdete:', munkaviszonyod_kezdete);
-        } else if (userDetails?.['munkaviszonyod kezdete']) {
-          munkaviszonyod_kezdete = userDetails['munkaviszonyod kezdete'];
-          console.log('Found munkaviszonyod kezdete (with space):', munkaviszonyod_kezdete);
+        if (munkaviszonyod_kezdete) {
+          console.log('Found employment start date:', munkaviszonyod_kezdete);
         } else {
-          // Log fields that might contain the date
-          const possibleDateFields = Object.keys(userDetails || {}).filter(key => 
-            key.toLowerCase().includes('munka') || key.toLowerCase().includes('kezd')
-          );
-          console.log('Possible employment date fields:', possibleDateFields);
-          if (possibleDateFields.length > 0) {
-            console.log('Field values:', JSON.stringify(possibleDateFields.map(k => ({ [k]: userDetails[k] }))));
-          } else {
-            console.log('No employment date field found. All user fields:', JSON.stringify(userDetails));
-          }
+          console.log('No employment start date found in user fields');
         }
       } catch (error) {
         console.warn('Failed to fetch full user details:', error);

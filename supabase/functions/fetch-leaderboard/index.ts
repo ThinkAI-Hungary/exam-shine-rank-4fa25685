@@ -1066,30 +1066,11 @@ serve(async (req) => {
             
             const tags = Array.isArray(du.tags) ? du.tags : [];
             
-            // Try different possible field names for employment start date
-            let munkaviszonyod_kezdete: string | null = null;
+            // Get employment start date from fields object
+            const munkaviszonyod_kezdete = du.fields?.cf_munkaviszonyodkezdete || null;
             
-            // Check various possible locations and names
-            if (du.munkaviszonyod_kezdete) {
-              munkaviszonyod_kezdete = du.munkaviszonyod_kezdete;
-              console.log(`Found munkaviszonyod_kezdete directly on user ${user.id}: ${munkaviszonyod_kezdete}`);
-            } else if (du.custom_fields?.munkaviszonyod_kezdete) {
-              munkaviszonyod_kezdete = du.custom_fields.munkaviszonyod_kezdete;
-              console.log(`Found munkaviszonyod_kezdete in custom_fields for user ${user.id}: ${munkaviszonyod_kezdete}`);
-            } else if (du['cf_munkaviszonyod_kezdete']) {
-              munkaviszonyod_kezdete = du['cf_munkaviszonyod_kezdete'];
-              console.log(`Found cf_munkaviszonyod_kezdete on user ${user.id}: ${munkaviszonyod_kezdete}`);
-            } else if (du['munkaviszonyod kezdete']) {
-              munkaviszonyod_kezdete = du['munkaviszonyod kezdete'];
-              console.log(`Found 'munkaviszonyod kezdete' (with space) on user ${user.id}: ${munkaviszonyod_kezdete}`);
-            } else {
-              // Log fields that might contain the date
-              const possibleDateFields = Object.keys(du).filter(key => 
-                key.toLowerCase().includes('munka') || key.toLowerCase().includes('kezd')
-              );
-              if (possibleDateFields.length > 0) {
-                console.log(`Possible employment date fields for user ${user.id}:`, possibleDateFields, JSON.stringify(possibleDateFields.map(k => ({ [k]: du[k] }))));
-              }
+            if (munkaviszonyod_kezdete) {
+              console.log(`Found employment start date for user ${user.id}: ${munkaviszonyod_kezdete}`);
             }
             
             const merged: LearnWorldsUser = {
