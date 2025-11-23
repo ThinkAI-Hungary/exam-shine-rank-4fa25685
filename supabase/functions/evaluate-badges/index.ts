@@ -264,14 +264,48 @@ async function evaluateMonthlyBadges(
     await revokeBadge(supabase, badge.id);
   }
   
-  // Check for "Starter Success" badge (new employees < 3 months with 80%+ avg)
-  const starterBadge = monthlyBadges.find(b => b.badge_name === 'Starter Success');
-  if (starterBadge && metrics.years_of_service < 0.25 && metrics.exam_performance_pct >= 80) {
+  // Check for "Starter Success" badge (complete all exams with 80%+ in first 3 months)
+  const starterBadge = monthlyBadges.find(b => b.badge_name === 'Kezdő Siker' || b.badge_name === 'Starter Success');
+  if (starterBadge) {
     const hasStarter = currentBadges?.find(b => b.badge_id === starterBadge.id);
-    if (!hasStarter) {
-      const nextMonth = new Date();
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-      await awardBadge(supabase, userId, starterBadge.id, metrics, nextMonth.toISOString());
+    
+    if (!hasStarter && metrics.years_of_service <= 0.25) {
+      // Get user's employment start date
+      const { data: userData } = await supabase
+        .from('users')
+        .select('start_of_empl')
+        .eq('user_id', userId)
+        .single();
+      
+      if (userData?.start_of_empl) {
+        const startDate = new Date(userData.start_of_empl);
+        const threeMonthsLater = new Date(startDate);
+        threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+        const now = new Date();
+        
+        // Only evaluate if within first 3 months
+        if (now <= threeMonthsLater) {
+          // Get all unique exams in the system
+          const { data: allExams } = await supabase
+            .from('exam_results')
+            .select('exam_id')
+            .eq('user_id', userId);
+          
+          // Get all available exams
+          const { data: availableExams } = await supabase
+            .from('exam_results')
+            .select('exam_id');
+          
+          const uniqueAvailableExams = [...new Set(availableExams?.map((e: any) => e.exam_id) || [])];
+          const userCompletedExams = [...new Set(allExams?.map((e: any) => e.exam_id) || [])];
+          
+          // Check if completed all exams with 80%+ average
+          if (userCompletedExams.length === uniqueAvailableExams.length && 
+              metrics.exam_performance_pct >= 80) {
+            await awardBadge(supabase, userId, starterBadge.id, metrics);
+          }
+        }
+      }
     }
   }
   
