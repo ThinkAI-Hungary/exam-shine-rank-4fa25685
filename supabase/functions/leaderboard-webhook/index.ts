@@ -233,6 +233,9 @@ function extractExamScores(courseProgress: CourseProgress): ExamScoreResult {
   for (const activity of courseProgress.activities) {
     // Only process completed exams
     if (activity.type === 'exam' && activity.status === 'completed') {
+      // Log the full activity structure to understand what fields are available
+      console.log('Full exam activity structure:', JSON.stringify(activity, null, 2));
+      
       // Extract score - can be in 'score' or 'grade' field
       const scoreValue = activity.score ?? activity.grade;
       
@@ -262,9 +265,13 @@ function extractExamScores(courseProgress: CourseProgress): ExamScoreResult {
           examCount += 1;
           
           // Store individual exam details
+          // Try multiple possible title fields
+          const examTitle = activity.title || activity.name || activity.learning_unit_title || 
+                           activity.unit_title || activity.exam_title || 'Untitled Exam';
+          
           exams.push({
             examId: activity.id,
-            examTitle: activity.title || 'Untitled Exam',
+            examTitle: examTitle,
             score: numericScore,
             completedAt: activity.completed_at || null,
           });
