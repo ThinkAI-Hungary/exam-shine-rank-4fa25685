@@ -27,6 +27,10 @@ interface ExamActivity {
   id: string;
   type: string;
   title?: string;
+  name?: string;
+  learning_unit_title?: string;
+  unit_title?: string;
+  exam_title?: string;
   score?: number;
   max_score?: number;
   status: string;
@@ -461,13 +465,20 @@ function extractExamScores(progress: CourseProgress, userId: string, username: s
   
   
   for (const activity of progress.activities) {
+    // Log full activity structure for exam activities to debug title extraction
+    if (activity.type === 'exam') {
+      console.log(`[User ${userId}] [Course ${courseId}] Full exam activity:`, JSON.stringify(activity, null, 2));
+    }
+    
     console.log(`[User ${userId}] [Course ${courseId}] Activity:`, JSON.stringify({
       id: activity.id,
       type: activity.type,
       status: activity.status,
       score: activity.score,
       max_score: activity.max_score,
-      title: activity.title
+      title: activity.title,
+      name: activity.name,
+      learning_unit_title: activity.learning_unit_title
     }));
 
     // Check if it's a completed exam
@@ -483,9 +494,13 @@ function extractExamScores(progress: CourseProgress, userId: string, username: s
 
       // Store exam result
       if (completedAt) {
+        // Try multiple possible title fields
+        const examTitle = activity.title || activity.name || activity.learning_unit_title || 
+                         activity.unit_title || activity.exam_title || 'Untitled Exam';
+        
         exams.push({
-          exam_id: String(activity.id || `${courseId}-${activity.title}`),
-          exam_title: activity.title || 'Untitled Exam',
+          exam_id: String(activity.id || `${courseId}-${examTitle}`),
+          exam_title: examTitle,
           score: activity.score,
           completed_at: completedAt,
           course_id: courseId,
