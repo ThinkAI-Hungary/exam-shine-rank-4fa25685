@@ -64,7 +64,7 @@ const Navigation = () => {
   if (loading) return null;
 
   return (
-    <nav className="flex items-center gap-4">
+    <nav className="flex items-center gap-2">
       {user && (
         <>
           {isAdmin && (
