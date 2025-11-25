@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Award, ArrowLeft } from "lucide-react";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
+import { Loader2, Award, ArrowLeft, Menu } from "lucide-react";
 import { toast } from "sonner";
+import Navigation from "@/components/Navigation";
 import BadgeDisplay from "@/components/BadgeDisplay";
 
 interface BadgeData {
@@ -35,6 +37,7 @@ interface UserWithBadges {
 const AdminBadges = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [usersWithBadges, setUsersWithBadges] = useState<UserWithBadges[]>([]);
 
   useEffect(() => {
@@ -127,21 +130,50 @@ const AdminBadges = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted p-6">
-      <div className="container mx-auto max-w-7xl">
-        <div className="flex items-center gap-4 mb-6">
-          <Button variant="outline" onClick={() => navigate("/admin/dashboard")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Vissza
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Award className="w-8 h-8" />
-              Összes Jelvény
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
+      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" size="sm" onClick={() => navigate("/admin/dashboard")}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Vissza
+            </Button>
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              <Award className="w-6 h-6" />
+              <span className="hidden sm:inline">Összes Jelvény</span>
             </h1>
-            <p className="text-muted-foreground">Jelvények és tulajdonosaik áttekintése</p>
           </div>
+          
+          {/* Desktop Navigation */}
+          <div className="hidden lg:block">
+            <Navigation />
+          </div>
+
+          {/* Mobile Menu */}
+          <Drawer open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <DrawerTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="lg:hidden border-2 hover:bg-accent"
+              >
+                <Menu className="w-6 h-6" />
+              </Button>
+            </DrawerTrigger>
+            <DrawerContent className="max-h-[85vh]">
+              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-muted mt-4 mb-2" />
+              <DrawerHeader className="pb-4">
+                <DrawerTitle className="text-xl">Menü</DrawerTitle>
+              </DrawerHeader>
+              <div className="flex flex-col gap-6 px-6 pb-8 overflow-y-auto">
+                <Navigation />
+              </div>
+            </DrawerContent>
+          </Drawer>
         </div>
+      </header>
+
+      <div className="container mx-auto max-w-7xl p-6">
 
         <Card>
           <CardHeader>
