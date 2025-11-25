@@ -294,11 +294,12 @@ const Index = () => {
                   <Menu className="w-5 h-5" />
                 </Button>
               </DrawerTrigger>
-              <DrawerContent className="max-h-[80vh]">
-                <DrawerHeader>
-                  <DrawerTitle>Menü</DrawerTitle>
+              <DrawerContent className="max-h-[85vh]">
+                <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-muted mt-4 mb-2" />
+                <DrawerHeader className="pb-4">
+                  <DrawerTitle className="text-xl">Menü</DrawerTitle>
                 </DrawerHeader>
-                <div className="flex flex-col gap-4 px-4 pb-6 overflow-y-auto">
+                <div className="flex flex-col gap-6 px-6 pb-8 overflow-y-auto">
                   <Navigation />
                   
                   <div className="space-y-2">
