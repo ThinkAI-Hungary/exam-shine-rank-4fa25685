@@ -106,9 +106,9 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span>{entry.username}</span>
-                    {entry.tags && entry.tags.length > 0 && (
+                    {getStoreTags(entry.tags).length > 0 && (
                       <div className="flex gap-1 flex-wrap">
-                        {entry.tags.map((tag, idx) => (
+                        {getStoreTags(entry.tags).map((tag, idx) => (
                           <Badge key={idx} variant="outline" className="text-xs">
                             {tag}
                           </Badge>
