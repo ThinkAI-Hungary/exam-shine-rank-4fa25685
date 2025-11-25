@@ -184,6 +184,42 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          learnworlds_email: string | null
+          learnworlds_user_id: string | null
+          link_method: string | null
+          link_verified: boolean | null
+          linked_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id: string
+          learnworlds_email?: string | null
+          learnworlds_user_id?: string | null
+          link_method?: string | null
+          link_verified?: boolean | null
+          linked_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          learnworlds_email?: string | null
+          learnworlds_user_id?: string | null
+          link_method?: string | null
+          link_verified?: boolean | null
+          linked_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       refresh_logs: {
         Row: {
           api_calls: number | null
