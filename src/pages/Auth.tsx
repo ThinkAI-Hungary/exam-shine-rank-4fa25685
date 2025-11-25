@@ -15,7 +15,14 @@ const passwordSchema = z.string().min(6, { message: "A jelszónak legalább 6 ka
 
 const Auth = () => {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'signin' | 'signup' | 'reset' | 'update-password'>('signin');
+  
+  // Check for recovery mode immediately before any state initialization
+  const params = new URLSearchParams(window.location.search);
+  const isRecovery = params.get('type') === 'recovery';
+  
+  const [mode, setMode] = useState<'signin' | 'signup' | 'reset' | 'update-password'>(
+    isRecovery ? 'update-password' : 'signin'
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -23,38 +30,37 @@ const Auth = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check for password recovery token
-    const checkRecovery = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const type = params.get('type');
-      
-      if (type === 'recovery') {
-        setMode('update-password');
-        return true;
+    // Check URL for recovery mode
+    const params = new URLSearchParams(window.location.search);
+    const isRecoveryMode = params.get('type') === 'recovery';
+    
+    // Don't redirect if we're in password recovery mode
+    if (isRecoveryMode) {
+      return;
+    }
+
+    // Check if already logged in
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigate("/");
       }
-      return false;
-    };
-
-    checkRecovery().then((isRecovery) => {
-      if (isRecovery) return;
-
-      // Check if already logged in (but not in recovery mode)
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          navigate("/");
-        }
-      });
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Handle password recovery
+      // Handle password recovery event
       if (event === 'PASSWORD_RECOVERY') {
         setMode('update-password');
         return;
       }
       
-      // Only navigate away if not in password recovery mode
-      if (session && mode !== 'update-password') {
+      // Don't navigate away if in password recovery mode
+      const currentParams = new URLSearchParams(window.location.search);
+      if (currentParams.get('type') === 'recovery') {
+        return;
+      }
+      
+      // Navigate to home if session exists and not in recovery
+      if (session) {
         // Try automatic linking on signup
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           setTimeout(async () => {
@@ -72,7 +78,7 @@ const Auth = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate, mode]);
+  }, [navigate]);
 
   const validateEmail = async (email: string): Promise<boolean> => {
     try {
