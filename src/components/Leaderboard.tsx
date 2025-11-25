@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Trophy, Medal, Award } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Trophy, Medal, Award, MapPin, Calendar, Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import BadgeDisplay from "./BadgeDisplay";
 
@@ -30,6 +32,7 @@ interface LeaderboardEntry {
   score_source?: 'exact' | 'estimated';
   tags?: string[];
   badges?: BadgeData[];
+  start_of_empl?: string;
 }
 
 interface LeaderboardProps {
@@ -39,6 +42,8 @@ interface LeaderboardProps {
 
 const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
   const navigate = useNavigate();
+  const [selectedUser, setSelectedUser] = useState<LeaderboardEntry | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -51,6 +56,19 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
       default:
         return <span className="text-muted-foreground font-semibold">{rank}</span>;
     }
+  };
+
+  const handleRowClick = (entry: LeaderboardEntry) => {
+    if (isEmbedded) return;
+    setSelectedUser(entry);
+    setDialogOpen(true);
+  };
+
+  const getStoreTags = (tags?: string[]) => {
+    if (!tags) return [];
+    return tags
+      .filter(tag => tag.startsWith('cf_aruhaz_'))
+      .map(tag => tag.replace('cf_aruhaz_', ''));
   };
 
   const content = (
@@ -78,7 +96,7 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
               <TableRow 
                 key={entry.rank}
                 className="hover:bg-muted/30 transition-colors cursor-pointer"
-                onClick={() => entry.user_id && !isEmbedded && navigate(`/profile/${entry.user_id}`)}
+                onClick={() => handleRowClick(entry)}
               >
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center">
@@ -123,7 +141,80 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
     </div>
   );
 
-  return isEmbedded ? content : <Card><CardContent className="p-0">{content}</CardContent></Card>;
+  return (
+    <>
+      {isEmbedded ? content : <Card><CardContent className="p-0">{content}</CardContent></Card>}
+      
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trophy className="w-5 h-5" />
+              {selectedUser?.username}
+            </DialogTitle>
+            <DialogDescription>Felhasználó részletek</DialogDescription>
+          </DialogHeader>
+          
+          {selectedUser && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm text-muted-foreground">Helyezés</span>
+                <div className="flex items-center gap-2">
+                  {getRankIcon(selectedUser.rank)}
+                  <span className="font-semibold">#{selectedUser.rank}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm text-muted-foreground">Összpontszám</span>
+                <Badge variant="secondary" className="font-mono">
+                  {selectedUser.total_score.toLocaleString()}
+                </Badge>
+              </div>
+
+              {getStoreTags(selectedUser.tags).length > 0 && (
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <MapPin className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Áruházak</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {getStoreTags(selectedUser.tags).map((store, idx) => (
+                      <Badge key={idx} variant="outline">
+                        {store}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedUser.start_of_empl && (
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Munkaviszony kezdete</span>
+                  </div>
+                  <span className="font-medium">
+                    {new Date(selectedUser.start_of_empl).toLocaleDateString('hu-HU')}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Star className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Átlag pontszám</span>
+                </div>
+                <Badge variant={selectedUser.average_score >= 80 ? "default" : "outline"}>
+                  {selectedUser.average_score.toFixed(1)}%
+                </Badge>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 };
 
 export default Leaderboard;

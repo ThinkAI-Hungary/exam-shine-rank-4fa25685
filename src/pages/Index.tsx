@@ -36,6 +36,7 @@ interface LeaderboardEntry {
   average_score: number;
   tags: string[];
   badges?: BadgeData[];
+  start_of_empl?: string;
 }
 
 const Index = () => {
@@ -88,7 +89,7 @@ const Index = () => {
         .from("leaderboard_cache")
         .select(`
           *,
-          users!inner(username, email, tags)
+          users!inner(username, email, tags, start_of_empl)
         `)
         .order("rank", { ascending: true });
 
@@ -119,6 +120,7 @@ const Index = () => {
         average_score: item.average_score,
         tags: item.users.tags || [],
         badges: badgesByUser[item.user_id] || [],
+        start_of_empl: item.users.start_of_empl,
       }));
 
       setLeaderboard(formattedData);
