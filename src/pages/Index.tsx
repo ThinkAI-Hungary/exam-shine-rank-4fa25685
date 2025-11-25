@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
 import { Trophy, Code, RefreshCw, Menu } from "lucide-react";
@@ -288,17 +288,17 @@ const Index = () => {
             </div>
 
             {/* Mobile Menu Button */}
-            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <SheetTrigger asChild>
+            <Drawer open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <DrawerTrigger asChild>
                 <Button variant="ghost" size="sm" className="lg:hidden">
                   <Menu className="w-5 h-5" />
                 </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-[300px] sm:w-[400px]">
-                <SheetHeader>
-                  <SheetTitle>Menü</SheetTitle>
-                </SheetHeader>
-                <div className="flex flex-col gap-4 mt-6">
+              </DrawerTrigger>
+              <DrawerContent className="max-h-[80vh]">
+                <DrawerHeader>
+                  <DrawerTitle>Menü</DrawerTitle>
+                </DrawerHeader>
+                <div className="flex flex-col gap-4 px-4 pb-6 overflow-y-auto">
                   <Navigation />
                   
                   <div className="space-y-2">
@@ -361,8 +361,8 @@ const Index = () => {
                     </DialogContent>
                   </Dialog>
                 </div>
-              </SheetContent>
-            </Sheet>
+              </DrawerContent>
+            </Drawer>
           </div>
         </div>
       </header>
