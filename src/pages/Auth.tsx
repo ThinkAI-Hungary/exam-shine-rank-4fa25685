@@ -30,37 +30,30 @@ const Auth = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check URL for recovery mode
-    const params = new URLSearchParams(window.location.search);
-    const isRecoveryMode = params.get('type') === 'recovery';
-    
-    // Don't redirect if we're in password recovery mode
-    if (isRecoveryMode) {
-      return;
-    }
-
-    // Check if already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate("/");
-      }
-    });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Handle password recovery event
-      if (event === 'PASSWORD_RECOVERY') {
+      console.log('Auth event:', event, 'Has session:', !!session);
+      
+      // Always check URL first before any navigation logic
+      const currentParams = new URLSearchParams(window.location.search);
+      const isRecoveryMode = currentParams.get('type') === 'recovery';
+      
+      // If recovery mode detected, set mode and don't navigate
+      if (isRecoveryMode) {
+        console.log('Recovery mode detected, staying on auth page');
         setMode('update-password');
         return;
       }
       
-      // Don't navigate away if in password recovery mode
-      const currentParams = new URLSearchParams(window.location.search);
-      if (currentParams.get('type') === 'recovery') {
+      // Handle password recovery event
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('PASSWORD_RECOVERY event');
+        setMode('update-password');
         return;
       }
       
-      // Navigate to home if session exists and not in recovery
-      if (session) {
+      // Only navigate away if we have a session AND not in recovery
+      if (session && !isRecoveryMode) {
+        console.log('Session exists and not recovery, navigating home');
         // Try automatic linking on signup
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           setTimeout(async () => {
