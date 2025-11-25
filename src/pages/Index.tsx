@@ -318,7 +318,7 @@ const Index = () => {
                 )}
               </CardHeader>
               <CardContent>
-                <Leaderboard entries={filteredLeaderboard} isEmbedded />
+                <Leaderboard entries={filteredLeaderboard} />
               </CardContent>
             </Card>
           </div>
