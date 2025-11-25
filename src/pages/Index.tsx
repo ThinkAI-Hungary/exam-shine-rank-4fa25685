@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
-import { Trophy, Code, RefreshCw } from "lucide-react";
+import { Trophy, Code, RefreshCw, Menu } from "lucide-react";
 import Leaderboard from "@/components/Leaderboard";
 import Navigation from "@/components/Navigation";
 import { toast } from "sonner";
@@ -50,6 +51,7 @@ const Index = () => {
   const [apiCallsUsed, setApiCallsUsed] = useState<number | null>(null);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const embedCode = `<iframe 
   src="${window.location.origin}/embed" 
@@ -221,8 +223,8 @@ const Index = () => {
               </h1>
             </div>
 
-            {/* Right Section */}
-            <div className="flex items-center gap-2">
+            {/* Desktop Navigation - Hidden on Mobile */}
+            <div className="hidden lg:flex items-center gap-2">
               <Navigation />
               
               <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
@@ -284,6 +286,83 @@ const Index = () => {
                 </DialogContent>
               </Dialog>
             </div>
+
+            {/* Mobile Menu Button */}
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="sm" className="lg:hidden">
+                  <Menu className="w-5 h-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                <SheetHeader>
+                  <SheetTitle>Menü</SheetTitle>
+                </SheetHeader>
+                <div className="flex flex-col gap-4 mt-6">
+                  <Navigation />
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Felhasználó kiválasztása</label>
+                    <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Válassz felhasználót" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">🌐 Összes felhasználó</SelectItem>
+                        <SelectSeparator />
+                        {leaderboard.map((entry) => (
+                          <SelectItem key={entry.user_id} value={entry.user_id}>
+                            {entry.username}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      handleRefresh();
+                      setMobileMenuOpen(false);
+                    }}
+                    disabled={refreshing}
+                    className="w-full"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                    {refreshing ? 'Frissítés...' : 'Frissítés'}
+                  </Button>
+                  
+                  {apiCallsUsed && (
+                    <span className="text-xs text-muted-foreground text-center">
+                      Utolsó: {apiCallsUsed} API hívás
+                    </span>
+                  )}
+              
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="default" className="w-full">
+                        <Code className="w-4 h-4 mr-2" />
+                        Kód beágyazása
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Ranglista beágyazása</DialogTitle>
+                        <DialogDescription>
+                          Másold ki ezt a kódot a ranglista weboldaladba történő beágyazásához
+                        </DialogDescription>
+                      </DialogHeader>
+                      <Textarea 
+                        value={embedCode} 
+                        readOnly 
+                        className="font-mono text-sm h-32"
+                        onClick={(e) => e.currentTarget.select()}
+                      />
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </header>
