@@ -9,6 +9,7 @@ import Auth from "./pages/Auth";
 import UserProfile from "./pages/UserProfile";
 import Profile from "./pages/Profile";
 import AdminUserLinking from "./pages/AdminUserLinking";
+import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/profile/:userId" element={<UserProfile />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/admin/user-linking" element={<AdminUserLinking />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

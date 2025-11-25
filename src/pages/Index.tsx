@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
 import { Trophy, Code, RefreshCw } from "lucide-react";
 import Leaderboard from "@/components/Leaderboard";
+import Navigation from "@/components/Navigation";
 import { toast } from "sonner";
 
 interface BadgeData {
@@ -37,6 +39,7 @@ interface LeaderboardEntry {
 }
 
 const Index = () => {
+  const navigate = useNavigate();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [filteredLeaderboard, setFilteredLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,6 +48,7 @@ const Index = () => {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [apiCallsUsed, setApiCallsUsed] = useState<number | null>(null);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [user, setUser] = useState<any>(null);
 
   const embedCode = `<iframe 
   src="${window.location.origin}/embed" 
@@ -55,8 +59,28 @@ const Index = () => {
 ></iframe>`;
 
   useEffect(() => {
-    fetchLeaderboard();
+    checkAuth();
   }, []);
+
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate("/auth");
+      return;
+    }
+    setUser(session.user);
+    fetchLeaderboard();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setUser(session.user);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  };
 
   const fetchLeaderboard = async () => {
     try {
@@ -189,12 +213,13 @@ const Index = () => {
               <Trophy className="w-6 h-6 text-primary-foreground" />
             </div>
             <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              LearnWorlds Leaderboard
-            </h1>
-          </div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                LearnWorlds Leaderboard
+              </h1>
+            </div>
           </div>
           <div className="flex gap-2 items-center flex-wrap">
+            <Navigation />
             
             <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
                   <SelectTrigger className="w-[250px]">
