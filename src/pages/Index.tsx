@@ -218,7 +218,7 @@ const Index = () => {
               </h1>
             </div>
           </div>
-          <div className="flex gap-2 items-center flex-wrap">
+          <div className="flex gap-2 items-center">
             <Navigation />
             
             <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
