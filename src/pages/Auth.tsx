@@ -24,28 +24,37 @@ const Auth = () => {
 
   useEffect(() => {
     // Check for password recovery token
-    const params = new URLSearchParams(window.location.search);
-    const type = params.get('type');
-    
-    if (type === 'recovery') {
-      setMode('update-password');
-      return;
-    }
-
-    // Check if already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && type !== 'recovery') {
-        navigate("/");
+    const checkRecovery = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const type = params.get('type');
+      
+      if (type === 'recovery') {
+        setMode('update-password');
+        return true;
       }
+      return false;
+    };
+
+    checkRecovery().then((isRecovery) => {
+      if (isRecovery) return;
+
+      // Check if already logged in (but not in recovery mode)
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          navigate("/");
+        }
+      });
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Handle password recovery
       if (event === 'PASSWORD_RECOVERY') {
         setMode('update-password');
         return;
       }
       
-      if (session && type !== 'recovery') {
+      // Only navigate away if not in password recovery mode
+      if (session && mode !== 'update-password') {
         // Try automatic linking on signup
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           setTimeout(async () => {
@@ -63,7 +72,7 @@ const Auth = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, mode]);
 
   const validateEmail = async (email: string): Promise<boolean> => {
     try {
@@ -135,10 +144,15 @@ const Auth = () => {
         if (updateError) {
           setError('Hiba történt a jelszó frissítése során');
         } else {
-          toast.success('Jelszó sikeresen frissítve! Bejelentkezhetsz.');
-          setMode('signin');
+          toast.success('Jelszó sikeresen frissítve! Átirányítás...');
           setPassword('');
           setConfirmPassword('');
+          // Sign out and redirect to login after password update
+          await supabase.auth.signOut();
+          setTimeout(() => {
+            navigate('/auth');
+            setMode('signin');
+          }, 1000);
         }
         setLoading(false);
         return;
