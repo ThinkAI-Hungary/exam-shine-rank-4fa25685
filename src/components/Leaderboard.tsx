@@ -60,7 +60,6 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
           <TableRow className="bg-muted/50">
             <TableHead className="w-16 text-center">Helyezés</TableHead>
             <TableHead>Tanuló</TableHead>
-            <TableHead>Jelvény</TableHead>
             <TableHead className="text-right">Összes pont</TableHead>
             <TableHead className="text-right">Kurzusok</TableHead>
             <TableHead className="text-right">Átlag pontszám</TableHead>
@@ -69,7 +68,7 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
         <TableBody>
           {entries.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                 <Trophy className="w-10 h-10 mx-auto mb-2 text-muted-foreground/30" />
                 <p>Még nincsenek pontszámok. Légy te az első!</p>
               </TableCell>
@@ -99,13 +98,6 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                       </div>
                     )}
                   </div>
-                </TableCell>
-                <TableCell>
-                  {entry.badges && entry.badges.length > 0 ? (
-                    <BadgeDisplay badges={entry.badges} compact />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">Nincs jelvény</span>
-                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   <Badge variant={entry.score_source === 'estimated' ? 'outline' : 'secondary'} className="font-mono">
