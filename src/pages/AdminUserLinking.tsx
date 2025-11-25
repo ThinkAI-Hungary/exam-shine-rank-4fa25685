@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Link as LinkIcon, CheckCircle, XCircle } from "lucide-react";
+import { Loader2, Link as LinkIcon, CheckCircle, XCircle, Menu, ArrowLeft } from "lucide-react";
+import Navigation from "@/components/Navigation";
 import {
   Table,
   TableBody,
@@ -30,6 +32,7 @@ const AdminUserLinking = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [linking, setLinking] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
@@ -163,14 +166,50 @@ const AdminUserLinking = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">Felhasználó Összekapcsolás (Admin)</h1>
-          <Button variant="outline" onClick={() => navigate("/")}>
-            Vissza
-          </Button>
+    <div className="min-h-screen bg-background">
+      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" size="sm" onClick={() => navigate("/admin/dashboard")}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Vissza
+            </Button>
+            <h1 className="text-xl font-bold">
+              <span className="hidden sm:inline">Felhasználó Összekapcsolás</span>
+              <span className="sm:hidden">Összekapcsolás</span>
+            </h1>
+          </div>
+          
+          {/* Desktop Navigation */}
+          <div className="hidden lg:block">
+            <Navigation />
+          </div>
+
+          {/* Mobile Menu */}
+          <Drawer open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <DrawerTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="lg:hidden border-2 hover:bg-accent"
+              >
+                <Menu className="w-6 h-6" />
+              </Button>
+            </DrawerTrigger>
+            <DrawerContent className="max-h-[85vh]">
+              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-muted mt-4 mb-2" />
+              <DrawerHeader className="pb-4">
+                <DrawerTitle className="text-xl">Menü</DrawerTitle>
+              </DrawerHeader>
+              <div className="flex flex-col gap-6 px-6 pb-8 overflow-y-auto">
+                <Navigation />
+              </div>
+            </DrawerContent>
+          </Drawer>
         </div>
+      </header>
+
+      <div className="max-w-6xl mx-auto p-4 space-y-6">
 
         {selectedProfile && (
           <Card>

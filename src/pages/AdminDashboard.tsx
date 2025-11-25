@@ -3,12 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import Navigation from "@/components/Navigation";
-import { Trophy, Users, Award, AlertTriangle, Loader2, Link as LinkIcon, Eye } from "lucide-react";
+import { Trophy, Users, Award, AlertTriangle, Loader2, Link as LinkIcon, Eye, Menu } from "lucide-react";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [stats, setStats] = useState({
     totalUsers: 0,
     linkedUsers: 0,
@@ -93,7 +95,33 @@ const AdminDashboard = () => {
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Admin Vezérlőpult</h1>
-          <Navigation />
+          
+          {/* Desktop Navigation */}
+          <div className="hidden lg:block">
+            <Navigation />
+          </div>
+
+          {/* Mobile Menu */}
+          <Drawer open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <DrawerTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="lg:hidden border-2 hover:bg-accent"
+              >
+                <Menu className="w-6 h-6" />
+              </Button>
+            </DrawerTrigger>
+            <DrawerContent className="max-h-[85vh]">
+              <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-muted mt-4 mb-2" />
+              <DrawerHeader className="pb-4">
+                <DrawerTitle className="text-xl">Menü</DrawerTitle>
+              </DrawerHeader>
+              <div className="flex flex-col gap-6 px-6 pb-8 overflow-y-auto">
+                <Navigation />
+              </div>
+            </DrawerContent>
+          </Drawer>
         </div>
       </header>
 
