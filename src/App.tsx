@@ -7,6 +7,8 @@ import Index from "./pages/Index";
 import Embed from "./pages/Embed";
 import Auth from "./pages/Auth";
 import UserProfile from "./pages/UserProfile";
+import Profile from "./pages/Profile";
+import AdminUserLinking from "./pages/AdminUserLinking";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +24,8 @@ const App = () => (
           <Route path="/embed" element={<Embed />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/profile/:userId" element={<UserProfile />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/admin/user-linking" element={<AdminUserLinking />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -11,6 +11,29 @@ const Auth = () => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
+        // Try automatic linking on signup
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+          setTimeout(async () => {
+            try {
+              const response = await fetch(
+                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auto-link-on-signup`,
+                {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                    "Content-Type": "application/json",
+                  },
+                }
+              );
+              const result = await response.json();
+              if (result.linked) {
+                console.log("Auto-linked to LearnWorlds account");
+              }
+            } catch (error) {
+              console.log("Auto-link not possible:", error);
+            }
+          }, 0);
+        }
         navigate("/");
       }
     });
