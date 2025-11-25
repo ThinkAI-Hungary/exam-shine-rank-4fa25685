@@ -160,7 +160,13 @@ const Auth = () => {
         });
 
         if (updateError) {
-          setError('Hiba történt a jelszó frissítése során');
+          // Check for specific error about password reuse
+          if (updateError.message.includes('same as the old password') || 
+              updateError.message.includes('New password should be different')) {
+            setError('Az új jelszó nem lehet azonos a jelenlegivel. Kérlek válassz másik jelszót.');
+          } else {
+            setError('Hiba történt a jelszó frissítése során: ' + updateError.message);
+          }
         } else {
           toast.success('Jelszó sikeresen frissítve! Átirányítás...');
           setPassword('');
