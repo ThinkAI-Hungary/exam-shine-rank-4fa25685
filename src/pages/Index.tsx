@@ -209,74 +209,81 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-glow rounded-xl flex items-center justify-center shadow-glow">
-              <Trophy className="w-5 h-5 text-primary-foreground" />
+        <div className="container mx-auto px-6 py-3">
+          <div className="flex items-center justify-between gap-6">
+            {/* Left Section */}
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-glow rounded-xl flex items-center justify-center shadow-glow">
+                <Trophy className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent whitespace-nowrap">
+                LearnWorlds Leaderboard
+              </h1>
             </div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent whitespace-nowrap">
-              LearnWorlds Leaderboard
-            </h1>
-          </div>
-          <div className="flex gap-3 items-center">
-            <Navigation />
-            
-            <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
-                  <SelectTrigger className="w-[250px]">
-                    <SelectValue placeholder="Válassz felhasználót (vagy mindet)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">🌐 Összes felhasználó (Teljes frissítés)</SelectItem>
-                    <SelectSeparator />
-                    {leaderboard.map((entry) => (
-                      <SelectItem key={entry.user_id} value={entry.user_id}>
-                        {entry.username} {entry.email && `(${entry.email})`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleRefresh}
-                  disabled={refreshing}
-                >
-                  <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                  {refreshing 
-                    ? 'Frissítés...' 
-                    : selectedUserId 
-                      ? 'Kiválasztott felhasználó frissítése' 
-                      : 'Összes felhasználó frissítése'
-                  }
-                </Button>
-                {apiCallsUsed && (
-                  <span className="text-xs text-muted-foreground">
-                    Utolsó: {apiCallsUsed} API hívás
-                  </span>
-                )}
-            
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="default" size="sm">
-                  <Code className="w-4 h-4 mr-2" />
-                  Kód beágyazása
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Ranglista beágyazása</DialogTitle>
-                  <DialogDescription>
-                    Másold ki ezt a kódot a ranglista weboldaladba történő beágyazásához
-                  </DialogDescription>
-                </DialogHeader>
-                <Textarea 
-                  value={embedCode} 
-                  readOnly 
-                  className="font-mono text-sm h-32"
-                  onClick={(e) => e.currentTarget.select()}
-                />
-              </DialogContent>
-            </Dialog>
+
+            {/* Right Section */}
+            <div className="flex items-center gap-3">
+              <Navigation />
+              
+              <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
+                <SelectTrigger className="w-[250px]">
+                  <SelectValue placeholder="Válassz felhasználót (vagy mindet)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">🌐 Összes felhasználó (Teljes frissítés)</SelectItem>
+                  <SelectSeparator />
+                  {leaderboard.map((entry) => (
+                    <SelectItem key={entry.user_id} value={entry.user_id}>
+                      {entry.username} {entry.email && `(${entry.email})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleRefresh}
+                disabled={refreshing}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                {refreshing 
+                  ? 'Frissítés...' 
+                  : selectedUserId 
+                    ? 'Kiválasztott felhasználó frissítése' 
+                    : 'Összes felhasználó frissítése'
+                }
+              </Button>
+              
+              {apiCallsUsed && (
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  Utolsó: {apiCallsUsed} API hívás
+                </span>
+              )}
+          
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="default" size="sm">
+                    <Code className="w-4 h-4 mr-2" />
+                    Kód beágyazása
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Ranglista beágyazása</DialogTitle>
+                    <DialogDescription>
+                      Másold ki ezt a kódot a ranglista weboldaladba történő beágyazásához
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Textarea 
+                    value={embedCode} 
+                    readOnly 
+                    className="font-mono text-sm h-32"
+                    onClick={(e) => e.currentTarget.select()}
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </div>
       </header>
