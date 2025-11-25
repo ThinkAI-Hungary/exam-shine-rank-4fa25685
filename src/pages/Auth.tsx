@@ -16,9 +16,15 @@ const passwordSchema = z.string().min(6, { message: "A jelszónak legalább 6 ka
 const Auth = () => {
   const navigate = useNavigate();
   
-  // Check for recovery mode immediately before any state initialization
-  const params = new URLSearchParams(window.location.search);
-  const isRecovery = params.get('type') === 'recovery';
+  // Check for recovery mode immediately - check both search params and hash
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const isRecovery = searchParams.get('type') === 'recovery' || hashParams.get('type') === 'recovery';
+  
+  console.log('Component mount - URL:', window.location.href);
+  console.log('Search params:', window.location.search);
+  console.log('Hash:', window.location.hash);
+  console.log('Is recovery mode:', isRecovery);
   
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset' | 'update-password'>(
     isRecovery ? 'update-password' : 'signin'
@@ -28,32 +34,45 @@ const Auth = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRecoverySession, setIsRecoverySession] = useState(isRecovery);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth event:', event, 'Has session:', !!session);
+      console.log('=== Auth State Change ===');
+      console.log('Event:', event);
+      console.log('Has session:', !!session);
+      console.log('Current URL:', window.location.href);
+      console.log('isRecoverySession state:', isRecoverySession);
       
-      // Always check URL first before any navigation logic
-      const currentParams = new URLSearchParams(window.location.search);
-      const isRecoveryMode = currentParams.get('type') === 'recovery';
-      
-      // If recovery mode detected, set mode and don't navigate
-      if (isRecoveryMode) {
-        console.log('Recovery mode detected, staying on auth page');
+      // Handle password recovery event - this means user clicked recovery link
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('PASSWORD_RECOVERY event - setting recovery mode');
+        setIsRecoverySession(true);
         setMode('update-password');
         return;
       }
       
-      // Handle password recovery event
-      if (event === 'PASSWORD_RECOVERY') {
-        console.log('PASSWORD_RECOVERY event');
+      // If we're in a recovery session, don't navigate away
+      if (isRecoverySession) {
+        console.log('In recovery session - staying on auth page');
+        return;
+      }
+      
+      // Check URL one more time
+      const currentSearchParams = new URLSearchParams(window.location.search);
+      const currentHashParams = new URLSearchParams(window.location.hash.substring(1));
+      const isCurrentlyRecovery = currentSearchParams.get('type') === 'recovery' || currentHashParams.get('type') === 'recovery';
+      
+      if (isCurrentlyRecovery) {
+        console.log('Recovery detected in URL - staying on auth page');
+        setIsRecoverySession(true);
         setMode('update-password');
         return;
       }
       
       // Only navigate away if we have a session AND not in recovery
-      if (session && !isRecoveryMode) {
-        console.log('Session exists and not recovery, navigating home');
+      if (session) {
+        console.log('Session exists and not recovery - navigating home');
         // Try automatic linking on signup
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           setTimeout(async () => {
@@ -71,7 +90,7 @@ const Auth = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, isRecoverySession]);
 
   const validateEmail = async (email: string): Promise<boolean> => {
     try {
@@ -146,6 +165,7 @@ const Auth = () => {
           toast.success('Jelszó sikeresen frissítve! Átirányítás...');
           setPassword('');
           setConfirmPassword('');
+          setIsRecoverySession(false); // Clear recovery flag
           // Sign out and redirect to login after password update
           await supabase.auth.signOut();
           setTimeout(() => {
