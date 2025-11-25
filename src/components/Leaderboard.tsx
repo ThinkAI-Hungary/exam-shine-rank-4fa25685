@@ -59,7 +59,12 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
   };
 
   const handleRowClick = (entry: LeaderboardEntry) => {
-    if (isEmbedded) return;
+    console.log('Row clicked:', entry.username);
+    if (isEmbedded) {
+      console.log('Embedded mode, not opening dialog');
+      return;
+    }
+    console.log('Setting selected user and opening dialog');
     setSelectedUser(entry);
     setDialogOpen(true);
   };
