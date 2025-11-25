@@ -15,7 +15,7 @@ const passwordSchema = z.string().min(6, { message: "A jelszónak legalább 6 ka
 
 const Auth = () => {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -102,7 +102,24 @@ const Auth = () => {
         return;
       }
 
-      // Validate password
+      if (mode === 'reset') {
+        // Password reset mode - only needs email
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth`,
+        });
+
+        if (resetError) {
+          setError('Hiba történt a jelszó visszaállítás során');
+        } else {
+          toast.success('Jelszó visszaállító email elküldve! Ellenőrizd a postaládád.');
+          setMode('signin');
+          setEmail('');
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Validate password for signin/signup
       try {
         passwordSchema.parse(password);
       } catch (error) {
@@ -142,7 +159,7 @@ const Auth = () => {
             setError(signUpError.message);
           }
         } else {
-          toast.success('Sikeres regisztráció! Jelentkezz be.');
+          toast.success('Sikeres regisztráció! Ellenőrizd az emailedet a megerősítéshez.');
           setMode('signin');
           setPassword('');
         }
@@ -160,12 +177,14 @@ const Auth = () => {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-3xl font-bold">
-            {mode === 'signin' ? 'Bejelentkezés' : 'Regisztráció'}
+            {mode === 'signin' ? 'Bejelentkezés' : mode === 'signup' ? 'Regisztráció' : 'Jelszó visszaállítás'}
           </CardTitle>
           <CardDescription>
             {mode === 'signin' 
               ? 'Jelentkezz be a ranglista megtekintéséhez'
-              : 'Hozz létre fiókot (csak LearnWorlds felhasználóknak)'
+              : mode === 'signup'
+              ? 'Hozz létre fiókot (csak LearnWorlds felhasználóknak)'
+              : 'Add meg az email címedet a jelszó visszaállításához'
             }
           </CardDescription>
         </CardHeader>
@@ -192,44 +211,68 @@ const Auth = () => {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Jelszó</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Jelszavad"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                maxLength={72}
-                disabled={loading}
-              />
-            </div>
+            {mode !== 'reset' && (
+              <div className="space-y-2">
+                <Label htmlFor="password">Jelszó</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Jelszavad"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  maxLength={72}
+                  disabled={loading}
+                />
+              </div>
+            )}
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {mode === 'signin' ? 'Bejelentkezés...' : 'Regisztráció...'}
+                  {mode === 'signin' ? 'Bejelentkezés...' : mode === 'signup' ? 'Regisztráció...' : 'Email küldése...'}
                 </>
               ) : (
-                mode === 'signin' ? 'Bejelentkezés' : 'Regisztráció'
+                mode === 'signin' ? 'Bejelentkezés' : mode === 'signup' ? 'Regisztráció' : 'Jelszó visszaállítás'
               )}
             </Button>
 
-            <div className="text-center">
+            <div className="text-center space-y-2">
+              {mode === 'signin' && (
+                <Button
+                  type="button"
+                  variant="link"
+                  onClick={() => {
+                    setMode('reset');
+                    setError(null);
+                    setPassword('');
+                  }}
+                  disabled={loading}
+                  className="text-sm"
+                >
+                  Elfelejtetted a jelszavad?
+                </Button>
+              )}
+              
               <Button
                 type="button"
                 variant="link"
                 onClick={() => {
-                  setMode(mode === 'signin' ? 'signup' : 'signin');
+                  if (mode === 'reset') {
+                    setMode('signin');
+                  } else {
+                    setMode(mode === 'signin' ? 'signup' : 'signin');
+                  }
                   setError(null);
                   setPassword('');
                 }}
                 disabled={loading}
               >
-                {mode === 'signin' 
+                {mode === 'reset' 
+                  ? 'Vissza a bejelentkezéshez'
+                  : mode === 'signin' 
                   ? 'Nincs még fiókod? Regisztrálj!' 
                   : 'Van már fiókod? Jelentkezz be!'
                 }
