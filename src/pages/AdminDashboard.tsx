@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Navigation from "@/components/Navigation";
-import { Trophy, Users, Award, AlertTriangle, Loader2, Link as LinkIcon } from "lucide-react";
+import { Trophy, Users, Award, AlertTriangle, Loader2, Link as LinkIcon, Eye } from "lucide-react";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -167,6 +167,14 @@ const AdminDashboard = () => {
                 >
                   <LinkIcon className="mr-2 h-4 w-4" />
                   Felhasználó Összekapcsolás Kezelése
+                </Button>
+                <Button 
+                  className="w-full justify-start" 
+                  variant="outline"
+                  onClick={() => navigate("/admin/badges")}
+                >
+                  <Award className="mr-2 h-4 w-4" />
+                  Összes Jelvény Megtekintése
                 </Button>
                 <Button 
                   className="w-full justify-start" 

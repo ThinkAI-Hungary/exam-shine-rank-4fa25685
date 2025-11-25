@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Link as LinkIcon, CheckCircle, XCircle } from "lucide-react";
+import { Loader2, Link as LinkIcon, CheckCircle, XCircle, Award } from "lucide-react";
+import BadgeDisplay from "@/components/BadgeDisplay";
 
 interface Profile {
   id: string;
@@ -18,6 +19,21 @@ interface Profile {
   link_method: string | null;
 }
 
+interface BadgeData {
+  id: string;
+  badge_definitions: {
+    badge_name: string;
+    badge_type: 'category' | 'monthly_star' | 'progress' | 'aspirant';
+    badge_level: string | null;
+    description: string;
+    icon_name: string;
+    color: string;
+  };
+  awarded_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
 const Profile = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -25,6 +41,7 @@ const Profile = () => {
   const [linking, setLinking] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [linkEmail, setLinkEmail] = useState("");
+  const [badges, setBadges] = useState<BadgeData[]>([]);
 
   useEffect(() => {
     checkAuth();
@@ -53,6 +70,18 @@ const Profile = () => {
       if (error) throw error;
       setProfile(data);
       setLinkEmail(data.email);
+
+      // Fetch user's badges if they have a linked LearnWorlds account
+      if (data.learnworlds_user_id) {
+        const { data: badgesData } = await supabase
+          .from('user_badges')
+          .select('*, badge_definitions(*)')
+          .eq('user_id', data.learnworlds_user_id)
+          .is('revoked_at', null)
+          .order('awarded_at', { ascending: false });
+        
+        setBadges(badgesData || []);
+      }
     } catch (error: any) {
       console.error("Error fetching profile:", error);
       toast({
@@ -214,6 +243,31 @@ const Profile = () => {
                     </>
                   )}
                 </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Award className="h-5 w-5" />
+              Jelvényeim
+            </CardTitle>
+            <CardDescription>
+              Az Ön által megszerzett jelvények
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {badges.length > 0 ? (
+              <BadgeDisplay badges={badges} />
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Award className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>Még nincsenek jelvényei</p>
+                {!profile?.link_verified && (
+                  <p className="text-sm mt-2">Kapcsolja össze fiókját a LearnWorlds rendszerrel a jelvények megszerzéséhez</p>
+                )}
               </div>
             )}
           </CardContent>
