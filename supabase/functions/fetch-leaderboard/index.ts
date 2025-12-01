@@ -262,10 +262,14 @@ async function fetchCourseProgress(
   try {
     const url = `${baseUrl}/v2/users/${userId}/courses/${courseId}/progress`;
     const data = await makeLearnWorldsRequest(url, accessToken, clientId);
+    const timeFields = data ? Object.keys(data).filter(k => 
+      k.toLowerCase().includes('time') || k.toLowerCase().includes('duration')
+    ) : [];
     console.log(`[User ${userId}] [Course ${courseId}] Progress data structure:`, JSON.stringify({
       hasActivities: !!data?.activities,
       activitiesCount: data?.activities?.length || 0,
-      sampleFields: data ? Object.keys(data) : []
+      sampleFields: data ? Object.keys(data) : [],
+      timeFields: timeFields
     }));
     return data;
   } catch (error) {
@@ -338,6 +342,41 @@ interface ExamResult {
   username: string;
   email: string | null;
   score_source?: 'exact' | 'estimated';
+  time_spent_seconds?: number | null;
+}
+
+interface CourseTimeData {
+  user_id: string;
+  course_id: string;
+  course_title: string;
+  total_time_spent_seconds: number;
+  last_activity_at: string | null;
+}
+
+/**
+ * Extract time spent data from activity or exam object
+ * Checks multiple possible field names for time data
+ */
+function extractTimeSpent(obj: any): number | null {
+  // Common field names for time spent in seconds
+  const timeFields = [
+    'time_spent_seconds',
+    'time_spent',
+    'duration_seconds',
+    'duration',
+    'spent_time',
+    'time_taken',
+    'total_time',
+  ];
+  
+  for (const field of timeFields) {
+    if (obj && typeof obj[field] === 'number' && obj[field] > 0) {
+      console.log(`Found time data in field '${field}': ${obj[field]} seconds`);
+      return obj[field];
+    }
+  }
+  
+  return null;
 }
 
 /**
@@ -402,7 +441,8 @@ function extractExamScoresFromGrades(
       grade: gradeEntry.grade,
       learningUnit: gradeEntry.learningUnit?.title || gradeEntry.learningUnit?.name,
       created: gradeEntry.created,
-      submittedTimestamp: gradeEntry.submittedTimestamp
+      submittedTimestamp: gradeEntry.submittedTimestamp,
+      availableTimeFields: Object.keys(gradeEntry).filter(k => k.toLowerCase().includes('time') || k.toLowerCase().includes('duration'))
     }));
     
     // Extract score from the grade field (number or numeric string)
@@ -417,8 +457,9 @@ function extractExamScoresFromGrades(
     if (score !== null) {
       const completedAt = normalizeTimestamp(gradeEntry.submittedTimestamp || gradeEntry.created || gradeEntry.modified);
       const examTitle = gradeEntry.learningUnit?.title || gradeEntry.learningUnit?.name || 'Untitled Exam';
+      const timeSpent = extractTimeSpent(gradeEntry);
       
-      console.log(`[User ${userId}] [Course ${courseId}] ✓ EXAM FOUND (from grades): score=${score}, title=${examTitle}`);
+      console.log(`[User ${userId}] [Course ${courseId}] ✓ EXAM FOUND (from grades): score=${score}, title=${examTitle}, time_spent=${timeSpent || 'N/A'}`);
       
       totalScore += score;
       examCount++;
@@ -435,6 +476,7 @@ function extractExamScoresFromGrades(
           username: username,
           email: email,
           score_source: 'exact',
+          time_spent_seconds: timeSpent,
         });
         
         if (!lastActivity || completedAt > lastActivity) {
@@ -465,9 +507,14 @@ function extractExamScores(progress: CourseProgress, userId: string, username: s
   
   
   for (const activity of progress.activities) {
-    // Log full activity structure for exam activities to debug title extraction
+    // Log full activity structure for exam activities to debug title extraction AND time tracking
     if (activity.type === 'exam') {
       console.log(`[User ${userId}] [Course ${courseId}] Full exam activity:`, JSON.stringify(activity, null, 2));
+      // Log available time-related fields
+      const timeFields = Object.keys(activity).filter(k => 
+        k.toLowerCase().includes('time') || k.toLowerCase().includes('duration')
+      );
+      console.log(`[User ${userId}] [Course ${courseId}] Time-related fields in activity:`, timeFields);
     }
     
     console.log(`[User ${userId}] [Course ${courseId}] Activity:`, JSON.stringify({
@@ -488,7 +535,8 @@ function extractExamScores(progress: CourseProgress, userId: string, username: s
       typeof activity.score === 'number'
     ) {
       const completedAt = normalizeTimestamp(activity.completed_at);
-      console.log(`[User ${userId}] [Course ${courseId}] ✓ EXAM FOUND: score=${activity.score}, title=${activity.title}`);
+      const timeSpent = extractTimeSpent(activity);
+      console.log(`[User ${userId}] [Course ${courseId}] ✓ EXAM FOUND: score=${activity.score}, title=${activity.title}, time_spent=${timeSpent || 'N/A'}`);
       totalScore += activity.score;
       examCount++;
 
@@ -508,6 +556,7 @@ function extractExamScores(progress: CourseProgress, userId: string, username: s
           user_id: userId,
           username: username,
           email: email,
+          time_spent_seconds: timeSpent,
         });
       }
 
@@ -577,6 +626,12 @@ async function aggregateUserData(
   if (allProgress.length > 0) {
     const sampleProgress = allProgress[0];
     console.log(`[User ${userId}] Progress sample keys: ${JSON.stringify(Object.keys(sampleProgress))}`);
+    
+    // Log time-related fields
+    const timeFields = Object.keys(sampleProgress).filter(k => 
+      k.toLowerCase().includes('time') || k.toLowerCase().includes('duration')
+    );
+    console.log(`[User ${userId}] Time-related fields in progress:`, timeFields);
     
     // Log full structure for debugging
     if (username.includes('Benke') || allProgress.length <= 3) {
@@ -1015,7 +1070,7 @@ serve(async (req) => {
     if (allExamResults.length > 0) {
       console.log(`\nUpserting ${allExamResults.length} exam results into database...`);
       
-      // Upsert exam results (omit non-existent columns like score_source)
+      // Upsert exam results including time_spent_seconds
       const sanitizedExamResults = allExamResults.map((e) => ({
         exam_id: e.exam_id,
         exam_title: e.exam_title,
@@ -1026,6 +1081,7 @@ serve(async (req) => {
         user_id: e.user_id,
         username: e.username,
         email: e.email ?? null,
+        time_spent_seconds: e.time_spent_seconds ?? null,
       }));
 
       const { error: examInsertError } = await supabase
@@ -1037,6 +1093,60 @@ serve(async (req) => {
         console.error('Error upserting exam results:', examInsertError);
       } else {
         console.log(`Successfully upserted ${allExamResults.length} exam results`);
+        
+        // Log time tracking statistics
+        const resultsWithTime = allExamResults.filter(e => e.time_spent_seconds);
+        console.log(`Time tracking: ${resultsWithTime.length}/${allExamResults.length} exams have time data`);
+      }
+      
+      // Step 3.1: Aggregate and store course-level time tracking
+      console.log('\nAggregating course-level time tracking...');
+      const courseTimeMap = new Map<string, CourseTimeData>();
+      
+      for (const exam of allExamResults) {
+        const key = `${exam.user_id}-${exam.course_id}`;
+        
+        if (!courseTimeMap.has(key)) {
+          courseTimeMap.set(key, {
+            user_id: exam.user_id,
+            course_id: exam.course_id,
+            course_title: exam.course_title,
+            total_time_spent_seconds: 0,
+            last_activity_at: exam.completed_at,
+          });
+        }
+        
+        const courseTime = courseTimeMap.get(key)!;
+        
+        // Add time if available
+        if (exam.time_spent_seconds) {
+          courseTime.total_time_spent_seconds += exam.time_spent_seconds;
+        }
+        
+        // Update last activity
+        if (exam.completed_at > (courseTime.last_activity_at || '')) {
+          courseTime.last_activity_at = exam.completed_at;
+        }
+      }
+      
+      // Upsert course time tracking data
+      if (courseTimeMap.size > 0) {
+        const courseTimeData = Array.from(courseTimeMap.values());
+        console.log(`Upserting ${courseTimeData.length} course time tracking records...`);
+        
+        const { error: courseTimeError } = await supabase
+          .from('course_time_tracking')
+          .upsert(courseTimeData, {
+            onConflict: 'user_id,course_id'
+          });
+        
+        if (courseTimeError) {
+          console.error('Error upserting course time tracking:', courseTimeError);
+        } else {
+          console.log(`Successfully upserted ${courseTimeData.length} course time tracking records`);
+          const trackedCourses = courseTimeData.filter(c => c.total_time_spent_seconds > 0);
+          console.log(`Courses with time data: ${trackedCourses.length}/${courseTimeData.length}`);
+        }
       }
     } else {
       console.log('No exam results to upsert');
