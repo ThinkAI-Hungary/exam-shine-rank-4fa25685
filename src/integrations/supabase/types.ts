@@ -53,6 +53,39 @@ export type Database = {
         }
         Relationships: []
       }
+      course_time_tracking: {
+        Row: {
+          course_id: string
+          course_title: string
+          created_at: string | null
+          id: string
+          last_activity_at: string | null
+          total_time_spent_seconds: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          course_id: string
+          course_title: string
+          created_at?: string | null
+          id?: string
+          last_activity_at?: string | null
+          total_time_spent_seconds?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          course_id?: string
+          course_title?: string
+          created_at?: string | null
+          id?: string
+          last_activity_at?: string | null
+          total_time_spent_seconds?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       exam_results: {
         Row: {
           completed_at: string
@@ -64,6 +97,7 @@ export type Database = {
           exam_title: string
           id: string
           score: number
+          time_spent_seconds: number | null
           user_id: string
           username: string
         }
@@ -77,6 +111,7 @@ export type Database = {
           exam_title: string
           id?: string
           score?: number
+          time_spent_seconds?: number | null
           user_id: string
           username: string
         }
@@ -90,6 +125,7 @@ export type Database = {
           exam_title?: string
           id?: string
           score?: number
+          time_spent_seconds?: number | null
           user_id?: string
           username?: string
         }
