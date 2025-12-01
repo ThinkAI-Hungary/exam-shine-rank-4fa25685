@@ -605,7 +605,8 @@ async function aggregateUserData(
   courseIds: string[],
   apiCallTracker: { count: number },
   allExamResults: ExamResult[],
-  courseGradesCache: Map<string, any>
+  courseGradesCache: Map<string, any>,
+  allCourseTimeData: CourseTimeData[]
 ): Promise<AggregatedUserData> {
   const userId = String(user.id);
   const username = user.username || user.name || user.email?.split('@')[0] || 'Unknown';
@@ -632,6 +633,11 @@ async function aggregateUserData(
       k.toLowerCase().includes('time') || k.toLowerCase().includes('duration')
     );
     console.log(`[User ${userId}] Time-related fields in progress:`, timeFields);
+    
+    // Check for time_on_course field
+    if ('time_on_course' in sampleProgress) {
+      console.log(`[User ${userId}] ✓ time_on_course field found: ${sampleProgress.time_on_course} seconds`);
+    }
     
     // Log full structure for debugging
     if (username.includes('Benke') || allProgress.length <= 3) {
@@ -698,6 +704,28 @@ async function aggregateUserData(
       if (detailedProgress) {
         examData = extractExamScores(detailedProgress, userId, username, email, courseId);
       }
+    }
+    
+    // Extract course-level time tracking data
+    if (courseId) {
+      const timeOnCourse = typeof (courseProgress as any).time_on_course === 'number' 
+        ? (courseProgress as any).time_on_course 
+        : 0;
+      
+      const completedAt = normalizeTimestamp((courseProgress as any).completed_at);
+      
+      if (timeOnCourse > 0) {
+        console.log(`[User ${userId}] [Course ${courseId}] time_on_course: ${timeOnCourse} seconds`);
+      }
+      
+      // Store course time data
+      allCourseTimeData.push({
+        user_id: userId,
+        course_id: courseId,
+        course_title: courseId, // Course title not available in progress
+        total_time_spent_seconds: timeOnCourse,
+        last_activity_at: completedAt,
+      });
     }
     
     // Add exam data to totals
@@ -1003,6 +1031,7 @@ serve(async (req) => {
     const batchSize = 3;
     const leaderboardData: AggregatedUserData[] = [];
     const allExamResults: any[] = [];
+    const allCourseTimeData: CourseTimeData[] = [];
 
     for (let i = 0; i < uniqueUsers.length; i += batchSize) {
       const batch = uniqueUsers.slice(i, i + batchSize);
@@ -1058,7 +1087,7 @@ serve(async (req) => {
             };
           } else {
             // Full refresh: Use per-course progress fetch
-            return aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, filterCourseIds, apiCallTracker, allExamResults, courseGradesCache);
+            return aggregateUserData(user, baseUrl, accessToken, clientId, rateLimiter, filterCourseIds, apiCallTracker, allExamResults, courseGradesCache, allCourseTimeData);
           }
         })
       );
@@ -1099,53 +1128,23 @@ serve(async (req) => {
         console.log(`Time tracking: ${resultsWithTime.length}/${allExamResults.length} exams have time data`);
       }
       
-      // Step 3.1: Aggregate and store course-level time tracking
-      console.log('\nAggregating course-level time tracking...');
-      const courseTimeMap = new Map<string, CourseTimeData>();
-      
-      for (const exam of allExamResults) {
-        const key = `${exam.user_id}-${exam.course_id}`;
-        
-        if (!courseTimeMap.has(key)) {
-          courseTimeMap.set(key, {
-            user_id: exam.user_id,
-            course_id: exam.course_id,
-            course_title: exam.course_title,
-            total_time_spent_seconds: 0,
-            last_activity_at: exam.completed_at,
-          });
-        }
-        
-        const courseTime = courseTimeMap.get(key)!;
-        
-        // Add time if available
-        if (exam.time_spent_seconds) {
-          courseTime.total_time_spent_seconds += exam.time_spent_seconds;
-        }
-        
-        // Update last activity
-        if (exam.completed_at > (courseTime.last_activity_at || '')) {
-          courseTime.last_activity_at = exam.completed_at;
-        }
-      }
-      
-      // Upsert course time tracking data
-      if (courseTimeMap.size > 0) {
-        const courseTimeData = Array.from(courseTimeMap.values());
-        console.log(`Upserting ${courseTimeData.length} course time tracking records...`);
+      // Step 3.1: Store course-level time tracking (use collected data from aggregateUserData)
+      console.log('\nStoring course-level time tracking...');
+      if (allCourseTimeData.length > 0) {
+        console.log(`Upserting ${allCourseTimeData.length} course time tracking records...`);
         
         const { error: courseTimeError } = await supabase
           .from('course_time_tracking')
-          .upsert(courseTimeData, {
+          .upsert(allCourseTimeData, {
             onConflict: 'user_id,course_id'
           });
         
         if (courseTimeError) {
           console.error('Error upserting course time tracking:', courseTimeError);
         } else {
-          console.log(`Successfully upserted ${courseTimeData.length} course time tracking records`);
-          const trackedCourses = courseTimeData.filter(c => c.total_time_spent_seconds > 0);
-          console.log(`Courses with time data: ${trackedCourses.length}/${courseTimeData.length}`);
+          console.log(`Successfully upserted ${allCourseTimeData.length} course time tracking records`);
+          const trackedCourses = allCourseTimeData.filter(c => c.total_time_spent_seconds > 0);
+          console.log(`Courses with time data: ${trackedCourses.length}/${allCourseTimeData.length}`);
         }
       }
     } else {
