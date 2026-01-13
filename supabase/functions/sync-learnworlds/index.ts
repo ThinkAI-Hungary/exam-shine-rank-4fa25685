@@ -587,6 +587,22 @@ serve(async (req) => {
         } else {
           console.log(`Updated leaderboard cache for ${leaderboardEntries.length} users`);
         }
+
+        // Update ranks (sort by average_score descending)
+        const { data: allLeaderboard } = await supabase
+          .from('leaderboard_cache')
+          .select('id, average_score')
+          .order('average_score', { ascending: false });
+
+        if (allLeaderboard) {
+          for (let i = 0; i < allLeaderboard.length; i++) {
+            await supabase
+              .from('leaderboard_cache')
+              .update({ rank: i + 1 })
+              .eq('id', allLeaderboard[i].id);
+          }
+          console.log(`Updated ranks for ${allLeaderboard.length} users`);
+        }
       }
     }
 
