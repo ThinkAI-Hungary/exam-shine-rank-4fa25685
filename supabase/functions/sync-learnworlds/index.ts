@@ -38,28 +38,83 @@ interface GradeResult {
 // Map to store unit_id -> unit_title for assessments/questionnaires
 const unitTitleMap = new Map<string, string>();
 
-async function makeLearnWorldsRequest(baseUrl: string, endpoint: string): Promise<any> {
-  // LearnWorlds API v2 requires a Bearer token (access token from OAuth)
-  const accessToken = Deno.env.get("LEARNWORLDS_ACCESS_TOKEN")?.trim();
-  // Fallback to API key if present
-  const apiKey = Deno.env.get("LEARNWORLDS_API_KEY")?.trim();
-  // Client ID is required in the Lw-Client header for the admin API
+let cachedAccessToken: { token: string; expiresAt: number } | null = null;
+
+async function getLearnWorldsAccessToken(subdomain: string): Promise<string> {
+  const now = Date.now();
+  if (cachedAccessToken && cachedAccessToken.expiresAt > now + 30_000) {
+    return cachedAccessToken.token;
+  }
+
   const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim();
-  
-  const bearer = accessToken || apiKey;
-  if (!bearer) throw new Error("Missing LEARNWORLDS_ACCESS_TOKEN or LEARNWORLDS_API_KEY secret");
+  const clientSecret = Deno.env.get("LEARNWORLDS_CLIENT_SECRET")?.trim();
+
+  // Backwards-compatible fallback: if you already have a working token, we can use it.
+  const staticToken = Deno.env.get("LEARNWORLDS_ACCESS_TOKEN")?.trim();
+  const apiKey = Deno.env.get("LEARNWORLDS_API_KEY")?.trim();
+
+  if (staticToken) return staticToken;
+  if (apiKey) return apiKey;
+
+  if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
+  if (!clientSecret) throw new Error("Missing LEARNWORLDS_CLIENT_SECRET secret");
+
+  const tokenUrl = `https://${subdomain}.learnworlds.com/oauth2/token`;
+  console.log(`[Auth] Fetching access token: ${tokenUrl}`);
+
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: clientId,
+    client_secret: clientSecret,
+  });
+
+  const resp = await fetch(tokenUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Accept": "application/json",
+    },
+    body,
+  });
+
+  const contentType = resp.headers.get("content-type") || "";
+  const text = await resp.text();
+
+  if (!resp.ok) {
+    console.error(`[Auth Error] ${resp.status} (${contentType}): ${text.substring(0, 500)}`);
+    throw new Error(`Auth error ${resp.status}: ${text.substring(0, 200)}`);
+  }
+
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`Auth returned non-JSON response (${contentType})`);
+  }
+
+  const token = String(json.access_token || "");
+  const expiresIn = Number(json.expires_in || 3600);
+  if (!token) throw new Error("Auth response missing access_token");
+
+  cachedAccessToken = { token, expiresAt: now + expiresIn * 1000 };
+  return token;
+}
+
+async function makeLearnWorldsRequest(baseUrl: string, endpoint: string, subdomain: string): Promise<any> {
+  const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim();
   if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
 
-  console.log("[API] Bearer token loaded:", !!bearer, "length:", bearer?.length);
-  console.log("[API] Client ID loaded:", !!clientId, "length:", clientId?.length);
+  const bearer = await getLearnWorldsAccessToken(subdomain);
 
-  const url = `${baseUrl}${endpoint}`;
+  // Some LearnWorlds admin endpoints expect client_id as query param as well.
+  const separator = endpoint.includes("?") ? "&" : "?";
+  const url = `${baseUrl}${endpoint}${separator}client_id=${encodeURIComponent(clientId)}`;
+
   console.log(`[API Request] ${url}`);
 
   const resp = await fetch(url, {
     method: "GET",
     headers: {
-      // LearnWorlds admin API requires Lw-Client header with the Client ID
       "Lw-Client": clientId,
       "Authorization": `Bearer ${bearer}`,
       "Content-Type": "application/json",
@@ -67,7 +122,6 @@ async function makeLearnWorldsRequest(baseUrl: string, endpoint: string): Promis
     },
   });
 
-  // Check content type before parsing
   const contentType = resp.headers.get("content-type") || "";
   const responseText = await resp.text();
 
@@ -76,7 +130,6 @@ async function makeLearnWorldsRequest(baseUrl: string, endpoint: string): Promis
     throw new Error(`API error ${resp.status}: ${responseText.substring(0, 200)}`);
   }
 
-  // Make sure we got JSON, not HTML
   if (!contentType.includes("application/json")) {
     console.error(`[API Error] Expected JSON but got ${contentType}: ${responseText.substring(0, 500)}`);
     throw new Error(`API returned non-JSON response (${contentType})`);
@@ -84,7 +137,7 @@ async function makeLearnWorldsRequest(baseUrl: string, endpoint: string): Promis
 
   try {
     return JSON.parse(responseText);
-  } catch (e) {
+  } catch {
     console.error(`[API Error] Failed to parse JSON: ${responseText.substring(0, 500)}`);
     throw new Error(`Failed to parse API response as JSON`);
   }
@@ -135,7 +188,7 @@ serve(async (req) => {
 
     // Step 1: Fetch all courses
     console.log('[Step 1] Fetching all courses...');
-    const coursesData = await makeLearnWorldsRequest(baseUrl, '/courses');
+    const coursesData = await makeLearnWorldsRequest(baseUrl, '/courses', subdomain);
     const courses: Course[] = coursesData.data || coursesData || [];
     console.log(`[Step 1] Found ${courses.length} courses`);
 
@@ -169,7 +222,7 @@ serve(async (req) => {
       try {
         // Step 2a: Fetch course content to get unit titles
         console.log(`  -> Fetching content for course ${courseId}...`);
-        const contentData = await makeLearnWorldsRequest(baseUrl, `/courses/${courseId}/content`);
+        const contentData = await makeLearnWorldsRequest(baseUrl, `/courses/${courseId}/content`, subdomain);
         const contentUnits: ContentUnit[] = contentData.data || contentData || [];
 
         // Store unit titles for assessments and questionnaires
@@ -182,7 +235,7 @@ serve(async (req) => {
 
         // Step 2b: Fetch all grades for this course
         console.log(`  -> Fetching grades for course ${courseId}...`);
-        const gradesData = await makeLearnWorldsRequest(baseUrl, `/courses/${courseId}/grades`);
+        const gradesData = await makeLearnWorldsRequest(baseUrl, `/courses/${courseId}/grades`, subdomain);
         const grades: GradeResult[] = gradesData.data || gradesData || [];
 
         console.log(`  -> Found ${grades.length} grade records`);
