@@ -53,8 +53,15 @@ interface ExamResult {
 
 // ============= API HELPERS =============
 
-// Use global LearnWorlds API cluster - school identification via Lw-Client-Id header
-const API_BASE = 'https://api.eu-w3.learnworlds.com/v2';
+// Build base URL from subdomain - extract first part if custom domain is set
+function computeBaseUrl(rawSubdomain: string): string {
+  // Extract 'academyhu' if the secret contains 'academyhu.diego.hu' or similar
+  const cleanSubdomain = rawSubdomain.trim().split('.')[0];
+  if (!cleanSubdomain) {
+    throw new Error('Invalid LEARNWORLDS_SUBDOMAIN - cannot extract subdomain');
+  }
+  return `https://${cleanSubdomain}.learnworlds.com/v2`;
+}
 
 async function makeLearnWorldsRequest(
   url: string,
@@ -142,7 +149,7 @@ async function fetchAllCourses(
   let hasMore = true;
 
   while (hasMore) {
-    const url = `${baseUrl}/courses?page=${page}&per_page=50`;
+    const url = `${baseUrl}/courses?client_id=${encodeURIComponent(clientId)}&page=${page}&per_page=50`;
     try {
       const data = await makeLearnWorldsRequest(url, accessToken, clientId);
       const courses = data.data || data || [];
@@ -185,7 +192,7 @@ async function fetchCourseContent(
   const unitTitleMap = new Map<string, string>();
   
   try {
-    const url = `${baseUrl}/courses/${courseId}/content`;
+    const url = `${baseUrl}/courses/${courseId}/content?client_id=${encodeURIComponent(clientId)}`;
     console.log(`[Course ${courseId}] Fetching content from: ${url}`);
     const data = await makeLearnWorldsRequest(url, accessToken, clientId);
     
@@ -248,7 +255,7 @@ async function fetchCourseGrades(
   
   while (hasMore) {
     try {
-      const url = `${baseUrl}/courses/${courseId}/grades?page=${page}&per_page=50`;
+      const url = `${baseUrl}/courses/${courseId}/grades?client_id=${encodeURIComponent(clientId)}&page=${page}&per_page=50`;
       console.log(`[Course ${courseId}] Fetching grades page ${page}: ${url}`);
       const data = await makeLearnWorldsRequest(url, accessToken, clientId);
       
@@ -395,16 +402,17 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    if (!clientId || !accessToken) {
-      throw new Error('Missing LearnWorlds credentials (LEARNWORLDS_CLIENT_ID or LEARNWORLDS_ACCESS_TOKEN)');
+    if (!subdomain || !clientId || !accessToken) {
+      throw new Error('Missing LearnWorlds credentials (LEARNWORLDS_SUBDOMAIN, LEARNWORLDS_CLIENT_ID, or LEARNWORLDS_ACCESS_TOKEN)');
     }
 
-    // Use global API cluster - school identification via Lw-Client-Id header
-    const baseUrl = API_BASE;
+    // Build base URL from subdomain (extract first part if custom domain)
+    const baseUrl = computeBaseUrl(subdomain);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('=== Starting Course-Based Sync ===');
-    console.log(`Client ID: ${clientId.substring(0, 8)}...`);
+    console.log(`Subdomain (raw): ${subdomain}`);
+    console.log(`Clean subdomain: ${subdomain.split('.')[0]}`);
     console.log(`API Base: ${baseUrl}`);
 
     // Parse options
