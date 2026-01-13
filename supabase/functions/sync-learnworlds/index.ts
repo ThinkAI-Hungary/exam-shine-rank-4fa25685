@@ -49,12 +49,24 @@ async function getLearnWorldsAccessToken(subdomain: string): Promise<string> {
   const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim();
   const clientSecret = Deno.env.get("LEARNWORLDS_CLIENT_SECRET")?.trim();
 
-  // Backwards-compatible fallback: if you already have a working token, we can use it.
+  // Prefer generating a token for THIS client_id to avoid mismatches.
+  // Fallbacks are only used when client credentials are not configured.
   const staticToken = Deno.env.get("LEARNWORLDS_ACCESS_TOKEN")?.trim();
   const apiKey = Deno.env.get("LEARNWORLDS_API_KEY")?.trim();
 
-  if (staticToken) return staticToken;
-  if (apiKey) return apiKey;
+  if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
+
+  if (!clientSecret) {
+    if (staticToken) {
+      console.log("[Auth] Using preconfigured access token");
+      return staticToken;
+    }
+    if (apiKey) {
+      console.log("[Auth] Using API key as bearer token");
+      return apiKey;
+    }
+    throw new Error("Missing LEARNWORLDS_CLIENT_SECRET (or fallback token/key) secret");
+  }
 
   if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
   if (!clientSecret) throw new Error("Missing LEARNWORLDS_CLIENT_SECRET secret");
