@@ -53,17 +53,12 @@ interface ExamResult {
 
 // ============= API HELPERS =============
 
-// LearnWorlds school subdomain (bypass custom domain redirects)
-const API_BASE = 'https://academyhu.learnworlds.com/v2';
+// LearnWorlds EU cluster API host (school context is provided via headers)
+const API_BASE = 'https://api.eu-w3.learnworlds.com/v2';
 
-function withClientId(url: string, clientId: string): string {
-  const cid = clientId.trim();
-  if (!cid) return url;
-
-  // If url already has a query, append; otherwise add.
-  return url.includes('?')
-    ? `${url}&client_id=${encodeURIComponent(cid)}`
-    : `${url}?client_id=${encodeURIComponent(cid)}`;
+// Previously we injected client_id into the URL; for the EU cluster we rely on headers.
+function withClientId(url: string, _clientId: string): string {
+  return url;
 }
 
 async function makeLearnWorldsRequest(
@@ -82,15 +77,27 @@ async function makeLearnWorldsRequest(
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     let resp: Response | null = null;
     try {
+      const headers = {
+        'Lw-Client': clientId.trim(),
+        'Lw-Client-Id': clientId.trim(),
+        'client_id': clientId.trim(),
+        'Authorization': `Bearer ${accessToken.trim()}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      // Log headers (mask token) so we can verify names are not stripped
+      const maskedHeaders = {
+        ...headers,
+        Authorization: headers.Authorization ? 'Bearer ***' : '',
+      };
+      console.log('Request headers:', maskedHeaders);
+
       resp = await fetch(url, {
         method: 'GET',
-        // Redirect prevention: do NOT follow 301/302 to HTML pages.
+        // Safety: do NOT follow 301/302 to HTML pages.
         redirect: 'manual',
-        headers: {
-          'Lw-Client-Id': clientId.trim(),
-          'Authorization': `Bearer ${accessToken.trim()}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
       });
     } catch (e) {
       if (attempt === maxRetries) {
@@ -409,38 +416,24 @@ serve(async (req) => {
   let totalExamResults = 0;
 
   try {
-    // Get credentials from environment (trimmed for safety)
-    const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID')?.trim();
-    const accessToken = (Deno.env.get('LEARNWORLDS_ACCESS_TOKEN')?.trim() ||
-      Deno.env.get('LEARNWORLDS_API_KEY')?.trim() ||
-      '');
-    const rawSubdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN')?.trim() || '';
+    // Hardcode Client ID for this test to eliminate any secret mismatch.
+    const clientId = '68664e416816e727f0a2d038';
+    const accessToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN')?.trim() || '';
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    if (!clientId || !accessToken) {
-      throw new Error('Missing LearnWorlds credentials (LEARNWORLDS_CLIENT_ID and LEARNWORLDS_ACCESS_TOKEN or LEARNWORLDS_API_KEY)');
+    if (!accessToken) {
+      throw new Error('Missing LearnWorlds credentials (LEARNWORLDS_ACCESS_TOKEN)');
     }
 
-    // Extract the core subdomain (e.g., "academyhu" from "academyhu.diego.hu")
-    const coreSubdomain = rawSubdomain.split('.')[0];
-
-    // Secret verification (hard fail to avoid silently calling the wrong school)
-    if (coreSubdomain !== 'academyhu') {
-      throw new Error(`LEARNWORLDS_SUBDOMAIN must start with "academyhu" (got "${rawSubdomain || '(empty)'}")`);
-    }
-    if (clientId !== '68664e416816e727f0a2d038') {
-      throw new Error(`LEARNWORLDS_CLIENT_ID must be exactly "68664e416816e727f0a2d038" (got "${clientId}")`);
-    }
-
-    // Forced school subdomain base URL (bypass custom domain redirects)
+    // Use the EU cluster API host.
     const baseUrl = API_BASE;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('=== Starting Course-Based Sync ===');
-    console.log('Targeting school subdomain with Client ID:', clientId);
-    console.log(`API Base: ${baseUrl}`);
+    console.log('Targeting EU Cluster with Client ID:', clientId);
+    console.log('API Base:', baseUrl);
 
     // Parse options
     let options: { courseTitleContains?: string } = {};
