@@ -39,33 +39,22 @@ interface GradeResult {
 const unitTitleMap = new Map<string, string>();
 
 async function makeLearnWorldsRequest(baseUrl: string, endpoint: string): Promise<any> {
-  const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim();
-  // LearnWorlds admin API expects an OAuth access token (Bearer)
-  const accessToken = Deno.env.get("LEARNWORLDS_ACCESS_TOKEN")?.trim();
-  // Keep API key as fallback if the project uses it as bearer token
+  // LearnWorlds API v2 requires only a Bearer token (the API key)
   const apiKey = Deno.env.get("LEARNWORLDS_API_KEY")?.trim();
+  // Fallback to access token if present
+  const accessToken = Deno.env.get("LEARNWORLDS_ACCESS_TOKEN")?.trim();
+  const bearer = apiKey || accessToken;
 
-  if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
-  const bearer = accessToken || apiKey;
-  if (!bearer) throw new Error("Missing LEARNWORLDS_ACCESS_TOKEN (or LEARNWORLDS_API_KEY) secret");
+  if (!bearer) throw new Error("Missing LEARNWORLDS_API_KEY secret");
 
-  console.log("[API] Client ID loaded:", !!clientId);
-  console.log("[API] Access token loaded:", !!accessToken);
-  console.log("[API] API key loaded:", !!apiKey);
+  console.log("[API] Bearer token loaded:", !!bearer, "length:", bearer?.length);
 
-  // Add client_id as query parameter (required by LearnWorlds API)
-  const separator = endpoint.includes('?') ? '&' : '?';
-  const url = `${baseUrl}${endpoint}${separator}client_id=${encodeURIComponent(clientId)}`;
-
+  const url = `${baseUrl}${endpoint}`;
   console.log(`[API Request] ${url}`);
-  console.log(`[API] Client ID length: ${clientId?.length}, Bearer length: ${bearer?.length}`);
 
   const resp = await fetch(url, {
     method: "GET",
     headers: {
-      // LearnWorlds docs/implementations vary; send both header variants to be safe.
-      "Lw-Client": clientId,
-      "Lw-Client-Id": clientId,
       "Authorization": `Bearer ${bearer}`,
       "Content-Type": "application/json",
       "Accept": "application/json",
@@ -131,7 +120,7 @@ serve(async (req) => {
 
     if (!subdomain) throw new Error("Missing LEARNWORLDS_SUBDOMAIN secret");
 
-    // Use /admin/api/v2 prefix (verified working path)
+    // LearnWorlds public API v2 base URL (works for all schools)
     const baseUrl = `https://${subdomain}.learnworlds.com/admin/api/v2`;
 
     console.log(`[sync-learnworlds] Course-centric sync starting. Base URL: ${baseUrl}`);
