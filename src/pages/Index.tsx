@@ -46,6 +46,7 @@ const Index = () => {
   const [filteredLeaderboard, setFilteredLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [apiCallsUsed, setApiCallsUsed] = useState<number | null>(null);
@@ -206,8 +207,39 @@ const Index = () => {
     }
   };
 
-
-
+  const handleCourseSync = async () => {
+    setSyncing(true);
+    toast.info("Szinkronizálás kurzusok alapján... Ez akár egy percig is eltarthat.");
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-learnworlds', {
+        body: { options: { courseTitleContains: 'Vizsgafelület' } }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.success) {
+        toast.success(
+          `Szinkronizálás kész! ${data.examResultsSaved} vizsga eredmény mentve, ${data.usersUpdated} felhasználó frissítve. (${data.apiCalls} API hívás)`
+        );
+        setApiCallsUsed(data.apiCalls);
+        
+        // Evaluate badges after sync
+        console.log('Evaluating badges...');
+        await supabase.functions.invoke('evaluate-badges', {});
+        
+        // Refresh the leaderboard view
+        setTimeout(() => { fetchLeaderboard(); }, 1500);
+      } else {
+        throw new Error(data?.error || 'Sync failed');
+      }
+    } catch (error: any) {
+      toast.error(`Szinkronizálás sikertelen: ${error.message}`);
+      console.error('Course sync failed:', error);
+    } finally {
+      setSyncing(false);
+    }
+  };
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
@@ -246,15 +278,25 @@ const Index = () => {
                 variant="outline" 
                 size="sm" 
                 onClick={handleRefresh}
-                disabled={refreshing}
+                disabled={refreshing || syncing}
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
                 {refreshing 
                   ? 'Frissítés...' 
                   : selectedUserId 
                     ? 'Kiválasztott felhasználó frissítése' 
-                    : 'Összes felhasználó frissítése'
+                    : 'Gyors frissítés'
                 }
+              </Button>
+              
+              <Button 
+                variant="default" 
+                size="sm" 
+                onClick={handleCourseSync}
+                disabled={refreshing || syncing}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Szinkronizálás...' : 'Összes felhasználó frissítése'}
               </Button>
               
               {apiCallsUsed && (
@@ -330,11 +372,24 @@ const Index = () => {
                       handleRefresh();
                       setMobileMenuOpen(false);
                     }}
-                    disabled={refreshing}
+                    disabled={refreshing || syncing}
                     className="w-full"
                   >
                     <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                    {refreshing ? 'Frissítés...' : 'Frissítés'}
+                    {refreshing ? 'Frissítés...' : 'Gyors frissítés'}
+                  </Button>
+                  
+                  <Button 
+                    variant="default" 
+                    onClick={() => {
+                      handleCourseSync();
+                      setMobileMenuOpen(false);
+                    }}
+                    disabled={refreshing || syncing}
+                    className="w-full"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                    {syncing ? 'Szinkronizálás...' : 'Összes felhasználó frissítése'}
                   </Button>
                   
                   {apiCallsUsed && (

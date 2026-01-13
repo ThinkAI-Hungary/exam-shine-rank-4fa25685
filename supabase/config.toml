@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.evaluate-warnings]
 verify_jwt = false
+
+[functions.sync-learnworlds]
+verify_jwt = false
