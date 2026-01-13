@@ -44,7 +44,20 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { user_id, evaluation_type } = await req.json();
+    // Parse request body safely - handle empty or invalid JSON
+    let user_id: string | undefined;
+    let evaluation_type: string | undefined;
+    
+    try {
+      const body = await req.text();
+      if (body && body.trim()) {
+        const parsed = JSON.parse(body);
+        user_id = parsed.user_id;
+        evaluation_type = parsed.evaluation_type;
+      }
+    } catch (parseError) {
+      console.log('No valid JSON body provided, evaluating all users');
+    }
     
     console.log(`Starting badge evaluation for user: ${user_id || 'all'}, type: ${evaluation_type || 'all'}`);
 
