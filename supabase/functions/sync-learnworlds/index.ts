@@ -423,9 +423,12 @@ serve(async (req) => {
       throw new Error('Missing LearnWorlds credentials (LEARNWORLDS_CLIENT_ID and LEARNWORLDS_ACCESS_TOKEN or LEARNWORLDS_API_KEY)');
     }
 
+    // Extract the core subdomain (e.g., "academyhu" from "academyhu.diego.hu")
+    const coreSubdomain = rawSubdomain.split('.')[0];
+
     // Secret verification (hard fail to avoid silently calling the wrong school)
-    if (rawSubdomain !== 'academyhu') {
-      throw new Error(`LEARNWORLDS_SUBDOMAIN must be exactly "academyhu" (got "${rawSubdomain || '(empty)'}")`);
+    if (coreSubdomain !== 'academyhu') {
+      throw new Error(`LEARNWORLDS_SUBDOMAIN must start with "academyhu" (got "${rawSubdomain || '(empty)'}")`);
     }
     if (clientId !== '68664e416816e727f0a2d038') {
       throw new Error(`LEARNWORLDS_CLIENT_ID must be exactly "68664e416816e727f0a2d038" (got "${clientId}")`);
