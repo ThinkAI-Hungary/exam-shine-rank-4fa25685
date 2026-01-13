@@ -516,47 +516,53 @@ serve(async (req) => {
       }
     }
 
-    // Update leaderboard cache
+    // Update leaderboard cache from the ACTUAL exam_results table (not just this sync batch)
     console.log('\n--- Step 4: Updating Leaderboard Cache ---');
     
-    // Aggregate scores by user
-    const userScores = new Map<string, {
-      username: string;
-      email: string | null;
-      total_score: number;
-      exam_count: number;
-      last_activity: string | null;
-    }>();
+    // Query actual aggregated stats from exam_results table
+    const { data: aggregatedStats, error: aggError } = await supabase
+      .from('exam_results')
+      .select('user_id, username, score, completed_at');
     
-    for (const result of allExamResults) {
-      const existing = userScores.get(result.user_id) || {
-        username: result.username,
-        email: result.email,
-        total_score: 0,
-        exam_count: 0,
-        last_activity: null,
-      };
+    if (aggError) {
+      console.error('Error fetching exam_results for leaderboard:', aggError);
+    } else if (aggregatedStats && aggregatedStats.length > 0) {
+      // Aggregate in memory
+      const userScores = new Map<string, {
+        username: string;
+        total_score: number;
+        exam_count: number;
+        last_activity: string | null;
+      }>();
       
-      existing.total_score += result.score;
-      existing.exam_count += 1;
-      
-      if (!existing.last_activity || result.completed_at > existing.last_activity) {
-        existing.last_activity = result.completed_at;
+      for (const row of aggregatedStats) {
+        const existing = userScores.get(row.user_id) || {
+          username: row.username,
+          total_score: 0,
+          exam_count: 0,
+          last_activity: null,
+        };
+        
+        existing.total_score += Number(row.score) || 0;
+        existing.exam_count += 1;
+        
+        if (!existing.last_activity || row.completed_at > existing.last_activity) {
+          existing.last_activity = row.completed_at;
+        }
+        
+        userScores.set(row.user_id, existing);
       }
       
-      userScores.set(result.user_id, existing);
-    }
-    
-    // Upsert to leaderboard_cache
-    const leaderboardEntries = Array.from(userScores.entries()).map(([user_id, data]) => ({
-      user_id,
-      total_score: Math.round(data.total_score),
-      exam_count: data.exam_count,
-      average_score: data.exam_count > 0 ? Math.round((data.total_score / data.exam_count) * 10) / 10 : 0,
-      last_activity: data.last_activity,
-    }));
-    
-    if (leaderboardEntries.length > 0) {
+      // Build leaderboard entries
+      const leaderboardEntries = Array.from(userScores.entries()).map(([user_id, data]) => ({
+        user_id,
+        total_score: Math.round(data.total_score),
+        exam_count: data.exam_count,
+        average_score: data.exam_count > 0 ? Math.round((data.total_score / data.exam_count) * 10) / 10 : 0,
+        last_activity: data.last_activity,
+      }));
+      
+      // Upsert to leaderboard_cache
       const { error } = await supabase
         .from('leaderboard_cache')
         .upsert(leaderboardEntries, { onConflict: 'user_id' });
@@ -567,7 +573,7 @@ serve(async (req) => {
         console.log(`Updated leaderboard cache for ${leaderboardEntries.length} users`);
       }
       
-      // Update ranks
+      // Update ranks (sort by average_score descending)
       const { data: allLeaderboard } = await supabase
         .from('leaderboard_cache')
         .select('id, average_score')
@@ -597,7 +603,6 @@ serve(async (req) => {
         apiCalls: apiCallCount,
         coursesProcessed,
         examResultsSaved: totalExamResults,
-        usersUpdated: userScores.size,
         durationMs: duration,
       }),
       { 
