@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { Trophy, Code, RefreshCw, Menu } from "lucide-react";
 import Leaderboard from "@/components/Leaderboard";
 import Navigation from "@/components/Navigation";
@@ -40,6 +41,17 @@ interface LeaderboardEntry {
   start_of_empl?: string;
 }
 
+interface SyncProgress {
+  total: number;
+  processed: number;
+  success: number;
+  failed: number;
+  examsTotal: number;
+}
+
+const BATCH_SIZE = 30;
+const BATCH_DELAY_MS = 10500; // 10.5 seconds between batches
+
 const Index = () => {
   const navigate = useNavigate();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -52,6 +64,8 @@ const Index = () => {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [user, setUser] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const syncAbortRef = useRef(false);
 
   const embedCode = `<iframe 
   src="${window.location.origin}/embed" 
@@ -63,6 +77,29 @@ const Index = () => {
 
   useEffect(() => {
     checkAuth();
+  }, []);
+
+  // Realtime subscription for leaderboard updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('leaderboard-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'leaderboard_cache',
+        },
+        () => {
+          console.log('Leaderboard updated via realtime');
+          fetchLeaderboard();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const checkAuth = async () => {
@@ -153,61 +190,187 @@ const Index = () => {
     }
   }, [selectedTag, leaderboard]);
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    const startTime = Date.now();
-    let logData: any = {
-      user_identifier: 'Anonymous',
-      is_selective_refresh: !!selectedUserId,
-      selected_user_id: selectedUserId,
+  // Initialize sync queue with all user IDs
+  const initSyncQueue = async () => {
+    console.log('Initializing sync queue...');
+    
+    // Get all user IDs from users table
+    const { data: allUsers, error: usersError } = await supabase
+      .from('users')
+      .select('user_id');
+
+    if (usersError || !allUsers) {
+      throw new Error(`Failed to fetch users: ${usersError?.message}`);
+    }
+
+    // Clear existing queue
+    await supabase.from('sync_queue').delete().neq('user_id', '');
+
+    // Insert all users as pending
+    const queueEntries = allUsers.map(u => ({
+      user_id: u.user_id,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+    }));
+
+    // Insert in batches to avoid payload limits
+    const chunkSize = 500;
+    for (let i = 0; i < queueEntries.length; i += chunkSize) {
+      const chunk = queueEntries.slice(i, i + chunkSize);
+      const { error } = await supabase.from('sync_queue').insert(chunk);
+      if (error) {
+        console.error('Error inserting queue chunk:', error);
+      }
+    }
+
+    console.log(`Initialized sync queue with ${allUsers.length} users`);
+    return allUsers.length;
+  };
+
+  // Process one batch and return remaining count
+  const processSyncBatch = async (): Promise<{ remaining: number; success: number; failed: number; exams: number }> => {
+    const { data, error } = await supabase.functions.invoke('sync-learnworlds', {
+      body: { batchSize: BATCH_SIZE }
+    });
+
+    if (error) {
+      throw new Error(`Sync batch failed: ${error.message}`);
+    }
+
+    return {
+      remaining: data.remaining || 0,
+      success: data.success || 0,
+      failed: data.failed || 0,
+      exams: data.exams_synced || 0,
     };
+  };
+
+  // Delay helper
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Handle full sync with recursive batching
+  const handleFullSync = async () => {
+    setRefreshing(true);
+    syncAbortRef.current = false;
     
     try {
-      const body = selectedUserId 
-        ? { options: { userIds: [selectedUserId], limitUsers: 0, limitCourses: 0, courseTitleContains: 'Vizsgafelület' } }
-        : { options: { limitUsers: 0, limitCourses: 0, courseTitleContains: 'Vizsgafelület' } };
+      // Init phase: populate sync queue
+      toast.info('Szinkronizálás előkészítése...');
+      const totalUsers = await initSyncQueue();
       
-      const { data, error } = await supabase.functions.invoke('fetch-leaderboard', { body });
-      
-      if (error) throw error;
-      
-      // Log success
-      logData.api_calls = data?.apiCalls || 0;
-      await supabase.from('refresh_logs').insert(logData);
-      
-      // Evaluate badges after fetching leaderboard data
-      console.log('Evaluating badges...');
-      const badgeParams = selectedUserId ? { user_id: selectedUserId } : {};
-      await supabase.functions.invoke('evaluate-badges', { body: badgeParams });
-      
-      const message = selectedUserId 
-        ? `Selected user refreshed! (${data?.apiCalls || '?'} API calls)`
-        : `Full leaderboard and badges refreshed! (${data?.apiCalls || '?'} API calls)`;
-      
-      toast.success(message);
-      if (data?.apiCalls) setApiCallsUsed(data.apiCalls);
+      setSyncProgress({
+        total: totalUsers,
+        processed: 0,
+        success: 0,
+        failed: 0,
+        examsTotal: 0,
+      });
 
-      // Fetch the updated data with JOIN to get user info
-      setTimeout(() => { fetchLeaderboard(); }, 1500);
-    } catch (error: any) {
-      // Log error
-      logData.error_message = error?.message || 'Unknown error';
-      logData.api_calls = 0;
-      try {
-        await supabase.from('refresh_logs').insert(logData);
-      } catch (logError) {
-        console.error('Failed to log refresh error:', logError);
+      let remaining = totalUsers;
+      let totalProcessed = 0;
+      let totalSuccess = 0;
+      let totalFailed = 0;
+      let totalExams = 0;
+
+      // Process phase: loop until queue is empty
+      while (remaining > 0 && !syncAbortRef.current) {
+        console.log(`Processing batch... ${remaining} users remaining`);
+        
+        const result = await processSyncBatch();
+        
+        totalProcessed += BATCH_SIZE;
+        totalSuccess += result.success;
+        totalFailed += result.failed;
+        totalExams += result.exams;
+        remaining = result.remaining;
+
+        setSyncProgress({
+          total: totalUsers,
+          processed: Math.min(totalProcessed, totalUsers),
+          success: totalSuccess,
+          failed: totalFailed,
+          examsTotal: totalExams,
+        });
+
+        // Refresh leaderboard to show updates
+        fetchLeaderboard();
+
+        // Wait before next batch (10.5 seconds to stay under rate limit)
+        if (remaining > 0) {
+          console.log(`Waiting ${BATCH_DELAY_MS}ms before next batch...`);
+          await delay(BATCH_DELAY_MS);
+        }
       }
+
+      // Evaluate badges after sync
+      console.log('Evaluating badges...');
+      await supabase.functions.invoke('evaluate-badges', { body: {} });
+
+      toast.success(`Szinkronizálás kész! ${totalSuccess} felhasználó, ${totalExams} vizsga eredmény`);
       
-      toast.error("Failed to refresh leaderboard");
+      // Log the sync
+      await supabase.from('refresh_logs').insert({
+        user_identifier: user?.email || 'Unknown',
+        is_selective_refresh: false,
+        api_calls: totalSuccess, // Each user = 1 API call with new endpoint
+      });
+
+      fetchLeaderboard();
+      
+    } catch (error: any) {
+      console.error('Full sync error:', error);
+      toast.error(`Szinkronizálási hiba: ${error.message}`);
+    } finally {
+      setRefreshing(false);
+      setSyncProgress(null);
+    }
+  };
+
+  // Handle single user refresh (uses old endpoint for now)
+  const handleSingleUserRefresh = async () => {
+    if (!selectedUserId) return;
+    
+    setRefreshing(true);
+    try {
+      // For single user, use the questionnaires endpoint directly
+      const { data, error } = await supabase.functions.invoke('sync-learnworlds', {
+        body: { batchSize: 1 }
+      });
+
+      // First add the single user to queue
+      await supabase.from('sync_queue').upsert({
+        user_id: selectedUserId,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+      });
+
+      // Then process
+      const result = await supabase.functions.invoke('sync-learnworlds', {
+        body: { batchSize: 1 }
+      });
+
+      if (result.error) throw result.error;
+
+      await supabase.functions.invoke('evaluate-badges', { body: { user_id: selectedUserId } });
+      
+      toast.success('Felhasználó frissítve!');
+      fetchLeaderboard();
+      
+    } catch (error: any) {
+      toast.error('Frissítési hiba');
       console.error(error);
     } finally {
       setRefreshing(false);
     }
   };
 
-
-
+  const handleRefresh = async () => {
+    if (selectedUserId) {
+      await handleSingleUserRefresh();
+    } else {
+      await handleFullSync();
+    }
+  };
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
@@ -257,7 +420,19 @@ const Index = () => {
                 }
               </Button>
               
-              {apiCallsUsed && (
+              {syncProgress && (
+                <div className="flex items-center gap-2 min-w-[200px]">
+                  <Progress 
+                    value={(syncProgress.processed / syncProgress.total) * 100} 
+                    className="h-2 flex-1"
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {syncProgress.processed} / {syncProgress.total}
+                  </span>
+                </div>
+              )}
+              
+              {!syncProgress && apiCallsUsed && (
                 <span className="text-xs text-muted-foreground whitespace-nowrap">
                   Utolsó: {apiCallsUsed} API hívás
                 </span>
@@ -337,7 +512,19 @@ const Index = () => {
                     {refreshing ? 'Frissítés...' : 'Frissítés'}
                   </Button>
                   
-                  {apiCallsUsed && (
+                  {syncProgress && (
+                    <div className="space-y-1">
+                      <Progress 
+                        value={(syncProgress.processed / syncProgress.total) * 100} 
+                        className="h-2"
+                      />
+                      <span className="text-xs text-muted-foreground text-center block">
+                        Feldolgozás: {syncProgress.processed} / {syncProgress.total} felhasználó
+                      </span>
+                    </div>
+                  )}
+                  
+                  {!syncProgress && apiCallsUsed && (
                     <span className="text-xs text-muted-foreground text-center">
                       Utolsó: {apiCallsUsed} API hívás
                     </span>
