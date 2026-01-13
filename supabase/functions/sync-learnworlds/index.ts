@@ -38,12 +38,16 @@ interface GradeResult {
 // Map to store unit_id -> unit_title for assessments/questionnaires
 const unitTitleMap = new Map<string, string>();
 
-async function makeLearnWorldsRequest(url: string): Promise<any> {
+async function makeLearnWorldsRequest(baseUrl: string, endpoint: string): Promise<any> {
   const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim();
   const apiKey = Deno.env.get("LEARNWORLDS_API_KEY")?.trim();
 
   if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
   if (!apiKey) throw new Error("Missing LEARNWORLDS_API_KEY secret");
+
+  // Add client_id as query parameter (required by LearnWorlds API)
+  const separator = endpoint.includes('?') ? '&' : '?';
+  const url = `${baseUrl}${endpoint}${separator}client_id=${encodeURIComponent(clientId)}`;
 
   console.log(`[API Request] ${url}`);
   console.log(`[API] Client ID length: ${clientId?.length}, API Key length: ${apiKey?.length}`);
@@ -126,7 +130,7 @@ serve(async (req) => {
 
     // Step 1: Fetch all courses
     console.log('[Step 1] Fetching all courses...');
-    const coursesData = await makeLearnWorldsRequest(`${baseUrl}/courses`);
+    const coursesData = await makeLearnWorldsRequest(baseUrl, '/courses');
     const courses: Course[] = coursesData.data || coursesData || [];
     console.log(`[Step 1] Found ${courses.length} courses`);
 
@@ -160,7 +164,7 @@ serve(async (req) => {
       try {
         // Step 2a: Fetch course content to get unit titles
         console.log(`  -> Fetching content for course ${courseId}...`);
-        const contentData = await makeLearnWorldsRequest(`${baseUrl}/courses/${courseId}/content`);
+        const contentData = await makeLearnWorldsRequest(baseUrl, `/courses/${courseId}/content`);
         const contentUnits: ContentUnit[] = contentData.data || contentData || [];
 
         // Store unit titles for assessments and questionnaires
@@ -173,7 +177,7 @@ serve(async (req) => {
 
         // Step 2b: Fetch all grades for this course
         console.log(`  -> Fetching grades for course ${courseId}...`);
-        const gradesData = await makeLearnWorldsRequest(`${baseUrl}/courses/${courseId}/grades`);
+        const gradesData = await makeLearnWorldsRequest(baseUrl, `/courses/${courseId}/grades`);
         const grades: GradeResult[] = gradesData.data || gradesData || [];
 
         console.log(`  -> Found ${grades.length} grade records`);
