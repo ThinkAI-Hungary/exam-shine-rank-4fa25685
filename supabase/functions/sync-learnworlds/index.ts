@@ -40,23 +40,31 @@ const unitTitleMap = new Map<string, string>();
 
 async function makeLearnWorldsRequest(baseUrl: string, endpoint: string): Promise<any> {
   const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim();
+  // LearnWorlds admin API expects an OAuth access token (Bearer)
+  const accessToken = Deno.env.get("LEARNWORLDS_ACCESS_TOKEN")?.trim();
+  // Keep API key as fallback if the project uses it as bearer token
   const apiKey = Deno.env.get("LEARNWORLDS_API_KEY")?.trim();
 
   if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
-  if (!apiKey) throw new Error("Missing LEARNWORLDS_API_KEY secret");
+  const bearer = accessToken || apiKey;
+  if (!bearer) throw new Error("Missing LEARNWORLDS_ACCESS_TOKEN (or LEARNWORLDS_API_KEY) secret");
+
+  console.log("[API] Client ID loaded:", !!clientId);
+  console.log("[API] Access token loaded:", !!accessToken);
+  console.log("[API] API key loaded:", !!apiKey);
 
   // Add client_id as query parameter (required by LearnWorlds API)
   const separator = endpoint.includes('?') ? '&' : '?';
   const url = `${baseUrl}${endpoint}${separator}client_id=${encodeURIComponent(clientId)}`;
 
   console.log(`[API Request] ${url}`);
-  console.log(`[API] Client ID length: ${clientId?.length}, API Key length: ${apiKey?.length}`);
+  console.log(`[API] Client ID length: ${clientId?.length}, Bearer length: ${bearer?.length}`);
 
   const resp = await fetch(url, {
     method: "GET",
     headers: {
       "Lw-Client-Id": clientId,
-      "Authorization": `Bearer ${apiKey}`,
+      "Authorization": `Bearer ${bearer}`,
       "Content-Type": "application/json",
       "Accept": "application/json",
     },
