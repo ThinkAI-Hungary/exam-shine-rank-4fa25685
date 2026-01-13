@@ -32,20 +32,27 @@ interface SyncResult {
   error?: string;
 }
 
-async function makeLearnWorldsRequest(
-  url: string,
-  accessToken: string,
-  clientId: string
-): Promise<any> {
-  console.log(`[LearnWorlds API] Full URL: ${url}`);
-  
+async function makeLearnWorldsRequest(url: string): Promise<any> {
+  // Verify secrets are loaded (do not log actual values)
+  console.log("Client ID loaded:", !!Deno.env.get("LEARNWORLDS_CLIENT_ID"));
+  console.log(
+    "API Key loaded:",
+    !!Deno.env.get("LEARNWORLDS_API_KEY") || !!Deno.env.get("LEARNWORLDS_ACCESS_TOKEN")
+  );
+  console.log("Full Target URL:", url);
+
+  const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID");
+  const apiKey = Deno.env.get("LEARNWORLDS_API_KEY") ?? Deno.env.get("LEARNWORLDS_ACCESS_TOKEN");
+
+  if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
+  if (!apiKey) throw new Error("Missing LEARNWORLDS_API_KEY (or LEARNWORLDS_ACCESS_TOKEN) secret");
+
   const resp = await fetch(url, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
-      'Lw-Client-Id': clientId,
+      "Lw-Client-Id": clientId,
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
     },
   });
 
@@ -80,8 +87,6 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const subdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN')!;
-    const accessToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN')!;
-    const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID')!;
 
     // Construct the base API URL from subdomain
     // LEARNWORLDS_SUBDOMAIN should be just the slug (e.g., "my-school")
@@ -147,10 +152,10 @@ serve(async (req) => {
       try {
         const url = `${baseUrl}/v2/users/${user_id}/questionnaires`;
         console.log(`[User ${user_id}] Fetching questionnaires from: ${url}`);
-        
-        const data = await makeLearnWorldsRequest(url, accessToken, clientId);
+
+        const data = await makeLearnWorldsRequest(url);
         const questionnaires: QuestionnaireResult[] = data.data || data || [];
-        
+
         console.log(`[User ${user_id}] Found ${questionnaires.length} questionnaire results`);
         if (questionnaires.length > 0) {
           console.log(`[User ${user_id}] Sample questionnaire:`, JSON.stringify(questionnaires[0]));
