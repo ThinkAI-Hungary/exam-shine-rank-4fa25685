@@ -63,8 +63,9 @@ async function makeLearnWorldsRequest(baseUrl: string, endpoint: string): Promis
   const resp = await fetch(url, {
     method: "GET",
     headers: {
-      // IMPORTANT: LearnWorlds docs specify "Lw-Client" NOT "Lw-Client-Id"
+      // LearnWorlds docs/implementations vary; send both header variants to be safe.
       "Lw-Client": clientId,
+      "Lw-Client-Id": clientId,
       "Authorization": `Bearer ${bearer}`,
       "Content-Type": "application/json",
       "Accept": "application/json",
