@@ -46,6 +46,7 @@ async function makeLearnWorldsRequest(url: string): Promise<any> {
   if (!apiKey) throw new Error("Missing LEARNWORLDS_API_KEY secret");
 
   console.log(`[API Request] ${url}`);
+  console.log(`[API] Client ID length: ${clientId?.length}, API Key length: ${apiKey?.length}`);
 
   const resp = await fetch(url, {
     method: "GET",
@@ -53,16 +54,31 @@ async function makeLearnWorldsRequest(url: string): Promise<any> {
       "Lw-Client-Id": clientId,
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      "Accept": "application/json",
     },
   });
 
+  // Check content type before parsing
+  const contentType = resp.headers.get("content-type") || "";
+  const responseText = await resp.text();
+
   if (!resp.ok) {
-    const text = await resp.text();
-    console.error(`[API Error] ${resp.status}: ${text}`);
-    throw new Error(`API error ${resp.status}: ${text}`);
+    console.error(`[API Error] ${resp.status} (${contentType}): ${responseText.substring(0, 500)}`);
+    throw new Error(`API error ${resp.status}: ${responseText.substring(0, 200)}`);
   }
 
-  return resp.json();
+  // Make sure we got JSON, not HTML
+  if (!contentType.includes("application/json")) {
+    console.error(`[API Error] Expected JSON but got ${contentType}: ${responseText.substring(0, 500)}`);
+    throw new Error(`API returned non-JSON response (${contentType})`);
+  }
+
+  try {
+    return JSON.parse(responseText);
+  } catch (e) {
+    console.error(`[API Error] Failed to parse JSON: ${responseText.substring(0, 500)}`);
+    throw new Error(`Failed to parse API response as JSON`);
+  }
 }
 
 function normalizeTimestamp(ts: any): string | null {
@@ -101,8 +117,8 @@ serve(async (req) => {
 
     if (!subdomain) throw new Error("Missing LEARNWORLDS_SUBDOMAIN secret");
 
-    // Use /v2 prefix (no /admin/api)
-    const baseUrl = `https://${subdomain}.learnworlds.com/v2`;
+    // Use /admin/api/v2 prefix (verified working path)
+    const baseUrl = `https://${subdomain}.learnworlds.com/admin/api/v2`;
 
     console.log(`[sync-learnworlds] Course-centric sync starting. Base URL: ${baseUrl}`);
 
