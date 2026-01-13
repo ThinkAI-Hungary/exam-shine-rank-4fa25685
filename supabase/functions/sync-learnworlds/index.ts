@@ -40,85 +40,62 @@ const unitTitleMap = new Map<string, string>();
 
 let cachedAccessToken: { token: string; expiresAt: number } | null = null;
 
-async function getLearnWorldsAccessToken(subdomain: string): Promise<string> {
-  const now = Date.now();
-  if (cachedAccessToken && cachedAccessToken.expiresAt > now + 30_000) {
-    return cachedAccessToken.token;
-  }
-
-  const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim();
-  const clientSecret = Deno.env.get("LEARNWORLDS_CLIENT_SECRET")?.trim();
-
-  // Prefer generating a token for THIS client_id to avoid mismatches.
-  // Fallbacks are only used when client credentials are not configured.
-  const staticToken = Deno.env.get("LEARNWORLDS_ACCESS_TOKEN")?.trim();
+async function getLearnWorldsAccessToken(_subdomain: string): Promise<string> {
+  // In some LearnWorlds setups the token endpoint is not accessible from server-to-server.
+  // We therefore rely on a pre-generated access token / API key stored as secrets.
+  const token = Deno.env.get("LEARNWORLDS_ACCESS_TOKEN")?.trim();
   const apiKey = Deno.env.get("LEARNWORLDS_API_KEY")?.trim();
 
-  if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
-
-  if (!clientSecret) {
-    if (staticToken) {
-      console.log("[Auth] Using preconfigured access token");
-      return staticToken;
-    }
-    if (apiKey) {
-      console.log("[Auth] Using API key as bearer token");
-      return apiKey;
-    }
-    throw new Error("Missing LEARNWORLDS_CLIENT_SECRET (or fallback token/key) secret");
+  const bearer = token || apiKey;
+  if (!bearer) {
+    throw new Error("Missing LEARNWORLDS_ACCESS_TOKEN (or LEARNWORLDS_API_KEY) secret");
   }
 
-  if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
-  if (!clientSecret) throw new Error("Missing LEARNWORLDS_CLIENT_SECRET secret");
-
-  const tokenUrl = `https://${subdomain}.learnworlds.com/oauth2/token`;
-  console.log(`[Auth] Fetching access token: ${tokenUrl}`);
-
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: clientId,
-    client_secret: clientSecret,
-  });
-
-  const resp = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Accept": "application/json",
-    },
-    body,
-  });
-
-  const contentType = resp.headers.get("content-type") || "";
-  const text = await resp.text();
-
-  if (!resp.ok) {
-    console.error(`[Auth Error] ${resp.status} (${contentType}): ${text.substring(0, 500)}`);
-    throw new Error(`Auth error ${resp.status}: ${text.substring(0, 200)}`);
-  }
-
-  let json: any;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    throw new Error(`Auth returned non-JSON response (${contentType})`);
-  }
-
-  const token = String(json.access_token || "");
-  const expiresIn = Number(json.expires_in || 3600);
-  if (!token) throw new Error("Auth response missing access_token");
-
-  cachedAccessToken = { token, expiresAt: now + expiresIn * 1000 };
-  return token;
+  return bearer;
 }
 
 async function makeLearnWorldsRequest(baseUrl: string, endpoint: string, subdomain: string): Promise<any> {
+  const isAdminApi = baseUrl.includes("/admin/");
+
+  // Public API mode (e.g. https://api.learnworlds.com/v2 or https://{school}.learnworlds.com/api/v2)
+  if (!isAdminApi) {
+    const bearer = Deno.env.get("LEARNWORLDS_API_KEY")?.trim() || Deno.env.get("LEARNWORLDS_ACCESS_TOKEN")?.trim();
+    if (!bearer) throw new Error("Missing LEARNWORLDS_API_KEY (or LEARNWORLDS_ACCESS_TOKEN) secret");
+
+    const url = `${baseUrl}${endpoint}`;
+    console.log(`[API Request] ${url}`);
+
+    const resp = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${bearer}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+    });
+
+    const contentType = resp.headers.get("content-type") || "";
+    const responseText = await resp.text();
+
+    if (!resp.ok) {
+      console.error(`[API Error] ${resp.status} (${contentType}): ${responseText.substring(0, 500)}`);
+      throw new Error(`API error ${resp.status}: ${responseText.substring(0, 200)}`);
+    }
+
+    if (!contentType.includes("application/json")) {
+      console.error(`[API Error] Expected JSON but got ${contentType}: ${responseText.substring(0, 500)}`);
+      throw new Error(`API returned non-JSON response (${contentType})`);
+    }
+
+    return JSON.parse(responseText);
+  }
+
+  // Admin API mode (requires client_id)
   const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim();
   if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
 
   const bearer = await getLearnWorldsAccessToken(subdomain);
 
-  // Some LearnWorlds admin endpoints expect client_id as query param as well.
   const separator = endpoint.includes("?") ? "&" : "?";
   const url = `${baseUrl}${endpoint}${separator}client_id=${encodeURIComponent(clientId)}`;
 
@@ -191,8 +168,10 @@ serve(async (req) => {
 
     if (!subdomain) throw new Error("Missing LEARNWORLDS_SUBDOMAIN secret");
 
-    // LearnWorlds public API v2 base URL (works for all schools)
-    const baseUrl = `https://${subdomain}.learnworlds.com/admin/api/v2`;
+    const configuredBaseUrl = (Deno.env.get("LEARNWORLDS_BASE_URL") || "").trim().replace(/\/+$/, "");
+
+    // Prefer configured base URL if provided, otherwise fall back to the admin API base.
+    const baseUrl = configuredBaseUrl || `https://${subdomain}.learnworlds.com/admin/api/v2`;
 
     console.log(`[sync-learnworlds] Course-centric sync starting. Base URL: ${baseUrl}`);
 
