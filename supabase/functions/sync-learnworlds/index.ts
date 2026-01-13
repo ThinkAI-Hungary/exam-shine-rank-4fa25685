@@ -53,33 +53,8 @@ interface ExamResult {
 
 // ============= API HELPERS =============
 
-/**
- * Reliable URL construction:
- * - Never use custom domains (e.g. diego.hu) for API calls because they may redirect to HTML.
- * - Always call the internal learnworlds.com subdomain.
- *
- * Examples:
- * - "academyhu" -> https://academyhu.learnworlds.com/v2
- * - "academyhu.learnworlds.com" -> https://academyhu.learnworlds.com/v2
- * - "academyhu.diego.hu" -> https://academyhu.learnworlds.com/v2 (extract only "academyhu")
- */
-function computeApiBase(subdomainRaw: string): string {
-  const cleaned = subdomainRaw
-    .trim()
-    .replace(/^https?:\/\//i, '')
-    .replace(/\/$/, '')
-    .split('/')[0];
-
-  // If it contains dots, we only keep the very first label (e.g. academyhu.diego.hu -> academyhu)
-  // This intentionally drops custom domains.
-  const academy = cleaned.split('.')[0];
-
-  if (!academy) {
-    throw new Error('Invalid LEARNWORLDS_SUBDOMAIN');
-  }
-
-  return `https://${academy}.learnworlds.com/v2`;
-}
+// Use global LearnWorlds API cluster - school identification via Lw-Client-Id header
+const API_BASE = 'https://api.eu-w3.learnworlds.com/v2';
 
 async function makeLearnWorldsRequest(
   url: string,
@@ -90,16 +65,19 @@ async function makeLearnWorldsRequest(
   const maxRetries = opts.maxRetries ?? 3;
   const baseDelayMs = opts.baseDelayMs ?? 500;
 
+  // Safety log before fetch
+  console.log(`Calling LearnWorlds API: ${url}`);
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     let resp: Response | null = null;
     try {
       resp = await fetch(url, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json',
+          'Lw-Client-Id': clientId.trim(),
+          'Authorization': `Bearer ${accessToken.trim()}`,
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-          'Lw-Client': clientId,
+          'Accept': 'application/json',
         },
       });
     } catch (e) {
@@ -417,16 +395,16 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    if (!subdomain || !clientId || !accessToken) {
-      throw new Error('Missing LearnWorlds credentials');
+    if (!clientId || !accessToken) {
+      throw new Error('Missing LearnWorlds credentials (LEARNWORLDS_CLIENT_ID or LEARNWORLDS_ACCESS_TOKEN)');
     }
 
-    // Reliable API base URL (always learnworlds.com + /v2)
-    const baseUrl = computeApiBase(subdomain);
+    // Use global API cluster - school identification via Lw-Client-Id header
+    const baseUrl = API_BASE;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('=== Starting Course-Based Sync ===');
-    console.log(`Subdomain (raw): ${subdomain}`);
+    console.log(`Client ID: ${clientId.substring(0, 8)}...`);
     console.log(`API Base: ${baseUrl}`);
 
     // Parse options
