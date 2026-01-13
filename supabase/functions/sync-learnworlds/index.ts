@@ -53,15 +53,32 @@ interface ExamResult {
 
 // ============= API HELPERS =============
 
-// Smart subdomain logic: if it contains a dot, use as-is; otherwise append .learnworlds.com
-function computeBaseUrl(subdomain: string): string {
-  if (subdomain.includes('.')) {
-    // Already contains a dot (e.g., "academyhu.diego.hu"), use as host directly
-    return `https://${subdomain}`;
-  } else {
-    // Simple subdomain (e.g., "academyhu"), append .learnworlds.com
-    return `https://${subdomain}.learnworlds.com`;
+/**
+ * Reliable URL construction:
+ * - Never use custom domains (e.g. diego.hu) for API calls because they may redirect to HTML.
+ * - Always call the internal learnworlds.com subdomain.
+ *
+ * Examples:
+ * - "academyhu" -> https://academyhu.learnworlds.com/v2
+ * - "academyhu.learnworlds.com" -> https://academyhu.learnworlds.com/v2
+ * - "academyhu.diego.hu" -> https://academyhu.learnworlds.com/v2 (extract only "academyhu")
+ */
+function computeApiBase(subdomainRaw: string): string {
+  const cleaned = subdomainRaw
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/$/, '')
+    .split('/')[0];
+
+  // If it contains dots, we only keep the very first label (e.g. academyhu.diego.hu -> academyhu)
+  // This intentionally drops custom domains.
+  const academy = cleaned.split('.')[0];
+
+  if (!academy) {
+    throw new Error('Invalid LEARNWORLDS_SUBDOMAIN');
   }
+
+  return `https://${academy}.learnworlds.com/v2`;
 }
 
 async function makeLearnWorldsRequest(
@@ -97,9 +114,9 @@ async function makeLearnWorldsRequest(
 
     // Check response status before parsing
     if (!resp.ok) {
-      const errorText = await resp.text();
-      console.error(`API Error ${resp.status}: ${errorText}`);
-      
+      const text = await resp.text();
+      console.error(`Status: ${resp.status}. Body snippet: ${text.substring(0, 500)}`);
+
       // Handle rate limit
       if (resp.status === 429 && attempt < maxRetries) {
         const retryAfter = Number(resp.headers.get('Retry-After'));
@@ -119,25 +136,17 @@ async function makeLearnWorldsRequest(
         continue;
       }
 
-      throw new Error(`LearnWorlds API returned ${resp.status}: ${errorText}`);
+      throw new Error(`LearnWorlds API returned ${resp.status}`);
     }
 
-    // Verify content-type is JSON before parsing
-    const contentType = resp.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const responseText = await resp.text();
-      console.error(`Non-JSON response received: ${responseText.substring(0, 200)}`);
-      throw new Error('API returned non-JSON response. Check your subdomain and API keys.');
+    const contentType = resp.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const body = await resp.text();
+      console.error('Expected JSON but got HTML. First 200 chars:', body.substring(0, 200));
+      throw new Error('API redirected to a non-JSON page. Check subdomain/auth.');
     }
 
-    // Parse JSON safely
-    try {
-      const data = await resp.json();
-      return data;
-    } catch (parseError) {
-      console.error(`JSON parse error:`, parseError);
-      throw new Error('Failed to parse API response as JSON');
-    }
+    return await resp.json();
   }
 
   throw new Error('Unreachable');
@@ -155,7 +164,7 @@ async function fetchAllCourses(
   let hasMore = true;
 
   while (hasMore) {
-    const url = `${baseUrl}/v2/courses?page=${page}&per_page=50`;
+    const url = `${baseUrl}/courses?page=${page}&per_page=50`;
     try {
       const data = await makeLearnWorldsRequest(url, accessToken, clientId);
       const courses = data.data || data || [];
@@ -198,7 +207,7 @@ async function fetchCourseContent(
   const unitTitleMap = new Map<string, string>();
   
   try {
-    const url = `${baseUrl}/v2/courses/${courseId}/content`;
+    const url = `${baseUrl}/courses/${courseId}/content`;
     console.log(`[Course ${courseId}] Fetching content from: ${url}`);
     const data = await makeLearnWorldsRequest(url, accessToken, clientId);
     
@@ -261,7 +270,7 @@ async function fetchCourseGrades(
   
   while (hasMore) {
     try {
-      const url = `${baseUrl}/v2/courses/${courseId}/grades?page=${page}&per_page=50`;
+      const url = `${baseUrl}/courses/${courseId}/grades?page=${page}&per_page=50`;
       console.log(`[Course ${courseId}] Fetching grades page ${page}: ${url}`);
       const data = await makeLearnWorldsRequest(url, accessToken, clientId);
       
@@ -412,13 +421,13 @@ serve(async (req) => {
       throw new Error('Missing LearnWorlds credentials');
     }
 
-    // Use smart subdomain logic
-    const baseUrl = computeBaseUrl(subdomain);
+    // Reliable API base URL (always learnworlds.com + /v2)
+    const baseUrl = computeApiBase(subdomain);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('=== Starting Course-Based Sync ===');
-    console.log(`Subdomain: ${subdomain}`);
-    console.log(`Computed Base URL: ${baseUrl}`);
+    console.log(`Subdomain (raw): ${subdomain}`);
+    console.log(`API Base: ${baseUrl}`);
 
     // Parse options
     let options: { courseTitleContains?: string } = {};
