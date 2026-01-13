@@ -11,7 +11,6 @@ import { Trophy, Code, RefreshCw, Menu } from "lucide-react";
 import Leaderboard from "@/components/Leaderboard";
 import Navigation from "@/components/Navigation";
 import { toast } from "sonner";
-
 interface BadgeData {
   id: string;
   badge_definitions: {
@@ -26,7 +25,6 @@ interface BadgeData {
   expires_at: string | null;
   revoked_at: string | null;
 }
-
 interface LeaderboardEntry {
   rank: number;
   username: string;
@@ -39,7 +37,6 @@ interface LeaderboardEntry {
   badges?: BadgeData[];
   start_of_empl?: string;
 }
-
 const Index = () => {
   const navigate = useNavigate();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -53,7 +50,6 @@ const Index = () => {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [user, setUser] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   const embedCode = `<iframe 
   src="${window.location.origin}/embed" 
   width="100%" 
@@ -61,50 +57,52 @@ const Index = () => {
   frameborder="0"
   style="border: 1px solid #e5e7eb; border-radius: 0.5rem;"
 ></iframe>`;
-
   useEffect(() => {
     checkAuth();
   }, []);
-
   const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: {
+        session
+      }
+    } = await supabase.auth.getSession();
     if (!session) {
       navigate("/auth");
       return;
     }
     setUser(session.user);
     fetchLeaderboard();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: {
+        subscription
+      }
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!session) {
         navigate("/auth");
       } else {
         setUser(session.user);
       }
     });
-
     return () => subscription.unsubscribe();
   };
-
   const fetchLeaderboard = async () => {
     try {
-      const { data, error } = await supabase
-        .from("leaderboard_cache")
-        .select(`
+      const {
+        data,
+        error
+      } = await supabase.from("leaderboard_cache").select(`
           *,
           users!inner(username, email, tags, start_of_empl)
-        `)
-        .order("rank", { ascending: true });
-
+        `).order("rank", {
+        ascending: true
+      });
       if (error) throw error;
 
       // Fetch badges for all users
       const userIds = (data || []).map((item: any) => item.user_id);
-      const { data: badgesData } = await supabase
-        .from('user_badges')
-        .select('*, badge_definitions(*)')
-        .in('user_id', userIds)
-        .is('revoked_at', null);
+      const {
+        data: badgesData
+      } = await supabase.from('user_badges').select('*, badge_definitions(*)').in('user_id', userIds).is('revoked_at', null);
 
       // Group badges by user_id
       const badgesByUser = (badgesData || []).reduce((acc: any, badge: any) => {
@@ -112,7 +110,6 @@ const Index = () => {
         acc[badge.user_id].push(badge);
         return acc;
       }, {});
-
       const formattedData: LeaderboardEntry[] = (data || []).map((item: any) => ({
         rank: item.rank,
         username: item.users.username,
@@ -123,12 +120,11 @@ const Index = () => {
         average_score: item.average_score,
         tags: item.users.tags || [],
         badges: badgesByUser[item.user_id] || [],
-        start_of_empl: item.users.start_of_empl,
+        start_of_empl: item.users.start_of_empl
       }));
-
       setLeaderboard(formattedData);
       setFilteredLeaderboard(formattedData);
-      
+
       // Extract unique tags
       const tags = new Set<string>();
       formattedData.forEach(entry => {
@@ -142,54 +138,65 @@ const Index = () => {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     if (selectedTag) {
-      const filtered = leaderboard.filter(entry => 
-        entry.tags.includes(selectedTag)
-      );
+      const filtered = leaderboard.filter(entry => entry.tags.includes(selectedTag));
       setFilteredLeaderboard(filtered);
     } else {
       setFilteredLeaderboard(leaderboard);
     }
   }, [selectedTag, leaderboard]);
-
   const handleRefresh = async () => {
     setRefreshing(true);
     const startTime = Date.now();
     let logData: any = {
       user_identifier: 'Anonymous',
       is_selective_refresh: !!selectedUserId,
-      selected_user_id: selectedUserId,
+      selected_user_id: selectedUserId
     };
-    
     try {
-      const body = selectedUserId 
-        ? { options: { userIds: [selectedUserId], limitUsers: 0, limitCourses: 0, courseTitleContains: 'Vizsgafelület' } }
-        : { options: { limitUsers: 0, limitCourses: 0, courseTitleContains: 'Vizsgafelület' } };
-      
-      const { data, error } = await supabase.functions.invoke('fetch-leaderboard', { body });
-      
+      const body = selectedUserId ? {
+        options: {
+          userIds: [selectedUserId],
+          limitUsers: 0,
+          limitCourses: 0,
+          courseTitleContains: 'Vizsgafelület'
+        }
+      } : {
+        options: {
+          limitUsers: 0,
+          limitCourses: 0,
+          courseTitleContains: 'Vizsgafelület'
+        }
+      };
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('fetch-leaderboard', {
+        body
+      });
       if (error) throw error;
-      
+
       // Log success
       logData.api_calls = data?.apiCalls || 0;
       await supabase.from('refresh_logs').insert(logData);
-      
+
       // Evaluate badges after fetching leaderboard data
       console.log('Evaluating badges...');
-      const badgeParams = selectedUserId ? { user_id: selectedUserId } : {};
-      await supabase.functions.invoke('evaluate-badges', { body: badgeParams });
-      
-      const message = selectedUserId 
-        ? `Selected user refreshed! (${data?.apiCalls || '?'} API calls)`
-        : `Full leaderboard and badges refreshed! (${data?.apiCalls || '?'} API calls)`;
-      
+      const badgeParams = selectedUserId ? {
+        user_id: selectedUserId
+      } : {};
+      await supabase.functions.invoke('evaluate-badges', {
+        body: badgeParams
+      });
+      const message = selectedUserId ? `Selected user refreshed! (${data?.apiCalls || '?'} API calls)` : `Full leaderboard and badges refreshed! (${data?.apiCalls || '?'} API calls)`;
       toast.success(message);
       if (data?.apiCalls) setApiCallsUsed(data.apiCalls);
 
       // Fetch the updated data with JOIN to get user info
-      setTimeout(() => { fetchLeaderboard(); }, 1500);
+      setTimeout(() => {
+        fetchLeaderboard();
+      }, 1500);
     } catch (error: any) {
       // Log error
       logData.error_message = error?.message || 'Unknown error';
@@ -199,37 +206,39 @@ const Index = () => {
       } catch (logError) {
         console.error('Failed to log refresh error:', logError);
       }
-      
       toast.error("Failed to refresh leaderboard");
       console.error(error);
     } finally {
       setRefreshing(false);
     }
   };
-
   const handleCourseSync = async () => {
     setSyncing(true);
     toast.info("Szinkronizálás kurzusok alapján... Ez akár egy percig is eltarthat.");
-    
     try {
-      const { data, error } = await supabase.functions.invoke('sync-learnworlds', {
-        body: { options: { courseTitleContains: 'Vizsgafelület' } }
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('sync-learnworlds', {
+        body: {
+          options: {
+            courseTitleContains: 'Vizsgafelület'
+          }
+        }
       });
-      
       if (error) throw error;
-      
       if (data?.success) {
-        toast.success(
-          `Szinkronizálás kész! ${data.examResultsSaved} vizsga eredmény mentve, ${data.usersUpdated} felhasználó frissítve. (${data.apiCalls} API hívás)`
-        );
+        toast.success(`Szinkronizálás kész! ${data.examResultsSaved} vizsga eredmény mentve, ${data.usersUpdated} felhasználó frissítve. (${data.apiCalls} API hívás)`);
         setApiCallsUsed(data.apiCalls);
-        
+
         // Evaluate badges after sync
         console.log('Evaluating badges...');
         await supabase.functions.invoke('evaluate-badges', {});
-        
+
         // Refresh the leaderboard view
-        setTimeout(() => { fetchLeaderboard(); }, 1500);
+        setTimeout(() => {
+          fetchLeaderboard();
+        }, 1500);
       } else {
         throw new Error(data?.error || 'Sync failed');
       }
@@ -240,8 +249,7 @@ const Index = () => {
       setSyncing(false);
     }
   };
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
+  return <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-full px-6 py-3">
           <div className="flex items-center justify-between gap-8">
@@ -259,51 +267,29 @@ const Index = () => {
             <div className="hidden lg:flex items-center gap-2">
               <Navigation />
               
-              <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
+              <Select value={selectedUserId || "all"} onValueChange={value => setSelectedUserId(value === "all" ? null : value)}>
                 <SelectTrigger className="w-[250px]">
                   <SelectValue placeholder="Válassz felhasználót (vagy mindet)" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">🌐 Összes felhasználó (Teljes frissítés)</SelectItem>
                   <SelectSeparator />
-                  {leaderboard.map((entry) => (
-                    <SelectItem key={entry.user_id} value={entry.user_id}>
+                  {leaderboard.map(entry => <SelectItem key={entry.user_id} value={entry.user_id}>
                       {entry.username} {entry.email && `(${entry.email})`}
-                    </SelectItem>
-                  ))}
+                    </SelectItem>)}
                 </SelectContent>
               </Select>
               
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleRefresh}
-                disabled={refreshing || syncing}
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                {refreshing 
-                  ? 'Frissítés...' 
-                  : selectedUserId 
-                    ? 'Kiválasztott felhasználó frissítése' 
-                    : 'Gyors frissítés'
-                }
-              </Button>
               
-              <Button 
-                variant="default" 
-                size="sm" 
-                onClick={handleCourseSync}
-                disabled={refreshing || syncing}
-              >
+              
+              <Button variant="default" size="sm" onClick={handleCourseSync} disabled={refreshing || syncing}>
                 <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
                 {syncing ? 'Szinkronizálás...' : 'Összes felhasználó frissítése'}
               </Button>
               
-              {apiCallsUsed && (
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {apiCallsUsed && <span className="text-xs text-muted-foreground whitespace-nowrap">
                   Utolsó: {apiCallsUsed} API hívás
-                </span>
-              )}
+                </span>}
           
               <Dialog>
                 <DialogTrigger asChild>
@@ -319,12 +305,7 @@ const Index = () => {
                       Másold ki ezt a kódot a ranglista weboldaladba történő beágyazásához
                     </DialogDescription>
                   </DialogHeader>
-                  <Textarea 
-                    value={embedCode} 
-                    readOnly 
-                    className="font-mono text-sm h-32"
-                    onClick={(e) => e.currentTarget.select()}
-                  />
+                  <Textarea value={embedCode} readOnly className="font-mono text-sm h-32" onClick={e => e.currentTarget.select()} />
                 </DialogContent>
               </Dialog>
             </div>
@@ -332,11 +313,7 @@ const Index = () => {
             {/* Mobile Menu Button */}
             <Drawer open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <DrawerTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className="lg:hidden border-2 hover:bg-accent"
-                >
+                <Button variant="outline" size="icon" className="lg:hidden border-2 hover:bg-accent">
                   <Menu className="w-6 h-6" />
                 </Button>
               </DrawerTrigger>
@@ -350,53 +327,39 @@ const Index = () => {
                   
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Felhasználó kiválasztása</label>
-                    <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
+                    <Select value={selectedUserId || "all"} onValueChange={value => setSelectedUserId(value === "all" ? null : value)}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Válassz felhasználót" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">🌐 Összes felhasználó</SelectItem>
                         <SelectSeparator />
-                        {leaderboard.map((entry) => (
-                          <SelectItem key={entry.user_id} value={entry.user_id}>
+                        {leaderboard.map(entry => <SelectItem key={entry.user_id} value={entry.user_id}>
                             {entry.username}
-                          </SelectItem>
-                        ))}
+                          </SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   
-                  <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      handleRefresh();
-                      setMobileMenuOpen(false);
-                    }}
-                    disabled={refreshing || syncing}
-                    className="w-full"
-                  >
+                  <Button variant="outline" onClick={() => {
+                  handleRefresh();
+                  setMobileMenuOpen(false);
+                }} disabled={refreshing || syncing} className="w-full">
                     <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
                     {refreshing ? 'Frissítés...' : 'Gyors frissítés'}
                   </Button>
                   
-                  <Button 
-                    variant="default" 
-                    onClick={() => {
-                      handleCourseSync();
-                      setMobileMenuOpen(false);
-                    }}
-                    disabled={refreshing || syncing}
-                    className="w-full"
-                  >
+                  <Button variant="default" onClick={() => {
+                  handleCourseSync();
+                  setMobileMenuOpen(false);
+                }} disabled={refreshing || syncing} className="w-full">
                     <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
                     {syncing ? 'Szinkronizálás...' : 'Összes felhasználó frissítése'}
                   </Button>
                   
-                  {apiCallsUsed && (
-                    <span className="text-xs text-muted-foreground text-center">
+                  {apiCallsUsed && <span className="text-xs text-muted-foreground text-center">
                       Utolsó: {apiCallsUsed} API hívás
-                    </span>
-                  )}
+                    </span>}
               
                   <Dialog>
                     <DialogTrigger asChild>
@@ -412,12 +375,7 @@ const Index = () => {
                           Másold ki ezt a kódot a ranglista weboldaladba történő beágyazásához
                         </DialogDescription>
                       </DialogHeader>
-                      <Textarea 
-                        value={embedCode} 
-                        readOnly 
-                        className="font-mono text-sm h-32"
-                        onClick={(e) => e.currentTarget.select()}
-                      />
+                      <Textarea value={embedCode} readOnly className="font-mono text-sm h-32" onClick={e => e.currentTarget.select()} />
                     </DialogContent>
                   </Dialog>
                 </div>
@@ -428,12 +386,9 @@ const Index = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
+        {loading ? <div className="flex items-center justify-center py-20">
             <div className="animate-pulse text-muted-foreground">Ranglista betöltése...</div>
-          </div>
-        ) : (
-          <div className="max-w-5xl mx-auto">
+          </div> : <div className="max-w-5xl mx-auto">
             <Card className="shadow-card">
               <CardHeader className="text-center space-y-4">
                 <div>
@@ -442,34 +397,27 @@ const Index = () => {
                     Az összes kurzuson szerzett átlag pontszám alapján rangsorolva
                   </CardDescription>
                 </div>
-                {availableTags.length > 0 && (
-                  <div className="flex justify-center">
-                    <Select value={selectedTag || "all"} onValueChange={(value) => setSelectedTag(value === "all" ? null : value)}>
+                {availableTags.length > 0 && <div className="flex justify-center">
+                    <Select value={selectedTag || "all"} onValueChange={value => setSelectedTag(value === "all" ? null : value)}>
                       <SelectTrigger className="w-[250px]">
                         <SelectValue placeholder="Szűrés címke szerint" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Összes címke</SelectItem>
                         <SelectSeparator />
-                        {availableTags.map((tag) => (
-                          <SelectItem key={tag} value={tag}>
+                        {availableTags.map(tag => <SelectItem key={tag} value={tag}>
                             {tag}
-                          </SelectItem>
-                        ))}
+                          </SelectItem>)}
                       </SelectContent>
                     </Select>
-                  </div>
-                )}
+                  </div>}
               </CardHeader>
               <CardContent>
                 <Leaderboard entries={filteredLeaderboard} />
               </CardContent>
             </Card>
-          </div>
-        )}
+          </div>}
       </main>
-    </div>
-  );
+    </div>;
 };
-
 export default Index;
