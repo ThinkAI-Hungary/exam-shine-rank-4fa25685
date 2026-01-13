@@ -180,14 +180,35 @@ serve(async (req) => {
     // Step 1: Fetch all courses
     console.log('[Step 1] Fetching all courses...');
     const coursesData = await makeLearnWorldsRequest(baseUrl, '/courses', subdomain);
-    const courses: Course[] = coursesData.data || coursesData || [];
+
+    // Handle different API response structures
+    let courses: Course[] = [];
+    if (Array.isArray(coursesData)) {
+      courses = coursesData;
+    } else if (coursesData && Array.isArray(coursesData.data)) {
+      courses = coursesData.data;
+    } else if (coursesData && typeof coursesData === "object") {
+      // If it's an object but not in expected format, log its keys
+      console.log(`[Step 1] Unexpected response structure. Keys: ${Object.keys(coursesData).join(", ")}`);
+      // Try common patterns
+      const possibleArrays = ["courses", "items", "results", "records"];
+      for (const key of possibleArrays) {
+        if (Array.isArray(coursesData[key])) {
+          courses = coursesData[key];
+          console.log(`[Step 1] Found courses under key: ${key}`);
+          break;
+        }
+      }
+    }
+
     console.log(`[Step 1] Found ${courses.length} courses`);
 
     if (courses.length === 0) {
       return new Response(JSON.stringify({ 
         message: 'No courses found',
         courses_processed: 0,
-        exams_synced: 0 
+        exams_synced: 0,
+        raw_response_keys: coursesData ? Object.keys(coursesData) : []
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
