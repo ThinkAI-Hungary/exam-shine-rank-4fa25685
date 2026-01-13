@@ -34,15 +34,13 @@ interface SyncResult {
 
 async function makeLearnWorldsRequest(url: string): Promise<any> {
   // Verify secrets are loaded (do not log actual values)
-  console.log("Client ID loaded:", !!Deno.env.get("LEARNWORLDS_CLIENT_ID"));
-  console.log(
-    "API Key loaded:",
-    !!Deno.env.get("LEARNWORLDS_API_KEY") || !!Deno.env.get("LEARNWORLDS_ACCESS_TOKEN")
-  );
-  console.log("Full Target URL:", url);
-
   const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID");
   const apiKey = Deno.env.get("LEARNWORLDS_API_KEY") ?? Deno.env.get("LEARNWORLDS_ACCESS_TOKEN");
+
+  console.log("Client ID loaded:", !!clientId);
+  console.log("API Key loaded:", !!apiKey);
+  console.log("Sending Lw-Client-Id header length:", clientId?.trim().length);
+  console.log("Full Target URL:", url);
 
   if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
   if (!apiKey) throw new Error("Missing LEARNWORLDS_API_KEY (or LEARNWORLDS_ACCESS_TOKEN) secret");
@@ -50,14 +48,18 @@ async function makeLearnWorldsRequest(url: string): Promise<any> {
   const resp = await fetch(url, {
     method: "GET",
     headers: {
-      "Lw-Client-Id": clientId,
+      "Lw-Client-Id": clientId.trim(),
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      "Accept": "application/json",
+      // backup variant (some stacks normalize header keys differently)
+      "lw-client-id": clientId.trim(),
     },
   });
 
   if (!resp.ok) {
     const text = await resp.text();
+    console.error("[LearnWorlds API] Error response body:", text);
     throw new Error(`API error ${resp.status}: ${text}`);
   }
 
@@ -78,6 +80,18 @@ function normalizeTimestamp(ts: any): string | null {
   return null;
 }
 
+function parseLearnWorldsSubdomain(raw: string): string {
+  let s = (raw || '').trim();
+  s = s.replace(/^https?:\/\//i, '');
+  s = s.replace(/\/$/, '');
+  s = s.replace(/\.learnworlds\.com\b/i, '');
+  // If user accidentally provided a custom domain, keep only the left-most label
+  // because we must call https://${SUBDOMAIN}.learnworlds.com
+  s = s.split('/')[0] ?? s;
+  s = s.split('.')[0] ?? s;
+  return s;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -86,16 +100,13 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const subdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN')!;
 
-    // Construct the base API URL from subdomain
-    // LEARNWORLDS_SUBDOMAIN should be just the slug (e.g., "my-school")
-    // OR a custom domain (e.g., "academy.mycompany.com")
-    const isCustomDomain = subdomain.includes('.');
-    const baseUrl = isCustomDomain 
-      ? `https://${subdomain}/admin/api`
-      : `https://${subdomain}.learnworlds.com/admin/api`;
-    
+    const rawSubdomain = Deno.env.get("LEARNWORLDS_SUBDOMAIN") ?? '';
+    const subdomain = parseLearnWorldsSubdomain(rawSubdomain);
+
+    // Force standard LearnWorlds domain routing (no custom domains)
+    const baseUrl = `https://${subdomain}.learnworlds.com/admin/api`;
+
     console.log(`[sync-learnworlds] Using subdomain: ${subdomain}, Base URL: ${baseUrl}`);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
