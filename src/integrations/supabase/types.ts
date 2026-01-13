@@ -286,30 +286,6 @@ export type Database = {
         }
         Relationships: []
       }
-      sync_queue: {
-        Row: {
-          created_at: string | null
-          error_message: string | null
-          last_attempt_at: string | null
-          status: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          error_message?: string | null
-          last_attempt_at?: string | null
-          status?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          error_message?: string | null
-          last_attempt_at?: string | null
-          status?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       training_activities: {
         Row: {
           completed: boolean | null
