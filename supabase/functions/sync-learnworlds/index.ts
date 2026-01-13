@@ -33,27 +33,24 @@ interface SyncResult {
 }
 
 async function makeLearnWorldsRequest(url: string): Promise<any> {
-  // Verify secrets are loaded (do not log actual values)
-  const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID");
-  const apiKey = Deno.env.get("LEARNWORLDS_API_KEY") ?? Deno.env.get("LEARNWORLDS_ACCESS_TOKEN");
+  // Clean credentials (do not log actual values)
+  const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim();
+  const apiKey = Deno.env.get("LEARNWORLDS_API_KEY")?.trim();
 
   console.log("Client ID loaded:", !!clientId);
   console.log("API Key loaded:", !!apiKey);
-  console.log("Sending Lw-Client-Id header length:", clientId?.trim().length);
+  console.log("Sending Lw-Client-Id header length:", clientId?.length);
   console.log("Full Target URL:", url);
 
   if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
-  if (!apiKey) throw new Error("Missing LEARNWORLDS_API_KEY (or LEARNWORLDS_ACCESS_TOKEN) secret");
+  if (!apiKey) throw new Error("Missing LEARNWORLDS_API_KEY secret");
 
   const resp = await fetch(url, {
     method: "GET",
     headers: {
-      "Lw-Client-Id": clientId.trim(),
+      "Lw-Client-Id": clientId,
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "Accept": "application/json",
-      // backup variant (some stacks normalize header keys differently)
-      "lw-client-id": clientId.trim(),
     },
   });
 
@@ -101,13 +98,16 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    const rawSubdomain = Deno.env.get("LEARNWORLDS_SUBDOMAIN") ?? '';
-    const subdomain = parseLearnWorldsSubdomain(rawSubdomain);
+    const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim();
+    const subdomain = parseLearnWorldsSubdomain(Deno.env.get("LEARNWORLDS_SUBDOMAIN")?.trim() ?? "");
 
-    // Force standard LearnWorlds domain routing (no custom domains)
-    const baseUrl = `https://${subdomain}.learnworlds.com/admin/api`;
+    if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
+    if (!subdomain) throw new Error("Missing LEARNWORLDS_SUBDOMAIN secret");
 
-    console.log(`[sync-learnworlds] Using subdomain: ${subdomain}, Base URL: ${baseUrl}`);
+    // Use /admin/api/v2 (verified non-404) as the base
+    const baseUrlV2 = `https://${subdomain}.learnworlds.com/admin/api/v2`;
+
+    console.log(`[sync-learnworlds] Using subdomain: ${subdomain}, Base URL: ${baseUrlV2}`);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -161,15 +161,26 @@ serve(async (req) => {
     // Process each user - call the questionnaires endpoint
     for (const { user_id } of pendingUsers) {
       try {
-        const url = `${baseUrl}/v2/users/${user_id}/questionnaires`;
-        console.log(`[User ${user_id}] Fetching questionnaires from: ${url}`);
+        const questionnairesUrl = `${baseUrlV2}/users/${user_id}/questionnaires?client_id=${encodeURIComponent(clientId)}`;
+        console.log(`[User ${user_id}] Fetching questionnaires from: ${questionnairesUrl}`);
 
-        const data = await makeLearnWorldsRequest(url);
+        let data: any;
+        try {
+          data = await makeLearnWorldsRequest(questionnairesUrl);
+        } catch (primaryErr) {
+          const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+          console.warn(`[User ${user_id}] Questionnaires failed, trying assessments fallback. Reason: ${primaryMsg}`);
+
+          const assessmentsUrl = `${baseUrlV2}/users/${user_id}/assessments?client_id=${encodeURIComponent(clientId)}`;
+          console.log(`[User ${user_id}] Fetching assessments from: ${assessmentsUrl}`);
+          data = await makeLearnWorldsRequest(assessmentsUrl);
+        }
+
         const questionnaires: QuestionnaireResult[] = data.data || data || [];
 
-        console.log(`[User ${user_id}] Found ${questionnaires.length} questionnaire results`);
+        console.log(`[User ${user_id}] Found ${questionnaires.length} results`);
         if (questionnaires.length > 0) {
-          console.log(`[User ${user_id}] Sample questionnaire:`, JSON.stringify(questionnaires[0]));
+          console.log(`[User ${user_id}] Sample result:`, JSON.stringify(questionnaires[0]));
         }
 
         const userInfo = userMap.get(user_id);
@@ -178,7 +189,7 @@ serve(async (req) => {
         for (const q of questionnaires) {
           // Extract exam title - try multiple fields
           const examTitle = q.questionnaire_title || q.title || q.name || 'Untitled Exam';
-          
+
           // Extract score - try multiple fields
           let score: number | null = null;
           if (typeof q.score_percentage === 'number') {
