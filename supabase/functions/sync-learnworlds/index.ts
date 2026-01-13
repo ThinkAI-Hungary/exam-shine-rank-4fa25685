@@ -37,13 +37,15 @@ async function makeLearnWorldsRequest(
   accessToken: string,
   clientId: string
 ): Promise<any> {
+  console.log(`[LearnWorlds API] Full URL: ${url}`);
+  
   const resp = await fetch(url, {
     method: 'GET',
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${accessToken}`,
-      'Lw-Client': clientId,
+      'Lw-Client-Id': clientId,
     },
   });
 
@@ -77,9 +79,19 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const baseUrl = Deno.env.get('LEARNWORLDS_BASE_URL')!;
+    const subdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN')!;
     const accessToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN')!;
     const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID')!;
+
+    // Construct the base API URL from subdomain
+    // LEARNWORLDS_SUBDOMAIN should be just the slug (e.g., "my-school")
+    // OR a custom domain (e.g., "academy.mycompany.com")
+    const isCustomDomain = subdomain.includes('.');
+    const baseUrl = isCustomDomain 
+      ? `https://${subdomain}/admin/api`
+      : `https://${subdomain}.learnworlds.com/admin/api`;
+    
+    console.log(`[sync-learnworlds] Using subdomain: ${subdomain}, Base URL: ${baseUrl}`);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
