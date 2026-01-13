@@ -53,8 +53,8 @@ interface ExamResult {
 
 // ============= API HELPERS =============
 
-// Official LearnWorlds API Gateway - school identification via Lw-Client-Id header
-const API_BASE = 'https://api.learnworlds.com/v2';
+// LearnWorlds EU cluster (school routes via Lw-Client-Id)
+const API_BASE = 'https://api.eu-w3.learnworlds.com/v2';
 
 async function makeLearnWorldsRequest(
   url: string,
@@ -390,20 +390,22 @@ serve(async (req) => {
   try {
     // Get credentials from environment (trimmed for safety)
     const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID')?.trim();
-    const accessToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN')?.trim();
+    const accessToken = (Deno.env.get('LEARNWORLDS_ACCESS_TOKEN')?.trim() ||
+      Deno.env.get('LEARNWORLDS_API_KEY')?.trim() ||
+      '');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     if (!clientId || !accessToken) {
-      throw new Error('Missing LearnWorlds credentials (LEARNWORLDS_CLIENT_ID or LEARNWORLDS_ACCESS_TOKEN)');
+      throw new Error('Missing LearnWorlds credentials (LEARNWORLDS_CLIENT_ID and LEARNWORLDS_ACCESS_TOKEN or LEARNWORLDS_API_KEY)');
     }
 
-    // Use official LearnWorlds API Gateway - school identification via Lw-Client-Id header
+    // Use LearnWorlds EU cluster - school identification via Lw-Client-Id header
     const baseUrl = API_BASE;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('=== Starting Course-Based Sync ===');
-    console.log(`Client ID: ${clientId.substring(0, 8)}...`);
+    console.log('Targeting EU Cluster with Client ID:', clientId);
     console.log(`API Base: ${baseUrl}`);
 
     // Parse options
