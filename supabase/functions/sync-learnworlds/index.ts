@@ -53,8 +53,18 @@ interface ExamResult {
 
 // ============= API HELPERS =============
 
-// LearnWorlds EU cluster (school routes via Lw-Client-Id)
-const API_BASE = 'https://api.eu-w3.learnworlds.com/v2';
+// LearnWorlds school subdomain (bypass custom domain redirects)
+const API_BASE = 'https://academyhu.learnworlds.com/v2';
+
+function withClientId(url: string, clientId: string): string {
+  const cid = clientId.trim();
+  if (!cid) return url;
+
+  // If url already has a query, append; otherwise add.
+  return url.includes('?')
+    ? `${url}&client_id=${encodeURIComponent(cid)}`
+    : `${url}?client_id=${encodeURIComponent(cid)}`;
+}
 
 async function makeLearnWorldsRequest(
   url: string,
@@ -65,7 +75,8 @@ async function makeLearnWorldsRequest(
   const maxRetries = opts.maxRetries ?? 3;
   const baseDelayMs = opts.baseDelayMs ?? 500;
 
-  // Safety log before fetch
+  // Safety logs before fetch
+  console.log('Full URL:', url);
   console.log(`Calling LearnWorlds API: ${url}`);
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -73,11 +84,12 @@ async function makeLearnWorldsRequest(
     try {
       resp = await fetch(url, {
         method: 'GET',
+        // Redirect prevention: do NOT follow 301/302 to HTML pages.
+        redirect: 'manual',
         headers: {
           'Lw-Client-Id': clientId.trim(),
           'Authorization': `Bearer ${accessToken.trim()}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
         },
       });
     } catch (e) {
@@ -88,6 +100,15 @@ async function makeLearnWorldsRequest(
       console.warn(`Network error, retrying in ${wait}ms (attempt ${attempt + 1}/${maxRetries})`);
       await new Promise(r => setTimeout(r, wait));
       continue;
+    }
+
+    // Block redirects explicitly (do not attempt to parse their HTML)
+    if (resp.status >= 300 && resp.status < 400) {
+      const location = resp.headers.get('location');
+      const body = await resp.text();
+      console.error(`Redirect response ${resp.status} for ${url}. Location: ${location ?? '(none)'}`);
+      console.error('Redirect body snippet (first 200 chars):', body.substring(0, 200));
+      throw new Error(`LearnWorlds API redirected (${resp.status}). Refusing to follow.`);
     }
 
     // Check response status before parsing
@@ -142,7 +163,7 @@ async function fetchAllCourses(
   let hasMore = true;
 
   while (hasMore) {
-    const url = `${baseUrl}/courses?page=${page}&per_page=50`;
+    const url = withClientId(`${baseUrl}/courses?page=${page}&per_page=50`, clientId);
     try {
       const data = await makeLearnWorldsRequest(url, accessToken, clientId);
       const courses = data.data || data || [];
@@ -185,7 +206,7 @@ async function fetchCourseContent(
   const unitTitleMap = new Map<string, string>();
   
   try {
-    const url = `${baseUrl}/courses/${courseId}/content`;
+    const url = withClientId(`${baseUrl}/courses/${courseId}/content`, clientId);
     console.log(`[Course ${courseId}] Fetching content from: ${url}`);
     const data = await makeLearnWorldsRequest(url, accessToken, clientId);
     
@@ -248,7 +269,7 @@ async function fetchCourseGrades(
   
   while (hasMore) {
     try {
-      const url = `${baseUrl}/courses/${courseId}/grades?page=${page}&per_page=50`;
+      const url = withClientId(`${baseUrl}/courses/${courseId}/grades?page=${page}&per_page=50`, clientId);
       console.log(`[Course ${courseId}] Fetching grades page ${page}: ${url}`);
       const data = await makeLearnWorldsRequest(url, accessToken, clientId);
       
@@ -393,6 +414,8 @@ serve(async (req) => {
     const accessToken = (Deno.env.get('LEARNWORLDS_ACCESS_TOKEN')?.trim() ||
       Deno.env.get('LEARNWORLDS_API_KEY')?.trim() ||
       '');
+    const rawSubdomain = Deno.env.get('LEARNWORLDS_SUBDOMAIN')?.trim() || '';
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -400,12 +423,20 @@ serve(async (req) => {
       throw new Error('Missing LearnWorlds credentials (LEARNWORLDS_CLIENT_ID and LEARNWORLDS_ACCESS_TOKEN or LEARNWORLDS_API_KEY)');
     }
 
-    // Use LearnWorlds EU cluster - school identification via Lw-Client-Id header
+    // Secret verification (hard fail to avoid silently calling the wrong school)
+    if (rawSubdomain !== 'academyhu') {
+      throw new Error(`LEARNWORLDS_SUBDOMAIN must be exactly "academyhu" (got "${rawSubdomain || '(empty)'}")`);
+    }
+    if (clientId !== '68664e416816e727f0a2d038') {
+      throw new Error(`LEARNWORLDS_CLIENT_ID must be exactly "68664e416816e727f0a2d038" (got "${clientId}")`);
+    }
+
+    // Forced school subdomain base URL (bypass custom domain redirects)
     const baseUrl = API_BASE;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('=== Starting Course-Based Sync ===');
-    console.log('Targeting EU Cluster with Client ID:', clientId);
+    console.log('Targeting school subdomain with Client ID:', clientId);
     console.log(`API Base: ${baseUrl}`);
 
     // Parse options
