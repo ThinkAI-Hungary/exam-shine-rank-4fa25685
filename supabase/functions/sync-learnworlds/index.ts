@@ -52,6 +52,18 @@ interface ExamResult {
 }
 
 // ============= API HELPERS =============
+
+// Smart subdomain logic: if it contains a dot, use as-is; otherwise append .learnworlds.com
+function computeBaseUrl(subdomain: string): string {
+  if (subdomain.includes('.')) {
+    // Already contains a dot (e.g., "academyhu.diego.hu"), use as host directly
+    return `https://${subdomain}`;
+  } else {
+    // Simple subdomain (e.g., "academyhu"), append .learnworlds.com
+    return `https://${subdomain}.learnworlds.com`;
+  }
+}
+
 async function makeLearnWorldsRequest(
   url: string,
   accessToken: string,
@@ -83,31 +95,49 @@ async function makeLearnWorldsRequest(
       continue;
     }
 
-    if (resp.ok) {
-      return await resp.json();
+    // Check response status before parsing
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      console.error(`API Error ${resp.status}: ${errorText}`);
+      
+      // Handle rate limit
+      if (resp.status === 429 && attempt < maxRetries) {
+        const retryAfter = Number(resp.headers.get('Retry-After'));
+        const backoff = Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(retryAfter * 1000, 5000)
+          : Math.min(baseDelayMs * Math.pow(2, attempt), 5000);
+        console.warn(`429 Too Many Requests for ${url}. Waiting ${backoff}ms before retry.`);
+        await new Promise(r => setTimeout(r, backoff));
+        continue;
+      }
+
+      // Retry on transient 5xx
+      if (resp.status >= 500 && resp.status < 600 && attempt < maxRetries) {
+        const backoff = baseDelayMs * Math.pow(2, attempt);
+        console.warn(`Server ${resp.status} for ${url}. Retry in ${backoff}ms.`);
+        await new Promise(r => setTimeout(r, backoff));
+        continue;
+      }
+
+      throw new Error(`LearnWorlds API returned ${resp.status}: ${errorText}`);
     }
 
-    // Handle rate limit
-    if (resp.status === 429 && attempt < maxRetries) {
-      const retryAfter = Number(resp.headers.get('Retry-After'));
-      const backoff = Number.isFinite(retryAfter) && retryAfter > 0
-        ? Math.min(retryAfter * 1000, 5000)
-        : Math.min(baseDelayMs * Math.pow(2, attempt), 5000);
-      console.warn(`429 Too Many Requests for ${url}. Waiting ${backoff}ms before retry.`);
-      await new Promise(r => setTimeout(r, backoff));
-      continue;
+    // Verify content-type is JSON before parsing
+    const contentType = resp.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const responseText = await resp.text();
+      console.error(`Non-JSON response received: ${responseText.substring(0, 200)}`);
+      throw new Error('API returned non-JSON response. Check your subdomain and API keys.');
     }
 
-    // Retry on transient 5xx
-    if (resp.status >= 500 && resp.status < 600 && attempt < maxRetries) {
-      const backoff = baseDelayMs * Math.pow(2, attempt);
-      console.warn(`Server ${resp.status} for ${url}. Retry in ${backoff}ms.`);
-      await new Promise(r => setTimeout(r, backoff));
-      continue;
+    // Parse JSON safely
+    try {
+      const data = await resp.json();
+      return data;
+    } catch (parseError) {
+      console.error(`JSON parse error:`, parseError);
+      throw new Error('Failed to parse API response as JSON');
     }
-
-    const text = await resp.text();
-    throw new Error(`API request failed (${resp.status}): ${text}`);
   }
 
   throw new Error('Unreachable');
@@ -382,11 +412,13 @@ serve(async (req) => {
       throw new Error('Missing LearnWorlds credentials');
     }
 
-    const baseUrl = `https://${subdomain}.learnworlds.com`;
+    // Use smart subdomain logic
+    const baseUrl = computeBaseUrl(subdomain);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('=== Starting Course-Based Sync ===');
-    console.log(`Base URL: ${baseUrl}`);
+    console.log(`Subdomain: ${subdomain}`);
+    console.log(`Computed Base URL: ${baseUrl}`);
 
     // Parse options
     let options: { courseTitleContains?: string } = {};
