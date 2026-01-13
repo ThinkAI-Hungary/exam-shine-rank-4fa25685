@@ -5,11 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import Navigation from "@/components/Navigation";
-import { Trophy, Users, Award, AlertTriangle, Loader2, Link as LinkIcon, Eye, Menu } from "lucide-react";
-
+import { Trophy, Users, Award, AlertTriangle, Loader2, Link as LinkIcon, Eye, Menu, RefreshCw } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -18,7 +21,6 @@ const AdminDashboard = () => {
     totalBadges: 0,
     activeWarnings: 0,
   });
-
   useEffect(() => {
     checkAdminAuth();
   }, []);
@@ -82,6 +84,53 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleSyncAllCourses = async () => {
+    setSyncing(true);
+    setSyncStatus("Syncing all courses...");
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No session");
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-learnworlds`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      setSyncStatus(`✓ Synced ${result.exams_synced} exams from ${result.courses_processed} courses`);
+      toast({
+        title: "Sync Complete!",
+        description: `Synced ${result.exams_synced} exam results from ${result.courses_processed} courses for ${result.unique_users} users.`,
+      });
+
+      // Refresh stats after sync
+      await fetchStats();
+    } catch (error: any) {
+      console.error("Sync error:", error);
+      setSyncStatus(`✗ Error: ${error.message}`);
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Failed to sync courses",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -89,7 +138,6 @@ const AdminDashboard = () => {
       </div>
     );
   }
-
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
@@ -180,6 +228,44 @@ const AdminDashboard = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Sync Card */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RefreshCw className="h-5 w-5" />
+                LearnWorlds Szinkronizálás
+              </CardTitle>
+              <CardDescription>
+                Összes kurzus és vizsga eredmény szinkronizálása
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button 
+                className="w-full" 
+                size="lg"
+                onClick={handleSyncAllCourses}
+                disabled={syncing}
+              >
+                {syncing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Szinkronizálás...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Összes felhasználó frissítése
+                  </>
+                )}
+              </Button>
+              {syncStatus && (
+                <p className={`text-sm text-center ${syncStatus.startsWith('✓') ? 'text-green-600' : syncStatus.startsWith('✗') ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {syncStatus}
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid gap-4 md:grid-cols-2">
             <Card>

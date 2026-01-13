@@ -8,42 +8,44 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
-interface QuestionnaireResult {
+interface Course {
   id: string;
-  questionnaire_id?: string;
-  questionnaire_title?: string;
-  title?: string;
-  name?: string;
+  title: string;
+}
+
+interface ContentUnit {
+  id: string;
+  title: string;
+  type: string;
+}
+
+interface GradeResult {
+  user_id: string;
+  user_email?: string;
+  learningUnit?: {
+    id: string;
+    type: string;
+  };
+  grade?: number;
   score?: number;
   score_percentage?: number;
-  grade?: number;
-  finished_at?: string;
   completed_at?: string;
+  finished_at?: string;
   submitted_at?: string;
-  created?: string;
-  course_id?: string;
-  course_title?: string;
+  created?: number;
 }
 
-interface SyncResult {
-  user_id: string;
-  success: boolean;
-  exams_count: number;
-  error?: string;
-}
+// Map to store unit_id -> unit_title for assessments/questionnaires
+const unitTitleMap = new Map<string, string>();
 
 async function makeLearnWorldsRequest(url: string): Promise<any> {
-  // Clean credentials (do not log actual values)
   const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim();
   const apiKey = Deno.env.get("LEARNWORLDS_API_KEY")?.trim();
 
-  console.log("Client ID loaded:", !!clientId);
-  console.log("API Key loaded:", !!apiKey);
-  console.log("Sending Lw-Client-Id header length:", clientId?.length);
-  console.log("Full Target URL:", url);
-
   if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
   if (!apiKey) throw new Error("Missing LEARNWORLDS_API_KEY secret");
+
+  console.log(`[API Request] ${url}`);
 
   const resp = await fetch(url, {
     method: "GET",
@@ -56,7 +58,7 @@ async function makeLearnWorldsRequest(url: string): Promise<any> {
 
   if (!resp.ok) {
     const text = await resp.text();
-    console.error("[LearnWorlds API] Error response body:", text);
+    console.error(`[API Error] ${resp.status}: ${text}`);
     throw new Error(`API error ${resp.status}: ${text}`);
   }
 
@@ -82,8 +84,6 @@ function parseLearnWorldsSubdomain(raw: string): string {
   s = s.replace(/^https?:\/\//i, '');
   s = s.replace(/\/$/, '');
   s = s.replace(/\.learnworlds\.com\b/i, '');
-  // If user accidentally provided a custom domain, keep only the left-most label
-  // because we must call https://${SUBDOMAIN}.learnworlds.com
   s = s.split('/')[0] ?? s;
   s = s.split('.')[0] ?? s;
   return s;
@@ -97,220 +97,212 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-    const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim();
     const subdomain = parseLearnWorldsSubdomain(Deno.env.get("LEARNWORLDS_SUBDOMAIN")?.trim() ?? "");
 
-    if (!clientId) throw new Error("Missing LEARNWORLDS_CLIENT_ID secret");
     if (!subdomain) throw new Error("Missing LEARNWORLDS_SUBDOMAIN secret");
 
-    // Use /admin/api/v2 (verified non-404) as the base
-    const baseUrlV2 = `https://${subdomain}.learnworlds.com/admin/api/v2`;
+    // Use /v2 prefix (no /admin/api)
+    const baseUrl = `https://${subdomain}.learnworlds.com/v2`;
 
-    console.log(`[sync-learnworlds] Using subdomain: ${subdomain}, Base URL: ${baseUrlV2}`);
+    console.log(`[sync-learnworlds] Course-centric sync starting. Base URL: ${baseUrl}`);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const body = await req.json().catch(() => ({}));
-    const batchSize = body.batchSize || 30;
+    // Step 1: Fetch all courses
+    console.log('[Step 1] Fetching all courses...');
+    const coursesData = await makeLearnWorldsRequest(`${baseUrl}/courses`);
+    const courses: Course[] = coursesData.data || coursesData || [];
+    console.log(`[Step 1] Found ${courses.length} courses`);
 
-    console.log(`[sync-learnworlds] Starting sync for batch of ${batchSize} users`);
-
-    // Get pending users from sync_queue
-    const { data: pendingUsers, error: queueError } = await supabase
-      .from('sync_queue')
-      .select('user_id')
-      .eq('status', 'pending')
-      .limit(batchSize);
-
-    if (queueError) {
-      throw new Error(`Failed to fetch sync queue: ${queueError.message}`);
-    }
-
-    if (!pendingUsers || pendingUsers.length === 0) {
-      console.log('[sync-learnworlds] No pending users in queue');
+    if (courses.length === 0) {
       return new Response(JSON.stringify({ 
-        message: 'No pending users',
-        processed: 0,
-        remaining: 0 
+        message: 'No courses found',
+        courses_processed: 0,
+        exams_synced: 0 
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log(`[sync-learnworlds] Processing ${pendingUsers.length} users`);
-
-    // Mark users as processing
-    const userIds = pendingUsers.map(u => u.user_id);
-    await supabase
-      .from('sync_queue')
-      .update({ status: 'processing', last_attempt_at: new Date().toISOString() })
-      .in('user_id', userIds);
-
-    // Fetch user info from users table
-    const { data: usersData } = await supabase
+    // Pre-fetch user data from our database for username/email lookup
+    const { data: allUsers } = await supabase
       .from('users')
-      .select('user_id, username, email')
-      .in('user_id', userIds);
+      .select('user_id, username, email');
+    const userMap = new Map((allUsers || []).map(u => [u.user_id, u]));
 
-    const userMap = new Map((usersData || []).map(u => [u.user_id, u]));
-
-    const results: SyncResult[] = [];
     const allExamResults: any[] = [];
+    let coursesProcessed = 0;
+    let totalGrades = 0;
 
-    // Process each user - call the questionnaires endpoint
-    for (const { user_id } of pendingUsers) {
+    // Step 2: Process each course
+    for (const course of courses) {
+      const courseId = course.id;
+      const courseTitle = course.title || 'Unknown Course';
+
+      console.log(`[Course ${coursesProcessed + 1}/${courses.length}] Processing: ${courseTitle} (${courseId})`);
+
       try {
-        const questionnairesUrl = `${baseUrlV2}/users/${user_id}/questionnaires?client_id=${encodeURIComponent(clientId)}`;
-        console.log(`[User ${user_id}] Fetching questionnaires from: ${questionnairesUrl}`);
+        // Step 2a: Fetch course content to get unit titles
+        console.log(`  -> Fetching content for course ${courseId}...`);
+        const contentData = await makeLearnWorldsRequest(`${baseUrl}/courses/${courseId}/content`);
+        const contentUnits: ContentUnit[] = contentData.data || contentData || [];
 
-        let data: any;
-        try {
-          data = await makeLearnWorldsRequest(questionnairesUrl);
-        } catch (primaryErr) {
-          const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
-          console.warn(`[User ${user_id}] Questionnaires failed, trying assessments fallback. Reason: ${primaryMsg}`);
-
-          const assessmentsUrl = `${baseUrlV2}/users/${user_id}/assessments?client_id=${encodeURIComponent(clientId)}`;
-          console.log(`[User ${user_id}] Fetching assessments from: ${assessmentsUrl}`);
-          data = await makeLearnWorldsRequest(assessmentsUrl);
+        // Store unit titles for assessments and questionnaires
+        for (const unit of contentUnits) {
+          if (unit.type === 'assessment' || unit.type === 'questionnaire' || unit.type === 'exam' || unit.type === 'quiz') {
+            unitTitleMap.set(unit.id, unit.title || 'Untitled Assessment');
+          }
         }
+        console.log(`  -> Found ${contentUnits.length} content units, ${unitTitleMap.size} are assessments`);
 
-        const questionnaires: QuestionnaireResult[] = data.data || data || [];
+        // Step 2b: Fetch all grades for this course
+        console.log(`  -> Fetching grades for course ${courseId}...`);
+        const gradesData = await makeLearnWorldsRequest(`${baseUrl}/courses/${courseId}/grades`);
+        const grades: GradeResult[] = gradesData.data || gradesData || [];
 
-        console.log(`[User ${user_id}] Found ${questionnaires.length} results`);
-        if (questionnaires.length > 0) {
-          console.log(`[User ${user_id}] Sample result:`, JSON.stringify(questionnaires[0]));
-        }
+        console.log(`  -> Found ${grades.length} grade records`);
 
-        const userInfo = userMap.get(user_id);
-        let examCount = 0;
+        // Process each grade result
+        for (const grade of grades) {
+          const userId = grade.user_id;
+          if (!userId) continue;
 
-        for (const q of questionnaires) {
-          // Extract exam title - try multiple fields
-          const examTitle = q.questionnaire_title || q.title || q.name || 'Untitled Exam';
+          // Get unit info
+          const unitId = grade.learningUnit?.id || '';
+          const unitType = grade.learningUnit?.type || '';
 
-          // Extract score - try multiple fields
+          // Only process assessments/questionnaires/exams
+          if (!['assessment', 'questionnaire', 'exam', 'quiz'].includes(unitType)) {
+            continue;
+          }
+
+          // Get the real title from our map
+          let examTitle = unitTitleMap.get(unitId);
+          if (!examTitle || examTitle === 'null' || examTitle === 'undefined') {
+            examTitle = `${courseTitle} - Assessment`;
+          }
+
+          // Extract score
           let score: number | null = null;
-          if (typeof q.score_percentage === 'number') {
-            score = q.score_percentage;
-          } else if (typeof q.score === 'number') {
-            score = q.score;
-          } else if (typeof q.grade === 'number') {
-            score = q.grade;
+          if (typeof grade.score_percentage === 'number') {
+            score = grade.score_percentage;
+          } else if (typeof grade.score === 'number') {
+            score = grade.score;
+          } else if (typeof grade.grade === 'number') {
+            score = grade.grade;
           }
 
           // Extract completion time
           const completedAt = normalizeTimestamp(
-            q.finished_at || q.completed_at || q.submitted_at || q.created
+            grade.completed_at || grade.finished_at || grade.submitted_at || grade.created
           );
 
-          // Extract exam ID
-          const examId = q.questionnaire_id || q.id || `${user_id}-${examTitle}`;
-
+          // Only add if we have a valid score and completion date
           if (score !== null && completedAt) {
+            const userInfo = userMap.get(userId);
+
             allExamResults.push({
-              user_id: user_id,
-              username: userInfo?.username || user_id,
-              email: userInfo?.email || null,
-              exam_id: String(examId),
+              user_id: userId,
+              username: userInfo?.username || userId,
+              email: userInfo?.email || grade.user_email || null,
+              exam_id: unitId || `${courseId}-${unitType}`,
               exam_title: examTitle,
               score: score,
               completed_at: completedAt,
-              course_id: q.course_id || 'unknown',
-              course_title: q.course_title || 'Unknown Course',
+              course_id: courseId,
+              course_title: courseTitle,
             });
-            examCount++;
+            totalGrades++;
           }
         }
 
-        // Mark as completed
-        await supabase
-          .from('sync_queue')
-          .update({ status: 'completed', error_message: null })
-          .eq('user_id', user_id);
+        coursesProcessed++;
+        console.log(`[Course ${coursesProcessed}/${courses.length}] ✓ Completed: ${courseTitle}`);
 
-        results.push({ user_id, success: true, exams_count: examCount });
-        console.log(`[User ${user_id}] ✓ Completed with ${examCount} exams`);
-
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`[User ${user_id}] ✗ Error:`, errorMessage);
-
-        await supabase
-          .from('sync_queue')
-          .update({ status: 'failed', error_message: errorMessage })
-          .eq('user_id', user_id);
-
-        results.push({ user_id, success: false, exams_count: 0, error: errorMessage });
+      } catch (courseError) {
+        const errorMsg = courseError instanceof Error ? courseError.message : String(courseError);
+        console.error(`[Course ${courseId}] ✗ Error: ${errorMsg}`);
+        // Continue with next course even if one fails
+        coursesProcessed++;
       }
     }
 
-    // Upsert exam results in batch
+    // Step 3: Upsert all exam results in batch
+    console.log(`[Step 3] Upserting ${allExamResults.length} exam results...`);
+
     if (allExamResults.length > 0) {
-      console.log(`[sync-learnworlds] Upserting ${allExamResults.length} exam results`);
-      
-      const { error: upsertError } = await supabase
-        .from('exam_results')
-        .upsert(allExamResults, { 
-          onConflict: 'user_id,exam_id',
-          ignoreDuplicates: false 
-        });
-
-      if (upsertError) {
-        console.error('[sync-learnworlds] Upsert error:', upsertError.message);
-      }
-
-      // Update leaderboard cache for processed users
-      console.log('[sync-learnworlds] Updating leaderboard cache...');
-      for (const userId of userIds) {
-        const { data: userExams } = await supabase
+      // Process in chunks of 500 to avoid payload size limits
+      const chunkSize = 500;
+      for (let i = 0; i < allExamResults.length; i += chunkSize) {
+        const chunk = allExamResults.slice(i, i + chunkSize);
+        
+        const { error: upsertError } = await supabase
           .from('exam_results')
-          .select('score, completed_at')
-          .eq('user_id', userId);
+          .upsert(chunk, { 
+            onConflict: 'user_id,exam_id',
+            ignoreDuplicates: false 
+          });
 
-        if (userExams && userExams.length > 0) {
-          const totalScore = userExams.reduce((sum, e) => sum + (e.score || 0), 0);
-          const avgScore = totalScore / userExams.length;
-          const lastActivity = userExams
-            .map(e => e.completed_at)
-            .filter(Boolean)
-            .sort()
-            .pop();
-
-          await supabase
-            .from('leaderboard_cache')
-            .upsert({
-              user_id: userId,
-              total_score: totalScore,
-              exam_count: userExams.length,
-              average_score: Math.round(avgScore * 100) / 100,
-              last_activity: lastActivity,
-              updated_at: new Date().toISOString(),
-            }, { onConflict: 'user_id' });
+        if (upsertError) {
+          console.error(`[Upsert chunk ${i / chunkSize + 1}] Error:`, upsertError.message);
+        } else {
+          console.log(`[Upsert chunk ${i / chunkSize + 1}] ✓ Inserted ${chunk.length} records`);
         }
       }
+
+      // Step 4: Update leaderboard cache for all affected users
+      console.log('[Step 4] Updating leaderboard cache...');
+      const uniqueUserIds = [...new Set(allExamResults.map(r => r.user_id))];
+
+      for (const userId of uniqueUserIds) {
+        try {
+          const { data: userExams } = await supabase
+            .from('exam_results')
+            .select('score, completed_at')
+            .eq('user_id', userId);
+
+          if (userExams && userExams.length > 0) {
+            const totalScore = userExams.reduce((sum, e) => sum + (e.score || 0), 0);
+            const avgScore = totalScore / userExams.length;
+            const lastActivity = userExams
+              .map(e => e.completed_at)
+              .filter(Boolean)
+              .sort()
+              .pop();
+
+            await supabase
+              .from('leaderboard_cache')
+              .upsert({
+                user_id: userId,
+                total_score: totalScore,
+                exam_count: userExams.length,
+                average_score: Math.round(avgScore * 100) / 100,
+                last_activity: lastActivity,
+                updated_at: new Date().toISOString(),
+              }, { onConflict: 'user_id' });
+          }
+        } catch (cacheError) {
+          console.warn(`[Cache] Error updating user ${userId}:`, cacheError);
+        }
+      }
+
+      console.log(`[Step 4] ✓ Updated leaderboard for ${uniqueUserIds.length} users`);
     }
 
-    // Count remaining pending users
-    const { count: remaining } = await supabase
+    // Clear sync queue (mark all as completed since we synced everyone)
+    await supabase
       .from('sync_queue')
-      .select('*', { count: 'exact', head: true })
+      .update({ status: 'completed', error_message: null })
       .eq('status', 'pending');
 
-    const successCount = results.filter(r => r.success).length;
-    const failCount = results.filter(r => !r.success).length;
-    const totalExams = results.reduce((sum, r) => sum + r.exams_count, 0);
-
-    console.log(`[sync-learnworlds] Batch complete: ${successCount} success, ${failCount} failed, ${totalExams} exams, ${remaining || 0} remaining`);
+    console.log(`[sync-learnworlds] ✓ Complete! Processed ${coursesProcessed} courses, synced ${allExamResults.length} exam results`);
 
     return new Response(JSON.stringify({
-      processed: pendingUsers.length,
-      success: successCount,
-      failed: failCount,
-      exams_synced: totalExams,
-      remaining: remaining || 0,
-      results,
+      success: true,
+      courses_processed: coursesProcessed,
+      total_courses: courses.length,
+      exams_synced: allExamResults.length,
+      unique_users: [...new Set(allExamResults.map(r => r.user_id))].length,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
