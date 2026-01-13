@@ -526,67 +526,67 @@ serve(async (req) => {
     
     if (aggError) {
       console.error('Error fetching exam_results for leaderboard:', aggError);
-    } else if (aggregatedStats && aggregatedStats.length > 0) {
-      // Aggregate in memory
-      const userScores = new Map<string, {
-        username: string;
-        total_score: number;
-        exam_count: number;
-        last_activity: string | null;
-      }>();
-      
-      for (const row of aggregatedStats) {
-        const existing = userScores.get(row.user_id) || {
-          username: row.username,
-          total_score: 0,
-          exam_count: 0,
-          last_activity: null,
-        };
-        
-        existing.total_score += Number(row.score) || 0;
-        existing.exam_count += 1;
-        
-        if (!existing.last_activity || row.completed_at > existing.last_activity) {
-          existing.last_activity = row.completed_at;
-        }
-        
-        userScores.set(row.user_id, existing);
-      }
-      
-      // Build leaderboard entries
-      const leaderboardEntries = Array.from(userScores.entries()).map(([user_id, data]) => ({
-        user_id,
-        total_score: Math.round(data.total_score),
-        exam_count: data.exam_count,
-        average_score: data.exam_count > 0 ? Math.round((data.total_score / data.exam_count) * 10) / 10 : 0,
-        last_activity: data.last_activity,
-      }));
-      
-      // Upsert to leaderboard_cache
-      const { error } = await supabase
+    } else {
+      // IMPORTANT: clear the cache first so users with 0 exams don't keep stale values
+      const { error: clearError } = await supabase
         .from('leaderboard_cache')
-        .upsert(leaderboardEntries, { onConflict: 'user_id' });
-      
-      if (error) {
-        console.error('Error updating leaderboard cache:', error);
+        .delete()
+        .neq('user_id', '');
+
+      if (clearError) {
+        console.error('Error clearing leaderboard cache:', clearError);
       } else {
-        console.log(`Updated leaderboard cache for ${leaderboardEntries.length} users`);
+        console.log('Cleared leaderboard_cache');
       }
-      
-      // Update ranks (sort by average_score descending)
-      const { data: allLeaderboard } = await supabase
-        .from('leaderboard_cache')
-        .select('id, average_score')
-        .order('average_score', { ascending: false });
-      
-      if (allLeaderboard) {
-        for (let i = 0; i < allLeaderboard.length; i++) {
-          await supabase
-            .from('leaderboard_cache')
-            .update({ rank: i + 1 })
-            .eq('id', allLeaderboard[i].id);
+
+      if (!aggregatedStats || aggregatedStats.length === 0) {
+        console.log('No exam_results found; leaderboard_cache left empty.');
+      } else {
+        // Aggregate in memory
+        const userScores = new Map<string, {
+          username: string;
+          total_score: number;
+          exam_count: number;
+          last_activity: string | null;
+        }>();
+
+        for (const row of aggregatedStats) {
+          const existing = userScores.get(row.user_id) || {
+            username: row.username,
+            total_score: 0,
+            exam_count: 0,
+            last_activity: null,
+          };
+
+          existing.total_score += Number(row.score) || 0;
+          existing.exam_count += 1;
+
+          if (!existing.last_activity || row.completed_at > existing.last_activity) {
+            existing.last_activity = row.completed_at;
+          }
+
+          userScores.set(row.user_id, existing);
         }
-        console.log(`Updated ranks for ${allLeaderboard.length} users`);
+
+        // Build leaderboard entries
+        const leaderboardEntries = Array.from(userScores.entries()).map(([user_id, data]) => ({
+          user_id,
+          total_score: Math.round(data.total_score),
+          exam_count: data.exam_count,
+          average_score: data.exam_count > 0 ? Math.round((data.total_score / data.exam_count) * 10) / 10 : 0,
+          last_activity: data.last_activity,
+        }));
+
+        // Insert back into leaderboard_cache
+        const { error } = await supabase
+          .from('leaderboard_cache')
+          .upsert(leaderboardEntries, { onConflict: 'user_id' });
+
+        if (error) {
+          console.error('Error updating leaderboard cache:', error);
+        } else {
+          console.log(`Updated leaderboard cache for ${leaderboardEntries.length} users`);
+        }
       }
     }
 
