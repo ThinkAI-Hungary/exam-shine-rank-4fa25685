@@ -115,6 +115,9 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                         ))}
                       </div>
                     )}
+                    {entry.badges && entry.badges.length > 0 && (
+                      <BadgeDisplay badges={entry.badges} compact />
+                    )}
                   </div>
                 </TableCell>
                 <TableCell className="text-right">
@@ -209,6 +212,13 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                   {selectedUser.average_score.toFixed(1)}%
                 </Badge>
               </div>
+
+              {selectedUser.badges && selectedUser.badges.length > 0 && (
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3">Jelvények</h3>
+                  <BadgeDisplay badges={selectedUser.badges} />
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
