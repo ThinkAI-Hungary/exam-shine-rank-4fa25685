@@ -274,22 +274,7 @@ const Index = () => {
                 </SelectContent>
               </Select>
               
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleRefresh}
-                disabled={refreshing || syncing}
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                {refreshing 
-                  ? 'Frissítés...' 
-                  : selectedUserId 
-                    ? 'Kiválasztott felhasználó frissítése' 
-                    : 'Gyors frissítés'
-                }
-              </Button>
-              
-              <Button 
+              <Button
                 variant="default" 
                 size="sm" 
                 onClick={handleCourseSync}
@@ -366,20 +351,7 @@ const Index = () => {
                     </Select>
                   </div>
                   
-                  <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      handleRefresh();
-                      setMobileMenuOpen(false);
-                    }}
-                    disabled={refreshing || syncing}
-                    className="w-full"
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                    {refreshing ? 'Frissítés...' : 'Gyors frissítés'}
-                  </Button>
-                  
-                  <Button 
+                  <Button
                     variant="default" 
                     onClick={() => {
                       handleCourseSync();
@@ -453,7 +425,7 @@ const Index = () => {
                         <SelectSeparator />
                         {availableTags.map((tag) => (
                           <SelectItem key={tag} value={tag}>
-                            {tag}
+                            {tag.replace(/^cf_aruhaz_/, '')}
                           </SelectItem>
                         ))}
                       </SelectContent>
