@@ -53,6 +53,50 @@ export type Database = {
         }
         Relationships: []
       }
+      category_history: {
+        Row: {
+          change_reason: string | null
+          change_type: string
+          created_at: string
+          id: string
+          new_category: string | null
+          performance_snapshot: Json | null
+          previous_category: string | null
+          user_id: string
+          warning_id: string | null
+        }
+        Insert: {
+          change_reason?: string | null
+          change_type: string
+          created_at?: string
+          id?: string
+          new_category?: string | null
+          performance_snapshot?: Json | null
+          previous_category?: string | null
+          user_id: string
+          warning_id?: string | null
+        }
+        Update: {
+          change_reason?: string | null
+          change_type?: string
+          created_at?: string
+          id?: string
+          new_category?: string | null
+          performance_snapshot?: Json | null
+          previous_category?: string | null
+          user_id?: string
+          warning_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "category_history_warning_id_fkey"
+            columns: ["warning_id"]
+            isOneToOne: false
+            referencedRelation: "performance_warnings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       course_time_tracking: {
         Row: {
           course_id: string
@@ -467,7 +511,9 @@ export type Database = {
           category_achieved_at: string | null
           created_at: string | null
           current_category: string | null
+          demoted_from_category: string | null
           email: string | null
+          last_demotion_date: string | null
           start_of_empl: string | null
           tags: string[] | null
           updated_at: string | null
@@ -478,7 +524,9 @@ export type Database = {
           category_achieved_at?: string | null
           created_at?: string | null
           current_category?: string | null
+          demoted_from_category?: string | null
           email?: string | null
+          last_demotion_date?: string | null
           start_of_empl?: string | null
           tags?: string[] | null
           updated_at?: string | null
@@ -489,7 +537,9 @@ export type Database = {
           category_achieved_at?: string | null
           created_at?: string | null
           current_category?: string | null
+          demoted_from_category?: string | null
           email?: string | null
+          last_demotion_date?: string | null
           start_of_empl?: string | null
           tags?: string[] | null
           updated_at?: string | null

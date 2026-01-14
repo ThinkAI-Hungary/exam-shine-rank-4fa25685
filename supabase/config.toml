@@ -17,3 +17,12 @@ verify_jwt = false
 
 [functions.sync-learnworlds]
 verify_jwt = false
+
+[functions.link-learnworlds-account]
+verify_jwt = false
+
+[functions.verify-learnworlds-email]
+verify_jwt = false
+
+[functions.auto-link-on-signup]
+verify_jwt = false
