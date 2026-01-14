@@ -19,6 +19,9 @@ interface BadgeDefinition {
     rank?: number;
     months?: number;
     period?: string;
+    first_months?: number;
+    complete_all?: boolean;
+    training_activity_100?: boolean;
   };
   evaluation_period: string;
 }
@@ -30,9 +33,20 @@ interface UserMetrics {
   overall_performance_pct: number;
   years_of_service: number;
   successful_exams_count: number;
+  total_exams_count: number;
   period_start: string;
   period_end: string;
 }
+
+interface UserData {
+  user_id: string;
+  start_of_empl: string | null;
+  current_category: string | null;
+  last_demotion_date: string | null;
+  demoted_from_category: string | null;
+}
+
+const BATCH_SIZE = 50; // Process 50 users at a time to avoid timeouts
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -44,7 +58,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Parse request body safely - handle empty or invalid JSON
+    // Parse request body safely
     let user_id: string | undefined;
     let evaluation_type: string | undefined;
     
@@ -68,137 +82,203 @@ Deno.serve(async (req) => {
 
     if (badgesError) throw badgesError;
 
-    // Get users to evaluate
-    let usersToEvaluate: string[] = [];
+    // Get users to evaluate with their data
+    let usersToEvaluate: UserData[] = [];
     if (user_id) {
-      usersToEvaluate = [user_id];
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('user_id, start_of_empl, current_category, last_demotion_date, demoted_from_category')
+        .eq('user_id', user_id)
+        .single();
+      if (error) throw error;
+      usersToEvaluate = [user];
     } else {
       const { data: users, error: usersError } = await supabase
         .from('users')
-        .select('user_id');
+        .select('user_id, start_of_empl, current_category, last_demotion_date, demoted_from_category');
       if (usersError) throw usersError;
-      usersToEvaluate = users.map(u => u.user_id);
+      usersToEvaluate = users || [];
     }
 
     let totalAwarded = 0;
     let totalRevoked = 0;
+    let totalProcessed = 0;
 
-    for (const userId of usersToEvaluate) {
-      console.log(`Evaluating badges for user: ${userId}`);
+    // Process users in batches
+    for (let i = 0; i < usersToEvaluate.length; i += BATCH_SIZE) {
+      const batch = usersToEvaluate.slice(i, i + BATCH_SIZE);
+      console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(usersToEvaluate.length / BATCH_SIZE)}`);
 
-      // Update performance metrics first
-      await supabase.rpc('update_user_performance_metrics', {
-        p_user_id: userId,
-        p_evaluation_period: 'current_month'
-      });
+      for (const userData of batch) {
+        const userId = userData.user_id;
+        console.log(`Evaluating badges for user: ${userId}`);
 
-      await supabase.rpc('update_user_performance_metrics', {
-        p_user_id: userId,
-        p_evaluation_period: 'last_6_months'
-      });
+        // Update performance metrics first (parallel for different periods)
+        await Promise.all([
+          supabase.rpc('update_user_performance_metrics', {
+            p_user_id: userId,
+            p_evaluation_period: 'current_month'
+          }),
+          supabase.rpc('update_user_performance_metrics', {
+            p_user_id: userId,
+            p_evaluation_period: 'last_6_months'
+          }),
+          supabase.rpc('update_user_performance_metrics', {
+            p_user_id: userId,
+            p_evaluation_period: 'last_year'
+          })
+        ]);
 
-      await supabase.rpc('update_user_performance_metrics', {
-        p_user_id: userId,
-        p_evaluation_period: 'last_year'
-      });
+        // Get user's current metrics
+        const { data: metrics, error: metricsError } = await supabase
+          .from('user_performance_metrics')
+          .select('*')
+          .eq('user_id', userId);
 
-      // Get user's current metrics
-      const { data: metrics, error: metricsError } = await supabase
-        .from('user_performance_metrics')
-        .select('*')
-        .eq('user_id', userId);
+        if (metricsError) {
+          console.error(`Error fetching metrics for ${userId}:`, metricsError);
+          continue;
+        }
 
-      if (metricsError) {
-        console.error(`Error fetching metrics for ${userId}:`, metricsError);
-        continue;
-      }
+        // Get current metrics by period
+        const currentMonthMetrics = metrics?.find(m => m.evaluation_period === 'current_month');
+        const last6MonthsMetrics = metrics?.find(m => m.evaluation_period === 'last_6_months');
+        const lastYearMetrics = metrics?.find(m => m.evaluation_period === 'last_year');
 
-      // Get current metrics by period
-      const currentMonthMetrics = metrics?.find(m => m.evaluation_period === 'current_month');
-      const last6MonthsMetrics = metrics?.find(m => m.evaluation_period === 'last_6_months');
-      const lastYearMetrics = metrics?.find(m => m.evaluation_period === 'last_year');
+        if (!currentMonthMetrics) {
+          console.log(`No metrics found for user ${userId}, skipping`);
+          continue;
+        }
 
-      if (!currentMonthMetrics) {
-        console.log(`No metrics found for user ${userId}, skipping`);
-        continue;
-      }
+        // Get user's current badges
+        const { data: currentBadges, error: currentBadgesError } = await supabase
+          .from('user_badges')
+          .select('*, badge_definitions(*)')
+          .eq('user_id', userId)
+          .is('revoked_at', null);
 
-      // Get user's current badges
-      const { data: currentBadges, error: currentBadgesError } = await supabase
-        .from('user_badges')
-        .select('*, badge_definitions(*)')
-        .eq('user_id', userId)
-        .is('revoked_at', null);
+        if (currentBadgesError) throw currentBadgesError;
 
-      if (currentBadgesError) throw currentBadgesError;
-
-      const currentBadgeIds = new Set(currentBadges?.map(b => b.badge_id) || []);
-
-      // Evaluate Category Badges
-      const categoryBadges = badges.filter(b => b.badge_type === 'category') as BadgeDefinition[];
-      const eligibleCategory = evaluateCategoryBadges(currentMonthMetrics, categoryBadges);
-      
-      if (eligibleCategory) {
-        const hasCategory = currentBadges?.find(b => b.badge_definitions.badge_type === 'category' && !b.revoked_at);
+        // ============= CATEGORY BADGES =============
+        const categoryBadges = badges.filter(b => b.badge_type === 'category') as BadgeDefinition[];
+        const eligibleCategory = evaluateCategoryBadges(currentMonthMetrics, categoryBadges);
         
-        if (!hasCategory || hasCategory.badge_id !== eligibleCategory.id) {
-          // Award new category badge
-          await awardBadge(supabase, userId, eligibleCategory.id, currentMonthMetrics);
-          totalAwarded++;
+        // Check re-promotion lockout (1-year waiting period after demotion)
+        const canBePromoted = checkRePromotionEligibility(userData, eligibleCategory);
+        
+        if (eligibleCategory && canBePromoted) {
+          const hasCategory = currentBadges?.find(b => 
+            b.badge_definitions?.badge_type === 'category' && !b.revoked_at
+          );
           
-          // Revoke old category badges
-          if (hasCategory) {
-            await revokeBadge(supabase, hasCategory.id);
+          if (!hasCategory || hasCategory.badge_id !== eligibleCategory.id) {
+            // Check if this is a promotion
+            const isPromotion = !hasCategory || 
+              getCategoryRank(eligibleCategory.badge_level) > getCategoryRank(hasCategory?.badge_definitions?.badge_level);
+            
+            if (isPromotion || !hasCategory) {
+              // Award new category badge
+              await awardBadge(supabase, userId, eligibleCategory.id, currentMonthMetrics);
+              totalAwarded++;
+              
+              // Revoke old category badges
+              if (hasCategory) {
+                await revokeBadge(supabase, hasCategory.id);
+                totalRevoked++;
+              }
+
+              // Update user's current category
+              await supabase
+                .from('users')
+                .update({ 
+                  current_category: eligibleCategory.badge_level,
+                  category_achieved_at: new Date().toISOString()
+                })
+                .eq('user_id', userId);
+
+              // Log category history
+              await supabase
+                .from('category_history')
+                .insert({
+                  user_id: userId,
+                  previous_category: hasCategory?.badge_definitions?.badge_level || null,
+                  new_category: eligibleCategory.badge_level,
+                  change_type: hasCategory ? 'promotion' : 'initial',
+                  change_reason: 'Met all category requirements',
+                  performance_snapshot: {
+                    exam_performance: currentMonthMetrics.exam_performance_pct,
+                    training_activity: currentMonthMetrics.training_activity_pct,
+                    years_of_service: currentMonthMetrics.years_of_service
+                  }
+                });
+            }
+          }
+        }
+
+        // ============= ASPIRANT BADGES =============
+        const aspirantBadges = badges.filter(b => b.badge_type === 'aspirant') as BadgeDefinition[];
+        const eligibleAspirant = evaluateAspirantBadges(currentMonthMetrics, aspirantBadges, eligibleCategory);
+        
+        if (eligibleAspirant) {
+          const hasAspirant = currentBadges?.find(b => b.badge_id === eligibleAspirant.id);
+          if (!hasAspirant) {
+            // Revoke lower aspirant badges first
+            const currentAspirantBadges = currentBadges?.filter(b => 
+              b.badge_definitions?.badge_type === 'aspirant'
+            );
+            for (const badge of currentAspirantBadges || []) {
+              await revokeBadge(supabase, badge.id);
+              totalRevoked++;
+            }
+            
+            await awardBadge(supabase, userId, eligibleAspirant.id, currentMonthMetrics);
+            totalAwarded++;
+          }
+        } else {
+          // Revoke aspirant badges if no longer eligible (e.g., got a full category)
+          const currentAspirantBadges = currentBadges?.filter(b => 
+            b.badge_definitions?.badge_type === 'aspirant'
+          );
+          for (const badge of currentAspirantBadges || []) {
+            await revokeBadge(supabase, badge.id);
             totalRevoked++;
           }
-
-          // Update user's current category
-          await supabase
-            .from('users')
-            .update({ 
-              current_category: eligibleCategory.badge_level,
-              category_achieved_at: new Date().toISOString()
-            })
-            .eq('user_id', userId);
         }
-      }
 
-      // Evaluate Aspirant Badges
-      const aspirantBadges = badges.filter(b => b.badge_type === 'aspirant') as BadgeDefinition[];
-      const eligibleAspirant = evaluateAspirantBadges(currentMonthMetrics, aspirantBadges, eligibleCategory);
-      
-      if (eligibleAspirant) {
-        const hasAspirant = currentBadges?.find(b => b.badge_id === eligibleAspirant.id);
-        if (!hasAspirant) {
-          await awardBadge(supabase, userId, eligibleAspirant.id, currentMonthMetrics);
-          totalAwarded++;
+        // ============= MONTHLY STAR BADGES =============
+        if (!evaluation_type || evaluation_type === 'monthly' || new Date().getDate() === 1) {
+          const monthlyResult = await evaluateMonthlyBadges(
+            supabase, userId, badges, currentMonthMetrics, currentBadges, userData
+          );
+          totalAwarded += monthlyResult.awarded;
+          totalRevoked += monthlyResult.revoked;
         }
-      } else {
-        // Revoke aspirant badges if no longer eligible
-        const currentAspirantBadges = currentBadges?.filter(b => b.badge_definitions.badge_type === 'aspirant');
-        for (const badge of currentAspirantBadges || []) {
-          await revokeBadge(supabase, badge.id);
-          totalRevoked++;
+
+        // ============= PROGRESS BADGES =============
+        if (last6MonthsMetrics && lastYearMetrics) {
+          const progressResult = await evaluateProgressBadges(
+            supabase, userId, badges, last6MonthsMetrics, lastYearMetrics, currentBadges
+          );
+          totalAwarded += progressResult.awarded;
+          totalRevoked += progressResult.revoked;
         }
-      }
 
-      // Evaluate Monthly Star Badges (only if requested or it's the first of the month)
-      if (!evaluation_type || evaluation_type === 'monthly' || new Date().getDate() === 1) {
-        await evaluateMonthlyBadges(supabase, userId, badges, currentMonthMetrics, currentBadges);
-      }
-
-      // Evaluate Progress Badges
-      if (last6MonthsMetrics && lastYearMetrics) {
-        await evaluateProgressBadges(supabase, userId, badges, last6MonthsMetrics, lastYearMetrics, currentBadges);
+        totalProcessed++;
       }
     }
 
-    console.log(`Badge evaluation complete. Awarded: ${totalAwarded}, Revoked: ${totalRevoked}`);
+    // ============= EXAM MASTER OF THE MONTH (Cross-user ranking) =============
+    if (!evaluation_type || evaluation_type === 'monthly') {
+      const examMasterResult = await evaluateExamMasterOfMonth(supabase, badges);
+      totalAwarded += examMasterResult.awarded;
+    }
+
+    console.log(`Badge evaluation complete. Processed: ${totalProcessed}, Awarded: ${totalAwarded}, Revoked: ${totalRevoked}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        users_evaluated: usersToEvaluate.length,
+        users_evaluated: totalProcessed,
         badges_awarded: totalAwarded,
         badges_revoked: totalRevoked
       }),
@@ -214,9 +294,37 @@ Deno.serve(async (req) => {
   }
 });
 
+function getCategoryRank(level: string | null): number {
+  if (!level) return 0;
+  const ranks: Record<string, number> = { 'bronze': 1, 'silver': 2, 'gold': 3 };
+  return ranks[level.toLowerCase()] || 0;
+}
+
+function checkRePromotionEligibility(userData: UserData, targetCategory: BadgeDefinition | null): boolean {
+  if (!targetCategory || !userData.last_demotion_date || !userData.demoted_from_category) {
+    return true; // No demotion history, eligible
+  }
+
+  const demotionDate = new Date(userData.last_demotion_date);
+  const oneYearLater = new Date(demotionDate);
+  oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+
+  // If trying to get back to the category they were demoted from
+  if (targetCategory.badge_level?.toLowerCase() === userData.demoted_from_category.toLowerCase()) {
+    if (new Date() < oneYearLater) {
+      console.log(`User ${userData.user_id} still in 1-year lockout period for ${userData.demoted_from_category}`);
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function evaluateCategoryBadges(metrics: UserMetrics, badges: BadgeDefinition[]): BadgeDefinition | null {
-  // Sort by level (Gold > Silver > Bronze)
-  const sortedBadges = [...badges].sort((a, b) => (b.criteria.years || 0) - (a.criteria.years || 0));
+  // Sort by level (Gold > Silver > Bronze) to get highest eligible
+  const sortedBadges = [...badges].sort((a, b) => 
+    getCategoryRank(b.badge_level) - getCategoryRank(a.badge_level)
+  );
   
   for (const badge of sortedBadges) {
     const meetsYears = metrics.years_of_service >= (badge.criteria.years || 0);
@@ -239,17 +347,16 @@ function evaluateAspirantBadges(
   // Don't award aspirant badge if user already has the full category
   if (currentCategory) return null;
   
-  // Sort by level (Gold > Silver > Bronze)
-  const sortedBadges = [...badges].sort((a, b) => {
-    const aLevel = a.badge_name.includes('Gold') ? 3 : a.badge_name.includes('Silver') ? 2 : 1;
-    const bLevel = b.badge_name.includes('Gold') ? 3 : b.badge_name.includes('Silver') ? 2 : 1;
-    return bLevel - aLevel;
-  });
+  // Sort by level (Gold > Silver > Bronze) to get highest eligible
+  const sortedBadges = [...badges].sort((a, b) => 
+    getCategoryRank(b.badge_level) - getCategoryRank(a.badge_level)
+  );
   
   for (const badge of sortedBadges) {
     const meetsExam = metrics.exam_performance_pct >= (badge.criteria.exam_perf || 0);
     const meetsTraining = metrics.training_activity_pct >= (badge.criteria.training_activity || 0);
     
+    // Aspirant badges don't require years of service (that's the point)
     if (meetsExam && meetsTraining) {
       return badge;
     }
@@ -263,77 +370,159 @@ async function evaluateMonthlyBadges(
   userId: string,
   allBadges: BadgeDefinition[],
   metrics: UserMetrics,
-  currentBadges: any[]
-) {
+  currentBadges: any[],
+  userData: UserData
+): Promise<{ awarded: number; revoked: number }> {
   const monthlyBadges = allBadges.filter(b => b.badge_type === 'monthly_star');
+  let awarded = 0;
+  let revoked = 0;
   
   // Expire old monthly badges
   const oldMonthlyBadges = currentBadges?.filter(b => 
-    b.badge_definitions.badge_type === 'monthly_star' && 
+    b.badge_definitions?.badge_type === 'monthly_star' && 
     b.expires_at && new Date(b.expires_at) < new Date()
   );
   
   for (const badge of oldMonthlyBadges || []) {
     await revokeBadge(supabase, badge.id);
+    revoked++;
   }
   
-  // Check for "Starter Success" badge (complete all exams with 80%+ in first 3 months)
-  const starterBadge = monthlyBadges.find(b => b.badge_name === 'Kezdő Siker' || b.badge_name === 'Starter Success');
-  if (starterBadge) {
-    const hasStarter = currentBadges?.find(b => b.badge_id === starterBadge.id);
+  // ============= STARTER SUCCESS / KEZDŐ SIKER =============
+  const starterBadge = monthlyBadges.find(b => 
+    b.badge_name === 'Kezdő Siker' || b.badge_name === 'Starter Success'
+  );
+  
+  if (starterBadge && userData.start_of_empl) {
+    const hasStarter = currentBadges?.find(b => b.badge_id === starterBadge.id && !b.revoked_at);
     
-    if (!hasStarter && metrics.years_of_service <= 0.25) {
-      // Get user's employment start date
-      const { data: userData } = await supabase
-        .from('users')
-        .select('start_of_empl')
-        .eq('user_id', userId)
-        .single();
+    if (!hasStarter) {
+      const startDate = new Date(userData.start_of_empl);
+      const threeMonthsLater = new Date(startDate);
+      threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+      const now = new Date();
       
-      if (userData?.start_of_empl) {
-        const startDate = new Date(userData.start_of_empl);
-        const threeMonthsLater = new Date(startDate);
-        threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
-        const now = new Date();
-        
-        // Only evaluate if within first 3 months
-        if (now <= threeMonthsLater) {
-          // Get all unique exams in the system
-          const { data: allExams } = await supabase
-            .from('exam_results')
-            .select('exam_id')
-            .eq('user_id', userId);
-          
-          // Get all available exams
-          const { data: availableExams } = await supabase
-            .from('exam_results')
-            .select('exam_id');
-          
-          const uniqueAvailableExams = [...new Set(availableExams?.map((e: any) => e.exam_id) || [])];
-          const userCompletedExams = [...new Set(allExams?.map((e: any) => e.exam_id) || [])];
-          
-          // Check if completed all exams with 80%+ average
-          if (userCompletedExams.length === uniqueAvailableExams.length && 
-              metrics.exam_performance_pct >= 80) {
-            await awardBadge(supabase, userId, starterBadge.id, metrics);
-          }
-        }
+      // Only evaluate if within first 3 months AND has 80%+ exam performance
+      if (now <= threeMonthsLater && metrics.exam_performance_pct >= 80) {
+        console.log(`Awarding Starter Success badge to ${userId}`);
+        await awardBadge(supabase, userId, starterBadge.id, metrics);
+        awarded++;
       }
     }
   }
   
-  // Check for "Training Champion" badge (100% training participation)
-  const trainingChampBadge = monthlyBadges.find(b => b.badge_name === 'Training Champion');
+  // ============= TRAINING CHAMPION / KÉPZÉSI BAJNOK =============
+  const trainingChampBadge = monthlyBadges.find(b => 
+    b.badge_name === 'Training Champion' || b.badge_name === 'Képzési Bajnok'
+  );
+  
   if (trainingChampBadge && metrics.training_activity_pct === 100) {
-    const hasChamp = currentBadges?.find(b => b.badge_id === trainingChampBadge.id);
+    const hasChamp = currentBadges?.find(b => 
+      b.badge_id === trainingChampBadge.id && !b.revoked_at &&
+      b.expires_at && new Date(b.expires_at) > new Date()
+    );
+    
     if (!hasChamp) {
       const nextMonth = new Date();
       nextMonth.setMonth(nextMonth.getMonth() + 1);
+      console.log(`Awarding Training Champion badge to ${userId}`);
       await awardBadge(supabase, userId, trainingChampBadge.id, metrics, nextMonth.toISOString());
+      awarded++;
     }
   }
   
-  // "Exam Master of the Month" is handled separately (requires ranking across all users)
+  return { awarded, revoked };
+}
+
+async function evaluateExamMasterOfMonth(
+  supabase: any,
+  allBadges: BadgeDefinition[]
+): Promise<{ awarded: number }> {
+  let awarded = 0;
+  
+  const examMasterBadge = allBadges.find(b => 
+    b.badge_type === 'monthly_star' && 
+    (b.badge_name === 'Hónap Vizsga Mestere' || b.badge_name === 'Exam Master of the Month')
+  );
+  
+  if (!examMasterBadge) return { awarded: 0 };
+  
+  // Get the current month's date range
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  
+  // Find the user with the highest average score this month (min 80% to qualify)
+  const { data: topPerformer } = await supabase
+    .from('exam_results')
+    .select('user_id, score')
+    .gte('completed_at', monthStart.toISOString())
+    .lte('completed_at', monthEnd.toISOString())
+    .gte('score', 80);
+  
+  if (!topPerformer || topPerformer.length === 0) {
+    console.log('No qualifying exam results for Exam Master this month');
+    return { awarded: 0 };
+  }
+  
+  // Aggregate scores by user
+  const userScores: Record<string, { totalScore: number; examCount: number; avgTime?: number }> = {};
+  
+  for (const result of topPerformer) {
+    if (!userScores[result.user_id]) {
+      userScores[result.user_id] = { totalScore: 0, examCount: 0 };
+    }
+    userScores[result.user_id].totalScore += result.score;
+    userScores[result.user_id].examCount++;
+  }
+  
+  // Find the user with highest average
+  let topUserId: string | null = null;
+  let topAverage = 0;
+  
+  for (const [userId, stats] of Object.entries(userScores)) {
+    const avg = stats.totalScore / stats.examCount;
+    if (avg > topAverage) {
+      topAverage = avg;
+      topUserId = userId;
+    }
+  }
+  
+  if (!topUserId) return { awarded: 0 };
+  
+  // Check if already awarded this month
+  const { data: existingBadge } = await supabase
+    .from('user_badges')
+    .select('*')
+    .eq('user_id', topUserId)
+    .eq('badge_id', examMasterBadge.id)
+    .gte('awarded_at', monthStart.toISOString())
+    .is('revoked_at', null)
+    .single();
+  
+  if (!existingBadge) {
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    
+    console.log(`Awarding Exam Master of the Month to ${topUserId} (avg: ${topAverage.toFixed(2)}%)`);
+    
+    const { error } = await supabase
+      .from('user_badges')
+      .insert({
+        user_id: topUserId,
+        badge_id: examMasterBadge.id,
+        awarded_at: new Date().toISOString(),
+        expires_at: nextMonth.toISOString(),
+        performance_data: {
+          average_score: topAverage,
+          exam_count: userScores[topUserId].examCount
+        }
+      });
+    
+    if (!error) awarded++;
+  }
+  
+  return { awarded };
 }
 
 async function evaluateProgressBadges(
@@ -343,22 +532,28 @@ async function evaluateProgressBadges(
   last6MonthsMetrics: UserMetrics,
   lastYearMetrics: UserMetrics,
   currentBadges: any[]
-) {
+): Promise<{ awarded: number; revoked: number }> {
   const progressBadges = allBadges.filter(b => b.badge_type === 'progress');
+  let awarded = 0;
+  let revoked = 0;
   
   for (const badge of progressBadges) {
     const metricsToUse = badge.criteria.period === 'half_yearly' ? last6MonthsMetrics : lastYearMetrics;
     const meetsExam = metricsToUse.exam_performance_pct >= (badge.criteria.exam_perf || 0);
     const meetsTraining = metricsToUse.training_activity_pct >= (badge.criteria.training_activity || 0);
     
-    const hasBadge = currentBadges?.find(b => b.badge_id === badge.id);
+    const hasBadge = currentBadges?.find(b => b.badge_id === badge.id && !b.revoked_at);
     
     if (meetsExam && meetsTraining && !hasBadge) {
       await awardBadge(supabase, userId, badge.id, metricsToUse);
+      awarded++;
     } else if ((!meetsExam || !meetsTraining) && hasBadge) {
       await revokeBadge(supabase, hasBadge.id);
+      revoked++;
     }
   }
+  
+  return { awarded, revoked };
 }
 
 async function awardBadge(
