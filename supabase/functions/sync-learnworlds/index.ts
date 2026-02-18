@@ -390,7 +390,7 @@ function processGrades(
     const gradeTitle = grade.learningUnit?.title || grade.learningUnit?.name;
     
     // Look up title from content mapping, fallback to grade data
-    let examTitle = unitTitleMap.get(learningUnitId) || gradeTitle || 'Untitled Exam';
+    let examTitle = unitTitleMap.get(learningUnitId) || gradeTitle || `${courseTitle} - Vizsga`;
     
     // Extract completed timestamp
     const completedAt = normalizeTimestamp(
