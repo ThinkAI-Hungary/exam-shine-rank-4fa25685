@@ -606,12 +606,112 @@ serve(async (req) => {
       }
     }
 
+    // Step 5: Fetch all users and sync their tags (aruhaz + beosztas) and employment dates
+    console.log('\n--- Step 5: Syncing User Tags ---');
+    let usersUpdated = 0;
+    
+    try {
+      // Fetch all users from LearnWorlds
+      const allUsers: any[] = [];
+      let userPage = 1;
+      let hasMoreUsers = true;
+      
+      while (hasMoreUsers) {
+        const url = `${API_BASE}/users?page=${userPage}&per_page=50`;
+        try {
+          const data = await makeLearnWorldsRequest(url, accessToken, clientId);
+          apiCallCount++;
+          const users = data.data || data || [];
+          
+          if (!Array.isArray(users) || users.length === 0) {
+            hasMoreUsers = false;
+          } else {
+            allUsers.push(...users);
+            console.log(`Fetched users page ${userPage}: ${users.length} users`);
+            userPage++;
+            if (userPage > 20) {
+              console.warn('Reached user page limit of 20');
+              hasMoreUsers = false;
+            }
+          }
+        } catch (error) {
+          console.error(`Error fetching users page ${userPage}:`, error);
+          hasMoreUsers = false;
+        }
+      }
+      
+      console.log(`Total users fetched for tag sync: ${allUsers.length}`);
+      
+      // Fetch detailed user data for each user (to get tags and employment date)
+      const userBatchSize = 10;
+      const userDataToUpsert: any[] = [];
+      
+      for (let i = 0; i < allUsers.length; i += userBatchSize) {
+        const batch = allUsers.slice(i, i + userBatchSize);
+        
+        const batchResults = await Promise.all(
+          batch.map(async (user: any) => {
+            try {
+              const url = `${API_BASE}/users/${user.id}`;
+              const detail = await makeLearnWorldsRequest(url, accessToken, clientId);
+              apiCallCount++;
+              
+              const tags = Array.isArray(detail.tags) ? detail.tags : [];
+              const aruhaz = tags.filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_aruhaz_'));
+              const beosztas = tags.filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_munkakorod'));
+              
+              const munkaviszonyod_kezdete = detail.fields?.cf_munkaviszonyodkezdete || null;
+              const startOfEmpl = munkaviszonyod_kezdete 
+                ? new Date(munkaviszonyod_kezdete).toISOString().split('T')[0]
+                : null;
+              
+              return {
+                user_id: String(user.id),
+                username: detail.username || detail.name || detail.email?.split('@')[0] || 'Unknown',
+                email: detail.email || null,
+                aruhaz,
+                beosztas,
+                start_of_empl: startOfEmpl,
+                updated_at: new Date().toISOString(),
+              };
+            } catch (error) {
+              console.warn(`Failed to fetch detail for user ${user.id}:`, error);
+              return null;
+            }
+          })
+        );
+        
+        userDataToUpsert.push(...batchResults.filter(Boolean));
+      }
+      
+      if (userDataToUpsert.length > 0) {
+        const { error: userUpsertError } = await supabase
+          .from('users')
+          .upsert(userDataToUpsert, { onConflict: 'user_id' });
+        
+        if (userUpsertError) {
+          console.error('Error upserting user tags:', userUpsertError);
+        } else {
+          usersUpdated = userDataToUpsert.length;
+          console.log(`Successfully synced tags for ${usersUpdated} users`);
+          
+          // Log some stats
+          const withAruhaz = userDataToUpsert.filter((u: any) => u.aruhaz.length > 0);
+          const withBeosztas = userDataToUpsert.filter((u: any) => u.beosztas.length > 0);
+          console.log(`Users with aruhaz tags: ${withAruhaz.length}, with beosztas tags: ${withBeosztas.length}`);
+        }
+      }
+    } catch (error) {
+      console.error('User tag sync failed:', error);
+    }
+
     const duration = Date.now() - startTime;
     console.log(`\n=== Sync Complete ===`);
     console.log(`Duration: ${duration}ms`);
     console.log(`API calls: ${apiCallCount}`);
     console.log(`Courses processed: ${coursesProcessed}`);
     console.log(`Exam results saved: ${totalExamResults}`);
+    console.log(`Users updated: ${usersUpdated}`);
 
     return new Response(
       JSON.stringify({
@@ -619,6 +719,7 @@ serve(async (req) => {
         apiCalls: apiCallCount,
         coursesProcessed,
         examResultsSaved: totalExamResults,
+        usersUpdated,
         durationMs: duration,
       }),
       { 
