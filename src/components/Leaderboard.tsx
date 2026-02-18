@@ -30,7 +30,8 @@ interface LeaderboardEntry {
   exam_count: number;
   average_score: number;
   score_source?: 'exact' | 'estimated';
-  tags?: string[];
+  aruhaz?: string[];
+  beosztas?: string[];
   badges?: BadgeData[];
   start_of_empl?: string;
 }
@@ -64,9 +65,9 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
     setDialogOpen(true);
   };
 
-  const getStoreTags = (tags?: string[]) => {
-    if (!tags) return [];
-    return tags
+  const getStoreTags = (aruhaz?: string[]) => {
+    if (!aruhaz) return [];
+    return aruhaz
       .filter(tag => tag.startsWith('cf_aruhaz_'))
       .map(tag => tag.replace('cf_aruhaz_', ''));
   };
@@ -106,9 +107,9 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span>{entry.username}</span>
-                    {getStoreTags(entry.tags).length > 0 && (
+                    {getStoreTags(entry.aruhaz).length > 0 && (
                       <div className="flex gap-1 flex-wrap">
-                        {getStoreTags(entry.tags).map((tag, idx) => (
+                        {getStoreTags(entry.aruhaz).map((tag, idx) => (
                           <Badge key={idx} variant="outline" className="text-xs">
                             {tag}
                           </Badge>
@@ -175,14 +176,14 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                 </Badge>
               </div>
 
-              {getStoreTags(selectedUser.tags).length > 0 && (
+              {getStoreTags(selectedUser.aruhaz).length > 0 && (
                 <div className="p-3 bg-muted/50 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
                     <MapPin className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">Áruházak</span>
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {getStoreTags(selectedUser.tags).map((store, idx) => (
+                    {getStoreTags(selectedUser.aruhaz).map((store, idx) => (
                       <Badge key={idx} variant="outline">
                         {store}
                       </Badge>

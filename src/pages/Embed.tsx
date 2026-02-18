@@ -11,7 +11,7 @@ interface LeaderboardEntry {
   total_score: number;
   exam_count: number;
   average_score: number;
-  tags: string[];
+  aruhaz: string[];
 }
 
 const Embed = () => {
@@ -31,7 +31,7 @@ const Embed = () => {
         .from("leaderboard_cache")
         .select(`
           *,
-          users!inner(username, email, tags)
+          users!inner(username, email, aruhaz)
         `)
         .order("rank", { ascending: true })
         .limit(50);
@@ -45,7 +45,7 @@ const Embed = () => {
         total_score: item.total_score,
         exam_count: item.exam_count,
         average_score: item.average_score,
-        tags: item.users.tags || [],
+        aruhaz: item.users.aruhaz || [],
       }));
       
       setLeaderboard(formattedData);
@@ -111,9 +111,9 @@ const Embed = () => {
                       <div className="font-medium">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span>{entry.username}</span>
-                          {entry.tags && entry.tags.length > 0 && (
+                          {entry.aruhaz && entry.aruhaz.length > 0 && (
                             <div className="flex gap-1 flex-wrap">
-                              {entry.tags.map((tag, idx) => (
+                              {entry.aruhaz.map((tag, idx) => (
                                 <Badge key={idx} variant="outline" className="text-xs">
                                   {tag}
                                 </Badge>

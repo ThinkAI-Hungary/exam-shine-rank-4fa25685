@@ -15,7 +15,8 @@ interface UserData {
   current_category: string | null;
   category_achieved_at: string | null;
   start_of_empl: string | null;
-  tags: string[];
+  aruhaz: string[];
+  beosztas: string[];
 }
 
 interface PerformanceMetrics {
@@ -177,10 +178,11 @@ const UserProfile = () => {
                   <span>({yearsOfService.toFixed(1)} év)</span>
                 </div>
               )}
-              {userData.tags && userData.tags.length > 0 && (
+              {userData.aruhaz && userData.aruhaz.length > 0 && (
                 <div className="flex items-center gap-2 flex-wrap">
-                  {userData.tags.map((tag, idx) => (
-                    <Badge key={idx} variant="outline">{tag}</Badge>
+                  <span className="text-sm text-muted-foreground">Áruház:</span>
+                  {userData.aruhaz.map((tag, idx) => (
+                    <Badge key={idx} variant="outline">{tag.replace(/^cf_aruhaz_/, '')}</Badge>
                   ))}
                 </div>
               )}
