@@ -553,7 +553,21 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      report_monthly_detailed: {
+        Row: {
+          Áruház: string[] | null
+          Dátum: string | null
+          email: string | null
+          "Eredmény %": number | null
+          "Kolléga neve": string | null
+          Megfelelt: string | null
+          Pozíció: string[] | null
+          Státusz: string | null
+          "Vizsga témakör": string | null
+          "Vizsga típusa": string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       calculate_exam_performance: {
