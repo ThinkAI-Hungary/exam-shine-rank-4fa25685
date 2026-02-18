@@ -617,7 +617,7 @@ serve(async (req) => {
       let hasMore = true;
       
       while (hasMore) {
-        const url = `${API_BASE}/users?page=${page}&per_page=20`;
+        const url = `${API_BASE}/users?page=${page}&per_page=100`;
         console.log(`Fetching users list page ${page}...`);
         
         try {
