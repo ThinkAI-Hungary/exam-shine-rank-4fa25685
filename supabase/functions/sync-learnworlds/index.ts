@@ -682,16 +682,23 @@ serve(async (req) => {
         });
       }
       
-      console.log(`Prepared ${userDataToUpsert.length} users for upsert`);
+      // Deduplicate by user_id (API can return duplicates across pages)
+      const userMap = new Map<string, any>();
+      for (const u of userDataToUpsert) {
+        userMap.set(u.user_id, u); // last occurrence wins
+      }
+      const dedupedUsers = Array.from(userMap.values());
       
-      if (userDataToUpsert.length > 0) {
+      console.log(`Prepared ${userDataToUpsert.length} users, deduplicated to ${dedupedUsers.length}`);
+      
+      if (dedupedUsers.length > 0) {
         // Log sample for debugging
-        console.log('Sample user data:', JSON.stringify(userDataToUpsert[0]));
+        console.log('Sample user data:', JSON.stringify(dedupedUsers[0]));
         
-        // Upsert in batches of 200
-        const upsertBatchSize = 200;
-        for (let i = 0; i < userDataToUpsert.length; i += upsertBatchSize) {
-          const batch = userDataToUpsert.slice(i, i + upsertBatchSize);
+        // Upsert in batches of 100
+        const upsertBatchSize = 100;
+        for (let i = 0; i < dedupedUsers.length; i += upsertBatchSize) {
+          const batch = dedupedUsers.slice(i, i + upsertBatchSize);
           const { error: userUpsertError } = await supabase
             .from('users')
             .upsert(batch, { onConflict: 'user_id' });
@@ -703,11 +710,11 @@ serve(async (req) => {
           }
         }
         
-        usersUpdated = userDataToUpsert.length;
+        usersUpdated = dedupedUsers.length;
         console.log(`Successfully synced ${usersUpdated} users`);
         
-        const withAruhaz = userDataToUpsert.filter((u: any) => u.aruhaz.length > 0);
-        const withBeosztas = userDataToUpsert.filter((u: any) => u.beosztas.length > 0);
+        const withAruhaz = dedupedUsers.filter((u: any) => u.aruhaz.length > 0);
+        const withBeosztas = dedupedUsers.filter((u: any) => u.beosztas.length > 0);
         console.log(`Users with aruhaz tags: ${withAruhaz.length}, with beosztas tags: ${withBeosztas.length}`);
       }
     } catch (error) {
