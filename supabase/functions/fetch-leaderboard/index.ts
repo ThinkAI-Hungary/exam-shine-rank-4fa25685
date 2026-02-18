@@ -1151,15 +1151,15 @@ serve(async (req) => {
       console.log('No exam results to upsert');
     }
 
-    // Step 3.5: Fetch existing users from DB to compare tags and start_of_empl
+    // Step 3.5: Fetch existing users from DB to compare aruhaz, beosztas and start_of_empl
     console.log('\nFetching existing users to check for tag and employment date changes...');
     const { data: existingUsers } = await supabase
       .from('users')
-      .select('user_id, tags, start_of_empl')
+      .select('user_id, aruhaz, beosztas, start_of_empl')
       .in('user_id', uniqueUsers.map(u => u.id));
     
-    const existingUserMap = new Map<string, { tags: string[]; start_of_empl: string | null }>(
-      (existingUsers || []).map((u: any) => [u.user_id, { tags: u.tags || [], start_of_empl: u.start_of_empl || null }])
+    const existingUserMap = new Map<string, { aruhaz: string[]; beosztas: string[]; start_of_empl: string | null }>(
+      (existingUsers || []).map((u: any) => [u.user_id, { aruhaz: u.aruhaz || [], beosztas: u.beosztas || [], start_of_empl: u.start_of_empl || null }])
     );
     
     // Fetch detailed user data (including tags) only for users with missing or potentially changed tags
@@ -1216,35 +1216,45 @@ serve(async (req) => {
       usersWithTags.push(...batchResults);
     }
 
-    // Step 3.6: Only upsert users whose tags or employment date have changed
+    // Step 3.6: Only upsert users whose aruhaz, beosztas or employment date have changed
     console.log('\nChecking for tag and employment date changes and upserting only modified users...');
     const usersToUpdate = usersWithTags.filter((user) => {
       const userId = String(user.id);
-      const newTags = ((user as any).tags || [])
+      const newAruhaz = ((user as any).tags || [])
         .filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_aruhaz_'))
         .sort();
-      const existingData = existingUserMap.get(userId) || { tags: [], start_of_empl: null };
-      const existingTags = existingData.tags.sort();
+      const newBeosztas = ((user as any).tags || [])
+        .filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_munkakorod'))
+        .sort();
+      const existingData = existingUserMap.get(userId) || { aruhaz: [], beosztas: [], start_of_empl: null };
+      const existingAruhaz = existingData.aruhaz.sort();
+      const existingBeosztas = existingData.beosztas.sort();
       
       // Parse new employment date if available (convert to date format YYYY-MM-DD)
       const newStartOfEmpl = user.munkaviszonyod_kezdete 
         ? new Date(user.munkaviszonyod_kezdete).toISOString().split('T')[0]
         : null;
       
-      // Check if tags have changed
-      const tagsChanged = JSON.stringify(newTags) !== JSON.stringify(existingTags);
+      // Check if aruhaz tags have changed
+      const aruhazChanged = JSON.stringify(newAruhaz) !== JSON.stringify(existingAruhaz);
+      
+      // Check if beosztas tags have changed
+      const beosztasChanged = JSON.stringify(newBeosztas) !== JSON.stringify(existingBeosztas);
       
       // Check if employment date has changed
       const emplDateChanged = newStartOfEmpl !== existingData.start_of_empl;
       
-      if (tagsChanged) {
-        console.log(`Tags changed for user ${userId}: [${existingTags.join(', ')}] -> [${newTags.join(', ')}]`);
+      if (aruhazChanged) {
+        console.log(`Aruhaz changed for user ${userId}: [${existingAruhaz.join(', ')}] -> [${newAruhaz.join(', ')}]`);
+      }
+      if (beosztasChanged) {
+        console.log(`Beosztas changed for user ${userId}: [${existingBeosztas.join(', ')}] -> [${newBeosztas.join(', ')}]`);
       }
       if (emplDateChanged) {
         console.log(`Employment date changed for user ${userId}: ${existingData.start_of_empl} -> ${newStartOfEmpl}`);
       }
       
-      return tagsChanged || emplDateChanged;
+      return aruhazChanged || beosztasChanged || emplDateChanged;
     });
 
     const userDataToUpsert = usersToUpdate.map((user) => {
@@ -1256,7 +1266,8 @@ serve(async (req) => {
         user_id: String(user.id),
         username: user.username || (user as any).name || (user as any).email?.split('@')[0] || 'Unknown',
         email: (user as any).email || null,
-        tags: ((user as any).tags || []).filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_aruhaz_')),
+        aruhaz: ((user as any).tags || []).filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_aruhaz_')),
+        beosztas: ((user as any).tags || []).filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_munkakorod')),
         start_of_empl: startOfEmpl,
         updated_at: new Date().toISOString(),
       };

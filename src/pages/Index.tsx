@@ -35,7 +35,8 @@ interface LeaderboardEntry {
   total_score: number;
   exam_count: number;
   average_score: number;
-  tags: string[];
+  aruhaz: string[];
+  beosztas: string[];
   badges?: BadgeData[];
   start_of_empl?: string;
 }
@@ -92,7 +93,7 @@ const Index = () => {
         .from("leaderboard_cache")
         .select(`
           *,
-          users!inner(username, email, tags, start_of_empl)
+          users!inner(username, email, aruhaz, beosztas, start_of_empl)
         `)
         .order("rank", { ascending: true });
 
@@ -121,7 +122,8 @@ const Index = () => {
         total_score: item.total_score,
         exam_count: item.exam_count,
         average_score: item.average_score,
-        tags: item.users.tags || [],
+        aruhaz: item.users.aruhaz || [],
+        beosztas: item.users.beosztas || [],
         badges: badgesByUser[item.user_id] || [],
         start_of_empl: item.users.start_of_empl,
       }));
@@ -129,10 +131,10 @@ const Index = () => {
       setLeaderboard(formattedData);
       setFilteredLeaderboard(formattedData);
       
-      // Extract unique tags
+      // Extract unique aruhaz tags
       const tags = new Set<string>();
       formattedData.forEach(entry => {
-        entry.tags.forEach(tag => tags.add(tag));
+        entry.aruhaz.forEach(tag => tags.add(tag));
       });
       setAvailableTags(Array.from(tags).sort());
     } catch (error: any) {
@@ -146,7 +148,7 @@ const Index = () => {
   useEffect(() => {
     if (selectedTag) {
       const filtered = leaderboard.filter(entry => 
-        entry.tags.includes(selectedTag)
+        entry.aruhaz.includes(selectedTag)
       );
       setFilteredLeaderboard(filtered);
     } else {

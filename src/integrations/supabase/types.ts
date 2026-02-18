@@ -508,6 +508,8 @@ export type Database = {
       }
       users: {
         Row: {
+          aruhaz: string[] | null
+          beosztas: string[] | null
           category_achieved_at: string | null
           created_at: string | null
           current_category: string | null
@@ -515,12 +517,13 @@ export type Database = {
           email: string | null
           last_demotion_date: string | null
           start_of_empl: string | null
-          tags: string[] | null
           updated_at: string | null
           user_id: string
           username: string
         }
         Insert: {
+          aruhaz?: string[] | null
+          beosztas?: string[] | null
           category_achieved_at?: string | null
           created_at?: string | null
           current_category?: string | null
@@ -528,12 +531,13 @@ export type Database = {
           email?: string | null
           last_demotion_date?: string | null
           start_of_empl?: string | null
-          tags?: string[] | null
           updated_at?: string | null
           user_id: string
           username: string
         }
         Update: {
+          aruhaz?: string[] | null
+          beosztas?: string[] | null
           category_achieved_at?: string | null
           created_at?: string | null
           current_category?: string | null
@@ -541,7 +545,6 @@ export type Database = {
           email?: string | null
           last_demotion_date?: string | null
           start_of_empl?: string | null
-          tags?: string[] | null
           updated_at?: string | null
           user_id?: string
           username?: string
