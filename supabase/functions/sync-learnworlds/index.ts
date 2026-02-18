@@ -217,6 +217,10 @@ async function fetchCourseContent(
     console.log(`[Course ${courseId}] Fetching content from: ${url}`);
     const data = await makeLearnWorldsRequest(url, accessToken, clientId);
     
+    // DEBUG: Log raw content response structure
+    console.log(`[DEBUG][Course ${courseId}] Content response keys:`, JSON.stringify(Object.keys(data)));
+    console.log(`[DEBUG][Course ${courseId}] Content response (first 1500 chars):`, JSON.stringify(data).substring(0, 1500));
+    
     // The content endpoint returns sections with units
     const sections = data.sections || data.data || data || [];
     
@@ -255,6 +259,11 @@ async function fetchCourseContent(
     
     processItems(sections);
     
+    console.log(`[DEBUG][Course ${courseId}] unitTitleMap size: ${unitTitleMap.size}`);
+    if (unitTitleMap.size > 0) {
+      const entries = Array.from(unitTitleMap.entries()).slice(0, 5);
+      console.log(`[DEBUG][Course ${courseId}] unitTitleMap sample:`, JSON.stringify(entries));
+    }
     console.log(`[Course ${courseId}] Content mapping complete: ${unitTitleMap.size} units mapped`);
   } catch (error) {
     console.warn(`[Course ${courseId}] Failed to fetch content:`, error instanceof Error ? error.message : error);
@@ -281,6 +290,17 @@ async function fetchCourseGrades(
       const data = await makeLearnWorldsRequest(url, accessToken, clientId);
       
       const grades = data.data || data || [];
+      
+      // DEBUG: Log first grade entry structure (only on first page of first fetch)
+      if (page === 1 && Array.isArray(grades) && grades.length > 0) {
+        console.log(`[DEBUG][Course ${courseId}] First grade entry keys:`, JSON.stringify(Object.keys(grades[0])));
+        console.log(`[DEBUG][Course ${courseId}] First grade entry (first 1000 chars):`, JSON.stringify(grades[0]).substring(0, 1000));
+        console.log(`[DEBUG][Course ${courseId}] learningUnit exists:`, !!grades[0].learningUnit);
+        if (grades[0].learningUnit) {
+          console.log(`[DEBUG][Course ${courseId}] learningUnit keys:`, JSON.stringify(Object.keys(grades[0].learningUnit)));
+          console.log(`[DEBUG][Course ${courseId}] learningUnit value:`, JSON.stringify(grades[0].learningUnit));
+        }
+      }
       
       if (!Array.isArray(grades) || grades.length === 0) {
         hasMore = false;
