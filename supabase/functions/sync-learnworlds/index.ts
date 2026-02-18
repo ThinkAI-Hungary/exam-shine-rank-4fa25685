@@ -611,62 +611,50 @@ serve(async (req) => {
     let usersUpdated = 0;
     
     try {
-      // Fetch all users from LearnWorlds
-      const allUsers: any[] = [];
-      let userPage = 1;
-      let hasMoreUsers = true;
+      // Fetch all users from LearnWorlds with detail (individual calls to get tags)
+      // First get the list of all user IDs from our DB
+      const { data: dbUsers } = await supabase
+        .from('users')
+        .select('user_id');
       
-      while (hasMoreUsers) {
-        const url = `${API_BASE}/users?page=${userPage}&per_page=50`;
-        try {
-          const data = await makeLearnWorldsRequest(url, accessToken, clientId);
-          apiCallCount++;
-          const users = data.data || data || [];
-          
-          if (!Array.isArray(users) || users.length === 0) {
-            hasMoreUsers = false;
-          } else {
-            allUsers.push(...users);
-            console.log(`Fetched users page ${userPage}: ${users.length} users`);
-            userPage++;
-            if (userPage > 20) {
-              console.warn('Reached user page limit of 20');
-              hasMoreUsers = false;
-            }
-          }
-        } catch (error) {
-          console.error(`Error fetching users page ${userPage}:`, error);
-          hasMoreUsers = false;
-        }
-      }
-      
-      console.log(`Total users fetched for tag sync: ${allUsers.length}`);
+      const userIds = (dbUsers || []).map((u: any) => u.user_id);
+      console.log(`Found ${userIds.length} users in DB to sync tags for`);
       
       // Fetch detailed user data for each user (to get tags and employment date)
-      const userBatchSize = 10;
+      const userBatchSize = 5;
       const userDataToUpsert: any[] = [];
       
-      for (let i = 0; i < allUsers.length; i += userBatchSize) {
-        const batch = allUsers.slice(i, i + userBatchSize);
+      for (let i = 0; i < userIds.length; i += userBatchSize) {
+        const batch = userIds.slice(i, i + userBatchSize);
+        console.log(`Fetching user details batch ${Math.floor(i / userBatchSize) + 1}/${Math.ceil(userIds.length / userBatchSize)}`);
         
         const batchResults = await Promise.all(
-          batch.map(async (user: any) => {
+          batch.map(async (userId: string) => {
             try {
-              const url = `${API_BASE}/users/${user.id}`;
+              const url = `${API_BASE}/users/${userId}`;
               const detail = await makeLearnWorldsRequest(url, accessToken, clientId);
               apiCallCount++;
               
               const tags = Array.isArray(detail.tags) ? detail.tags : [];
+              console.log(`User ${userId} tags: ${JSON.stringify(tags)}`);
+              
               const aruhaz = tags.filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_aruhaz_'));
               const beosztas = tags.filter((tag: string) => typeof tag === 'string' && tag.startsWith('cf_munkakorod'));
               
-              const munkaviszonyod_kezdete = detail.fields?.cf_munkaviszonyodkezdete || null;
+              console.log(`User ${userId} aruhaz: ${JSON.stringify(aruhaz)}, beosztas: ${JSON.stringify(beosztas)}`);
+              
+              // Try multiple field name variations for employment start date
+              const fields = detail.fields || {};
+              const munkaviszonyod_kezdete = fields.cf_munkaviszonyodkezdete 
+                || fields.cf_munkaviszonyod_kezdete
+                || fields['cf_munkaviszonyodkezdete']
+                || null;
               const startOfEmpl = munkaviszonyod_kezdete 
                 ? new Date(munkaviszonyod_kezdete).toISOString().split('T')[0]
                 : null;
               
               return {
-                user_id: String(user.id),
+                user_id: String(userId),
                 username: detail.username || detail.name || detail.email?.split('@')[0] || 'Unknown',
                 email: detail.email || null,
                 aruhaz,
@@ -675,7 +663,7 @@ serve(async (req) => {
                 updated_at: new Date().toISOString(),
               };
             } catch (error) {
-              console.warn(`Failed to fetch detail for user ${user.id}:`, error);
+              console.warn(`Failed to fetch detail for user ${userId}:`, error instanceof Error ? error.message : error);
               return null;
             }
           })
@@ -684,25 +672,29 @@ serve(async (req) => {
         userDataToUpsert.push(...batchResults.filter(Boolean));
       }
       
+      console.log(`Prepared ${userDataToUpsert.length} users for upsert`);
+      
       if (userDataToUpsert.length > 0) {
+        // Log first user data for debugging
+        console.log('Sample user data:', JSON.stringify(userDataToUpsert[0]));
+        
         const { error: userUpsertError } = await supabase
           .from('users')
           .upsert(userDataToUpsert, { onConflict: 'user_id' });
         
         if (userUpsertError) {
-          console.error('Error upserting user tags:', userUpsertError);
+          console.error('Error upserting user tags:', JSON.stringify(userUpsertError));
         } else {
           usersUpdated = userDataToUpsert.length;
           console.log(`Successfully synced tags for ${usersUpdated} users`);
           
-          // Log some stats
           const withAruhaz = userDataToUpsert.filter((u: any) => u.aruhaz.length > 0);
           const withBeosztas = userDataToUpsert.filter((u: any) => u.beosztas.length > 0);
           console.log(`Users with aruhaz tags: ${withAruhaz.length}, with beosztas tags: ${withBeosztas.length}`);
         }
       }
     } catch (error) {
-      console.error('User tag sync failed:', error);
+      console.error('User tag sync failed:', error instanceof Error ? error.message : error);
     }
 
     const duration = Date.now() - startTime;
