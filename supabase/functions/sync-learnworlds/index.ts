@@ -402,8 +402,8 @@ function processGrades(
       continue;
     }
     
-    // Create unique exam_id
-    const examId = learningUnitId || `${courseId}-${grade.id}`;
+    // Create unique exam_id using grade.id (unique per attempt)
+    const examId = String(grade.id || learningUnitId || `${courseId}-unknown`);
     
     results.push({
       user_id: userId,
