@@ -1,0 +1,1 @@
+DELETE FROM exam_results WHERE user_id = 'test_debug_user';
