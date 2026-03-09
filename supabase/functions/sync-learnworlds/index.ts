@@ -546,7 +546,7 @@ serve(async (req) => {
               completed_at: r.completed_at,
               time_spent_seconds: r.time_spent_seconds,
             })),
-            { onConflict: 'user_id,exam_id' }
+            { onConflict: 'user_id,exam_id,completed_at' }
           )
           .select('id');
         
