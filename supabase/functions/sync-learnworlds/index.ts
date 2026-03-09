@@ -502,34 +502,36 @@ serve(async (req) => {
     }
 
     console.log(`\n--- Step 3: Saving ${allExamResults.length} Exam Results ---`);
-    totalExamResults = allExamResults.length;
+
+    // Deduplicate: keep last entry for each unique (user_id, exam_id, completed_at)
+    const deduped = new Map<string, ExamResult>();
+    for (const r of allExamResults) {
+      const key = `${r.user_id}|${r.exam_id}|${r.completed_at}`;
+      deduped.set(key, r); // last one wins
+    }
+    const dedupedResults = Array.from(deduped.values());
+    totalExamResults = dedupedResults.length;
 
     // Track debug info for response
     const debugInfo: any = {
-      totalResultsBeforeUpsert: allExamResults.length,
-      uniquePairs: 0,
-      sampleResults: [] as any[],
+      totalResultsRaw: allExamResults.length,
+      totalAfterDedup: dedupedResults.length,
+      uniqueUsers: new Set(dedupedResults.map(r => r.user_id)).size,
+      sampleResults: dedupedResults.slice(0, 3).map(r => ({
+        user_id: r.user_id, exam_id: r.exam_id, score: r.score, completed_at: r.completed_at
+      })),
       batchResults: [] as any[],
       upsertErrors: 0,
       upsertSuccess: 0,
       dbCountAfter: 0,
     };
 
-    // Log unique (user_id, exam_id) pairs
-    const uniquePairs = new Set(allExamResults.map(r => `${r.user_id}|${r.exam_id}`));
-    debugInfo.uniquePairs = uniquePairs.size;
-    
-    // Sample first 3 results
-    debugInfo.sampleResults = allExamResults.slice(0, 3).map(r => ({
-      user_id: r.user_id, exam_id: r.exam_id, score: r.score, title: r.exam_title
-    }));
-
-    // Batch upsert exam results
-    if (allExamResults.length > 0) {
+    // Batch upsert deduplicated exam results
+    if (dedupedResults.length > 0) {
       const batchSize = 100;
       
-      for (let i = 0; i < allExamResults.length; i += batchSize) {
-        const batch = allExamResults.slice(i, i + batchSize);
+      for (let i = 0; i < dedupedResults.length; i += batchSize) {
+        const batch = dedupedResults.slice(i, i + batchSize);
         
         const { data, error } = await supabase
           .from('exam_results')
