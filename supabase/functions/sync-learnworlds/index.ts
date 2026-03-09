@@ -402,8 +402,8 @@ function processGrades(
       continue;
     }
     
-    // Create unique exam_id
-    const examId = learningUnitId || `${courseId}-${grade.id}`;
+    // Create unique exam_id using grade.id (unique per attempt)
+    const examId = String(grade.id || learningUnitId || `${courseId}-unknown`);
     
     results.push({
       user_id: userId,
@@ -546,7 +546,7 @@ serve(async (req) => {
               completed_at: r.completed_at,
               time_spent_seconds: r.time_spent_seconds,
             })),
-            { onConflict: 'user_id,exam_id' }
+            { onConflict: 'user_id,exam_id,completed_at' }
           )
           .select('id');
         
