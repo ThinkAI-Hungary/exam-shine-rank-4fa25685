@@ -555,16 +555,42 @@ export type Database = {
     Views: {
       report_monthly_detailed: {
         Row: {
-          Áruház: string[] | null
+          Áruház: string | null
           Dátum: string | null
           email: string | null
           "Eredmény %": number | null
           "Kolléga neve": string | null
           Megfelelt: string | null
-          Pozíció: string[] | null
+          Pozíció: string | null
           Státusz: string | null
           "Vizsga témakör": string | null
           "Vizsga típusa": string | null
+        }
+        Relationships: []
+      }
+      report_monthly_stats: {
+        Row: {
+          Áruház: string | null
+          "Átlagos eredmény %": number | null
+          Hónap: string | null
+          "Összes vizsga száma": number | null
+          "Sikeres vizsgák": number | null
+          "Sikerességi ráta %": number | null
+          "Sikertelen vizsgák": number | null
+          "Vizsga témakör": string | null
+        }
+        Relationships: []
+      }
+      report_quarterly_totals: {
+        Row: {
+          Áruház: string | null
+          "Áruházi rangsor helyezés": number | null
+          "Átlagos eredmény %": number | null
+          Negyedév: string | null
+          "Sikeres fő": number | null
+          "Sikertelen fő": number | null
+          "Vizsga témakör": string | null
+          "Vizsgázott fő": number | null
         }
         Relationships: []
       }

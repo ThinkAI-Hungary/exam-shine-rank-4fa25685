@@ -504,13 +504,25 @@ serve(async (req) => {
     console.log(`\n--- Step 3: Saving ${allExamResults.length} Exam Results ---`);
     totalExamResults = allExamResults.length;
 
+    // Log unique (user_id, exam_id) pairs to understand deduplication
+    const uniquePairs = new Set(allExamResults.map(r => `${r.user_id}|${r.exam_id}`));
+    console.log(`Unique (user_id, exam_id) pairs: ${uniquePairs.size} out of ${allExamResults.length} total`);
+    
+    // Log first 5 results for debugging
+    for (const r of allExamResults.slice(0, 5)) {
+      console.log(`Sample: user=${r.user_id}, exam_id=${r.exam_id}, score=${r.score}, title=${r.exam_title}`);
+    }
+
     // Batch upsert exam results
     if (allExamResults.length > 0) {
-      const batchSize = 500;
+      const batchSize = 100; // Reduced batch size for reliability
+      let upsertErrors = 0;
+      let upsertSuccess = 0;
+      
       for (let i = 0; i < allExamResults.length; i += batchSize) {
         const batch = allExamResults.slice(i, i + batchSize);
         
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('exam_results')
           .upsert(
             batch.map(r => ({
@@ -526,14 +538,25 @@ serve(async (req) => {
               time_spent_seconds: r.time_spent_seconds,
             })),
             { onConflict: 'user_id,exam_id' }
-          );
+          )
+          .select('id');
         
         if (error) {
-          console.error(`Error upserting batch ${i / batchSize + 1}:`, error);
+          upsertErrors++;
+          console.error(`Error upserting batch ${i / batchSize + 1}:`, JSON.stringify(error));
         } else {
-          console.log(`Upserted batch ${i / batchSize + 1}: ${batch.length} records`);
+          upsertSuccess += data?.length || 0;
+          console.log(`Upserted batch ${i / batchSize + 1}: ${batch.length} sent, ${data?.length || 0} returned`);
         }
       }
+      
+      console.log(`Upsert summary: ${upsertSuccess} rows confirmed, ${upsertErrors} batch errors`);
+      
+      // Verify actual count in DB
+      const { count } = await supabase
+        .from('exam_results')
+        .select('*', { count: 'exact', head: true });
+      console.log(`Actual exam_results count in DB after upsert: ${count}`);
     }
 
     // Update leaderboard cache from the ACTUAL exam_results table (not just this sync batch)
