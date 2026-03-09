@@ -788,6 +788,7 @@ serve(async (req) => {
         examResultsSaved: totalExamResults,
         usersUpdated,
         durationMs: duration,
+        debug: debugInfo,
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
