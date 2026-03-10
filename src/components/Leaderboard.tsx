@@ -116,9 +116,7 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                         ))}
                       </div>
                     )}
-                    {entry.badges && entry.badges.length > 0 && (
-                      <BadgeDisplay badges={entry.badges} compact />
-                    )}
+                    
                   </div>
                 </TableCell>
                 <TableCell className="text-right">
