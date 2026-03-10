@@ -7,8 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
-import { Trophy, Code, RefreshCw, Menu } from "lucide-react";
+import { Trophy, Code, RefreshCw, Menu, Users, User } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Leaderboard from "@/components/Leaderboard";
+import StoreLeaderboard from "@/components/StoreLeaderboard";
 import Navigation from "@/components/Navigation";
 import { toast } from "sonner";
 
@@ -54,6 +56,7 @@ const Index = () => {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [user, setUser] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [leaderboardView, setLeaderboardView] = useState<'individual' | 'store'>('individual');
 
   const embedCode = `<iframe 
   src="${window.location.origin}/embed" 
@@ -416,8 +419,20 @@ const Index = () => {
                     Az összes kurzuson szerzett átlag pontszám alapján rangsorolva
                   </CardDescription>
                 </div>
-                {availableTags.length > 0 && (
-                  <div className="flex justify-center">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <Tabs value={leaderboardView} onValueChange={(v) => setLeaderboardView(v as 'individual' | 'store')}>
+                    <TabsList>
+                      <TabsTrigger value="individual" className="gap-1.5">
+                        <User className="w-4 h-4" />
+                        Egyéni
+                      </TabsTrigger>
+                      <TabsTrigger value="store" className="gap-1.5">
+                        <Users className="w-4 h-4" />
+                        Áruház szint
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  {availableTags.length > 0 && leaderboardView === 'individual' && (
                     <Select value={selectedTag || "all"} onValueChange={(value) => setSelectedTag(value === "all" ? null : value)}>
                       <SelectTrigger className="w-[250px]">
                         <SelectValue placeholder="Szűrés címke szerint" />
@@ -432,11 +447,15 @@ const Index = () => {
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                )}
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                <Leaderboard entries={filteredLeaderboard} />
+                {leaderboardView === 'individual' ? (
+                  <Leaderboard entries={filteredLeaderboard} />
+                ) : (
+                  <StoreLeaderboard entries={leaderboard} />
+                )}
               </CardContent>
             </Card>
           </div>
