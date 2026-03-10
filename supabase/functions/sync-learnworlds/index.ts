@@ -203,6 +203,90 @@ async function fetchAllCourses(
   return allCourses;
 }
 
+// Fetch bundles and find the course IDs belonging to a specific bundle by name
+async function fetchBundleCourseIds(
+  baseUrl: string,
+  accessToken: string,
+  clientId: string,
+  bundleName: string
+): Promise<string[]> {
+  console.log(`Fetching bundles to find "${bundleName}"...`);
+  const courseIds: string[] = [];
+  let page = 1;
+  let hasMore = true;
+  let foundBundle: any = null;
+
+  while (hasMore && !foundBundle) {
+    const url = withClientId(`${baseUrl}/bundles?page=${page}&per_page=50`, clientId);
+    try {
+      const data = await makeLearnWorldsRequest(url, accessToken, clientId);
+      const bundles = data.data || data || [];
+      
+      console.log(`[Bundles] Page ${page}: ${Array.isArray(bundles) ? bundles.length : 0} bundles`);
+      
+      if (!Array.isArray(bundles) || bundles.length === 0) {
+        hasMore = false;
+      } else {
+        for (const bundle of bundles) {
+          const title = bundle.title || bundle.name || '';
+          const id = bundle.id || '';
+          console.log(`[Bundle] id=${id}, title="${title}"`);
+          
+          if (title.toLowerCase().includes(bundleName.toLowerCase())) {
+            foundBundle = bundle;
+            console.log(`[Bundle] Found matching bundle: "${title}" (${id})`);
+            console.log(`[Bundle] Full bundle data (first 2000 chars):`, JSON.stringify(bundle).substring(0, 2000));
+            break;
+          }
+        }
+        page++;
+        if (page > 10) hasMore = false;
+      }
+    } catch (error) {
+      console.error(`Error fetching bundles page ${page}:`, error);
+      hasMore = false;
+    }
+  }
+
+  if (!foundBundle) {
+    console.error(`Bundle "${bundleName}" not found!`);
+    return [];
+  }
+
+  // Extract course IDs from the bundle
+  // LearnWorlds bundles typically have a "courses" array or "products" array
+  const courses = foundBundle.courses || foundBundle.products || foundBundle.course_ids || [];
+  if (Array.isArray(courses)) {
+    for (const c of courses) {
+      const cId = typeof c === 'string' ? c : (c.id || c.course_id || '');
+      if (cId) courseIds.push(cId);
+    }
+  }
+  
+  // If no courses found in bundle data, try fetching bundle details
+  if (courseIds.length === 0 && foundBundle.id) {
+    console.log(`[Bundle] No courses in list response, fetching bundle details for ${foundBundle.id}...`);
+    try {
+      const detailUrl = withClientId(`${baseUrl}/bundles/${foundBundle.id}`, clientId);
+      const detail = await makeLearnWorldsRequest(detailUrl, accessToken, clientId);
+      console.log(`[Bundle] Detail response (first 2000 chars):`, JSON.stringify(detail).substring(0, 2000));
+      
+      const detailCourses = detail.courses || detail.products || detail.course_ids || detail.data?.courses || [];
+      if (Array.isArray(detailCourses)) {
+        for (const c of detailCourses) {
+          const cId = typeof c === 'string' ? c : (c.id || c.course_id || '');
+          if (cId) courseIds.push(cId);
+        }
+      }
+    } catch (error) {
+      console.error(`Error fetching bundle details:`, error);
+    }
+  }
+
+  console.log(`[Bundle] "${bundleName}" contains ${courseIds.length} courses: ${JSON.stringify(courseIds)}`);
+  return courseIds;
+}
+
 // Fetch course content to get unit titles (assessments/questionnaires)
 async function fetchCourseContent(
   baseUrl: string,
@@ -456,7 +540,7 @@ serve(async (req) => {
     console.log('API Base:', baseUrl);
 
     // Parse options
-    let options: { courseTitleContains?: string } = {};
+    let options: { courseTitleContains?: string; bundleName?: string } = {};
     if (req.method === 'POST') {
       try {
         const body = await req.json();
@@ -464,17 +548,34 @@ serve(async (req) => {
       } catch (_) { /* no-op */ }
     }
 
-    // Step 1: Fetch all courses
-    console.log('\n--- Step 1: Fetching All Courses ---');
-    const allCourses = await fetchAllCourses(baseUrl, accessToken, clientId);
-    apiCallCount += Math.ceil(allCourses.length / 50); // Estimate API calls for course fetch
+    // Default bundle name for leaderboard data
+    const bundleName = options.bundleName || 'Vizsgaközpont';
+
+    // Step 1: Fetch course IDs from the target bundle
+    console.log(`\n--- Step 1: Fetching courses from bundle "${bundleName}" ---`);
+    const bundleCourseIds = await fetchBundleCourseIds(baseUrl, accessToken, clientId, bundleName);
+    apiCallCount += 2; // Estimate for bundle list + detail calls
     
-    // Filter courses if needed
-    let coursesToProcess = allCourses;
-    if (options.courseTitleContains) {
-      const filter = options.courseTitleContains.toLowerCase();
-      coursesToProcess = allCourses.filter(c => c.title.toLowerCase().includes(filter));
-      console.log(`Filtered to ${coursesToProcess.length} courses containing "${options.courseTitleContains}"`);
+    if (bundleCourseIds.length === 0) {
+      console.warn(`No courses found in bundle "${bundleName}". Falling back to all courses.`);
+    }
+    
+    // Fetch all courses to get titles
+    const allCourses = await fetchAllCourses(baseUrl, accessToken, clientId);
+    apiCallCount += Math.ceil(allCourses.length / 50);
+    
+    // Filter to only courses in the bundle
+    let coursesToProcess: Array<{ id: string; title: string }>;
+    if (bundleCourseIds.length > 0) {
+      coursesToProcess = allCourses.filter(c => bundleCourseIds.includes(c.id));
+      console.log(`Filtered to ${coursesToProcess.length} courses from bundle "${bundleName}"`);
+    } else {
+      // Fallback: use old filter if bundle lookup failed
+      const filter = (options.courseTitleContains || '').toLowerCase();
+      coursesToProcess = filter 
+        ? allCourses.filter(c => c.title.toLowerCase().includes(filter))
+        : allCourses;
+      console.log(`Fallback filter: ${coursesToProcess.length} courses`);
     }
 
     console.log(`Will process ${coursesToProcess.length} courses`);
