@@ -364,8 +364,10 @@ async function fetchCourseGrades(
   clientId: string
 ): Promise<GradeEntry[]> {
   const allGrades: GradeEntry[] = [];
+  const seenIds = new Set<string>();
   let page = 1;
   let hasMore = true;
+  let consecutiveDuplicatePages = 0;
   
   while (hasMore) {
     try {
@@ -375,7 +377,7 @@ async function fetchCourseGrades(
       
       const grades = data.data || data || [];
       
-      // DEBUG: Log first grade entry structure (only on first page of first fetch)
+      // DEBUG: Log first grade entry structure (only on first page)
       if (page === 1 && Array.isArray(grades) && grades.length > 0) {
         console.log(`[DEBUG][Course ${courseId}] First grade entry keys:`, JSON.stringify(Object.keys(grades[0])));
         console.log(`[DEBUG][Course ${courseId}] First grade entry (first 1000 chars):`, JSON.stringify(grades[0]).substring(0, 1000));
@@ -389,12 +391,33 @@ async function fetchCourseGrades(
       if (!Array.isArray(grades) || grades.length === 0) {
         hasMore = false;
       } else {
-        allGrades.push(...grades);
-        console.log(`[Course ${courseId}] Fetched grades page ${page}: ${grades.length} entries`);
-        page++;
+        // Check how many entries on this page are actually new
+        let newOnThisPage = 0;
+        for (const g of grades) {
+          const gId = String(g.id || `${g.user_id}-${g.learningUnit?.id || ''}-${g.finished_at || g.created || ''}`);
+          if (!seenIds.has(gId)) {
+            seenIds.add(gId);
+            allGrades.push(g);
+            newOnThisPage++;
+          }
+        }
         
-        if (page > 50) {
-          console.warn(`[Course ${courseId}] Reached grades page limit of 50`);
+        console.log(`[Course ${courseId}] Page ${page}: ${grades.length} entries, ${newOnThisPage} new, ${grades.length - newOnThisPage} duplicates`);
+        
+        // If no new entries on this page, the API is looping
+        if (newOnThisPage === 0) {
+          consecutiveDuplicatePages++;
+          if (consecutiveDuplicatePages >= 2) {
+            console.warn(`[Course ${courseId}] Stopping pagination: ${consecutiveDuplicatePages} consecutive duplicate pages at page ${page}`);
+            hasMore = false;
+          }
+        } else {
+          consecutiveDuplicatePages = 0;
+        }
+        
+        page++;
+        if (page > 100) {
+          console.warn(`[Course ${courseId}] Reached grades page limit of 100`);
           hasMore = false;
         }
       }
@@ -404,7 +427,7 @@ async function fetchCourseGrades(
     }
   }
   
-  console.log(`[Course ${courseId}] Total grades fetched: ${allGrades.length}`);
+  console.log(`[Course ${courseId}] Total unique grades fetched: ${allGrades.length} (from ${page - 1} pages)`);
   return allGrades;
 }
 
