@@ -71,7 +71,8 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
           s.topPerformer = entry.username;
         }
       }
-    });
+      }
+    }
 
     const stats: StoreStats[] = Array.from(storeMap.entries())
       .map(([storeName, data]) => ({
