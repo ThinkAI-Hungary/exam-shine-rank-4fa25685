@@ -203,6 +203,90 @@ async function fetchAllCourses(
   return allCourses;
 }
 
+// Fetch bundles and find the course IDs belonging to a specific bundle by name
+async function fetchBundleCourseIds(
+  baseUrl: string,
+  accessToken: string,
+  clientId: string,
+  bundleName: string
+): Promise<string[]> {
+  console.log(`Fetching bundles to find "${bundleName}"...`);
+  const courseIds: string[] = [];
+  let page = 1;
+  let hasMore = true;
+  let foundBundle: any = null;
+
+  while (hasMore && !foundBundle) {
+    const url = withClientId(`${baseUrl}/bundles?page=${page}&per_page=50`, clientId);
+    try {
+      const data = await makeLearnWorldsRequest(url, accessToken, clientId);
+      const bundles = data.data || data || [];
+      
+      console.log(`[Bundles] Page ${page}: ${Array.isArray(bundles) ? bundles.length : 0} bundles`);
+      
+      if (!Array.isArray(bundles) || bundles.length === 0) {
+        hasMore = false;
+      } else {
+        for (const bundle of bundles) {
+          const title = bundle.title || bundle.name || '';
+          const id = bundle.id || '';
+          console.log(`[Bundle] id=${id}, title="${title}"`);
+          
+          if (title.toLowerCase().includes(bundleName.toLowerCase())) {
+            foundBundle = bundle;
+            console.log(`[Bundle] Found matching bundle: "${title}" (${id})`);
+            console.log(`[Bundle] Full bundle data (first 2000 chars):`, JSON.stringify(bundle).substring(0, 2000));
+            break;
+          }
+        }
+        page++;
+        if (page > 10) hasMore = false;
+      }
+    } catch (error) {
+      console.error(`Error fetching bundles page ${page}:`, error);
+      hasMore = false;
+    }
+  }
+
+  if (!foundBundle) {
+    console.error(`Bundle "${bundleName}" not found!`);
+    return [];
+  }
+
+  // Extract course IDs from the bundle
+  // LearnWorlds bundles typically have a "courses" array or "products" array
+  const courses = foundBundle.courses || foundBundle.products || foundBundle.course_ids || [];
+  if (Array.isArray(courses)) {
+    for (const c of courses) {
+      const cId = typeof c === 'string' ? c : (c.id || c.course_id || '');
+      if (cId) courseIds.push(cId);
+    }
+  }
+  
+  // If no courses found in bundle data, try fetching bundle details
+  if (courseIds.length === 0 && foundBundle.id) {
+    console.log(`[Bundle] No courses in list response, fetching bundle details for ${foundBundle.id}...`);
+    try {
+      const detailUrl = withClientId(`${baseUrl}/bundles/${foundBundle.id}`, clientId);
+      const detail = await makeLearnWorldsRequest(detailUrl, accessToken, clientId);
+      console.log(`[Bundle] Detail response (first 2000 chars):`, JSON.stringify(detail).substring(0, 2000));
+      
+      const detailCourses = detail.courses || detail.products || detail.course_ids || detail.data?.courses || [];
+      if (Array.isArray(detailCourses)) {
+        for (const c of detailCourses) {
+          const cId = typeof c === 'string' ? c : (c.id || c.course_id || '');
+          if (cId) courseIds.push(cId);
+        }
+      }
+    } catch (error) {
+      console.error(`Error fetching bundle details:`, error);
+    }
+  }
+
+  console.log(`[Bundle] "${bundleName}" contains ${courseIds.length} courses: ${JSON.stringify(courseIds)}`);
+  return courseIds;
+}
+
 // Fetch course content to get unit titles (assessments/questionnaires)
 async function fetchCourseContent(
   baseUrl: string,
