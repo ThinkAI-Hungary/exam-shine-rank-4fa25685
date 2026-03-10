@@ -644,8 +644,17 @@ serve(async (req) => {
       dbCountAfter: 0,
     };
 
-    // Batch upsert deduplicated exam results
+    // Rebuild exam_results from strict bundle scope to avoid stale non-bundle leaderboard data
     if (dedupedResults.length > 0) {
+      const { error: clearExamResultsError } = await supabase
+        .from('exam_results')
+        .delete()
+        .neq('user_id', '');
+
+      if (clearExamResultsError) {
+        throw new Error(`Failed to clear exam_results before rebuild: ${clearExamResultsError.message}`);
+      }
+
       const batchSize = 100;
       
       for (let i = 0; i < dedupedResults.length; i += batchSize) {
