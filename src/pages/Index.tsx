@@ -167,8 +167,8 @@ const Index = () => {
     
     try {
       const body = selectedUserId 
-        ? { options: { userIds: [selectedUserId], limitUsers: 0, limitCourses: 0, courseTitleContains: 'Vizsgafelület' } }
-        : { options: { limitUsers: 0, limitCourses: 0, courseTitleContains: 'Vizsgafelület' } };
+        ? { options: { userIds: [selectedUserId], limitUsers: 0, limitCourses: 0 } }
+        : { options: { limitUsers: 0, limitCourses: 0 } };
       
       const { data, error } = await supabase.functions.invoke('fetch-leaderboard', { body });
       
