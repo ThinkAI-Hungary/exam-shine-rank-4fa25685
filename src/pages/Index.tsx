@@ -56,6 +56,7 @@ const Index = () => {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [user, setUser] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [leaderboardView, setLeaderboardView] = useState<'individual' | 'store'>('individual');
 
   const embedCode = `<iframe 
   src="${window.location.origin}/embed" 
