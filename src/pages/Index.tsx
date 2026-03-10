@@ -215,7 +215,7 @@ const Index = () => {
     
     try {
       const { data, error } = await supabase.functions.invoke('sync-learnworlds', {
-        body: { options: { courseTitleContains: 'Vizsgafelület' } }
+        body: { options: {} }
       });
       
       if (error) throw error;
