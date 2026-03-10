@@ -716,10 +716,11 @@ serve(async (req) => {
     // Update leaderboard cache from exam_results filtered to the selected collection only
     console.log('\n--- Step 4: Updating Leaderboard Cache ---');
     
-    // Query actual aggregated stats from exam_results table
+    // Query aggregated stats from exam_results, scoped strictly to selected bundle course IDs
     const { data: aggregatedStats, error: aggError } = await supabase
       .from('exam_results')
-      .select('user_id, username, score, completed_at');
+      .select('user_id, username, score, completed_at, course_id')
+      .in('course_id', bundleCourseIds);
     
     if (aggError) {
       console.error('Error fetching exam_results for leaderboard:', aggError);
