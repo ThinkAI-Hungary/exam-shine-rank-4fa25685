@@ -76,7 +76,7 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
     const stats: StoreStats[] = Array.from(storeMap.entries())
       .map(([storeName, data]) => ({
         storeName,
-        displayName: storeName.replace(/^cf_aruhaz_/, ''),
+        displayName: storeName.replace(/^cf_aruhaz_/, '').trim(),
         userCount: data.users.size,
         totalExams: data.examCount,
         averageScore: data.users.size > 0
@@ -87,6 +87,7 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
         topScore: data.topScore,
         rank: 0,
       }))
+      .filter((s) => s.displayName.length > 0)
       .sort((a, b) => b.averageScore - a.averageScore)
       .map((s, i) => ({ ...s, rank: i + 1 }));
 
