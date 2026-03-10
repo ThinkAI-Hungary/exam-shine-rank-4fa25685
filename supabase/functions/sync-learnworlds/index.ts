@@ -670,17 +670,8 @@ serve(async (req) => {
       dbCountAfter: 0,
     };
 
-    // Rebuild exam_results from strict bundle scope to avoid stale non-bundle leaderboard data
+    // Batch upsert deduplicated exam results (keep historical attempts; table has unique key user_id+exam_id+completed_at)
     if (dedupedResults.length > 0) {
-      const { error: clearExamResultsError } = await supabase
-        .from('exam_results')
-        .delete()
-        .neq('user_id', '');
-
-      if (clearExamResultsError) {
-        throw new Error(`Failed to clear exam_results before rebuild: ${clearExamResultsError.message}`);
-      }
-
       const batchSize = 100;
       
       for (let i = 0; i < dedupedResults.length; i += batchSize) {
@@ -722,7 +713,7 @@ serve(async (req) => {
       debugInfo.dbCountAfter = count;
     }
 
-    // Update leaderboard cache from the ACTUAL exam_results table (not just this sync batch)
+    // Update leaderboard cache from exam_results filtered to the selected collection only
     console.log('\n--- Step 4: Updating Leaderboard Cache ---');
     
     // Query actual aggregated stats from exam_results table
