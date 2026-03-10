@@ -796,8 +796,12 @@ serve(async (req) => {
       let page = 1;
       let hasMore = true;
       
+      let consecutiveDuplicateUserPages = 0;
+      const seenUserIds = new Set<string>();
+
       while (hasMore) {
-        const url = `${API_BASE}/users?page=${page}&per_page=100`;
+        const perPage = 100;
+        const url = `${API_BASE}/users?page=${page}&per_page=${perPage}`;
         console.log(`Fetching users list page ${page}...`);
         
         try {
@@ -810,8 +814,37 @@ serve(async (req) => {
             hasMore = false;
           } else {
             allLearnWorldsUsers.push(...users);
-            console.log(`Fetched users page ${page}: ${users.length} users (total so far: ${allLearnWorldsUsers.length})`);
-            page++;
+
+            let newUsersOnPage = 0;
+            for (const u of users) {
+              const uid = String(u?.id || u?.user_id || '');
+              if (!uid) continue;
+              if (!seenUserIds.has(uid)) {
+                seenUserIds.add(uid);
+                newUsersOnPage++;
+              }
+            }
+
+            console.log(`Fetched users page ${page}: ${users.length} users, ${newUsersOnPage} new (total so far: ${allLearnWorldsUsers.length})`);
+
+            if (newUsersOnPage === 0) {
+              consecutiveDuplicateUserPages++;
+              if (consecutiveDuplicateUserPages >= 2) {
+                console.warn(`Stopping user pagination: ${consecutiveDuplicateUserPages} consecutive duplicate pages at page ${page}`);
+                hasMore = false;
+                continue;
+              }
+            } else {
+              consecutiveDuplicateUserPages = 0;
+            }
+
+            // Normal pagination stop: short page means last page
+            if (users.length < perPage) {
+              console.log(`Users pagination finished at page ${page} (short page: ${users.length} < ${perPage})`);
+              hasMore = false;
+            } else {
+              page++;
+            }
             
             // Safety limit for very large platforms
             if (page > 200) {
