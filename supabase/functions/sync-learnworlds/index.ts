@@ -580,26 +580,20 @@ serve(async (req) => {
     apiCallCount += 2; // Estimate for bundle list + detail calls
     
     if (bundleCourseIds.length === 0) {
-      console.warn(`No courses found in bundle "${bundleName}". Falling back to all courses.`);
+      throw new Error(`A "${bundleName}" collection-ben nem találtam kurzusokat, ezért a szinkronizálás leállt (nincs fallback all courses).`);
     }
     
     // Fetch all courses to get titles
     const allCourses = await fetchAllCourses(baseUrl, accessToken, clientId);
     apiCallCount += Math.ceil(allCourses.length / 50);
     
-    // Filter to only courses in the bundle
-    let coursesToProcess: Array<{ id: string; title: string }>;
-    if (bundleCourseIds.length > 0) {
-      coursesToProcess = allCourses.filter(c => bundleCourseIds.includes(c.id));
-      console.log(`Filtered to ${coursesToProcess.length} courses from bundle "${bundleName}"`);
-    } else {
-      // Fallback: use old filter if bundle lookup failed
-      const filter = (options.courseTitleContains || '').toLowerCase();
-      coursesToProcess = filter 
-        ? allCourses.filter(c => c.title.toLowerCase().includes(filter))
-        : allCourses;
-      console.log(`Fallback filter: ${coursesToProcess.length} courses`);
+    // Strict filter: process ONLY courses from the selected bundle
+    const coursesToProcess = allCourses.filter(c => bundleCourseIds.includes(c.id));
+    if (coursesToProcess.length === 0) {
+      throw new Error(`A "${bundleName}" collection kurzusai nem találhatók a /courses listában.`);
     }
+
+    console.log(`Strict bundle filter: ${coursesToProcess.length} course from "${bundleName}"`);
 
     console.log(`Will process ${coursesToProcess.length} courses`);
 
