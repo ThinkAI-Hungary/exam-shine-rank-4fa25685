@@ -253,14 +253,44 @@ async function fetchBundleCourseIds(
     return [];
   }
 
+  const collectCourseIds = (raw: any): string[] => {
+    const out = new Set<string>();
+
+    const collectFromValue = (value: any) => {
+      if (!value) return;
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const cId = typeof item === 'string'
+            ? item
+            : (item?.id || item?.course_id || item?.slug || item?.course_slug || '');
+          if (cId) out.add(String(cId));
+        }
+        return;
+      }
+      if (typeof value === 'object') {
+        // Covers shapes like: { courses: [...] } or nested product maps
+        for (const nested of Object.values(value)) {
+          collectFromValue(nested);
+        }
+      }
+    };
+
+    collectFromValue(raw?.courses);
+    collectFromValue(raw?.course_ids);
+    collectFromValue(raw?.products);
+    collectFromValue(raw?.products?.courses);
+    collectFromValue(raw?.products?.course_ids);
+    collectFromValue(raw?.data?.courses);
+    collectFromValue(raw?.data?.course_ids);
+    collectFromValue(raw?.data?.products);
+    collectFromValue(raw?.data?.products?.courses);
+
+    return Array.from(out);
+  };
+
   // Extract course IDs from the bundle
-  // LearnWorlds bundles typically have a "courses" array or "products" array
-  const courses = foundBundle.courses || foundBundle.products || foundBundle.course_ids || [];
-  if (Array.isArray(courses)) {
-    for (const c of courses) {
-      const cId = typeof c === 'string' ? c : (c.id || c.course_id || '');
-      if (cId) courseIds.push(cId);
-    }
+  for (const id of collectCourseIds(foundBundle)) {
+    courseIds.push(id);
   }
   
   // If no courses found in bundle data, try fetching bundle details
@@ -271,12 +301,8 @@ async function fetchBundleCourseIds(
       const detail = await makeLearnWorldsRequest(detailUrl, accessToken, clientId);
       console.log(`[Bundle] Detail response (first 2000 chars):`, JSON.stringify(detail).substring(0, 2000));
       
-      const detailCourses = detail.courses || detail.products || detail.course_ids || detail.data?.courses || [];
-      if (Array.isArray(detailCourses)) {
-        for (const c of detailCourses) {
-          const cId = typeof c === 'string' ? c : (c.id || c.course_id || '');
-          if (cId) courseIds.push(cId);
-        }
+      for (const id of collectCourseIds(detail)) {
+        courseIds.push(id);
       }
     } catch (error) {
       console.error(`Error fetching bundle details:`, error);
