@@ -540,7 +540,7 @@ serve(async (req) => {
     console.log('API Base:', baseUrl);
 
     // Parse options
-    let options: { courseTitleContains?: string } = {};
+    let options: { courseTitleContains?: string; bundleName?: string } = {};
     if (req.method === 'POST') {
       try {
         const body = await req.json();
@@ -548,17 +548,34 @@ serve(async (req) => {
       } catch (_) { /* no-op */ }
     }
 
-    // Step 1: Fetch all courses
-    console.log('\n--- Step 1: Fetching All Courses ---');
-    const allCourses = await fetchAllCourses(baseUrl, accessToken, clientId);
-    apiCallCount += Math.ceil(allCourses.length / 50); // Estimate API calls for course fetch
+    // Default bundle name for leaderboard data
+    const bundleName = options.bundleName || 'Vizsgaközpont';
+
+    // Step 1: Fetch course IDs from the target bundle
+    console.log(`\n--- Step 1: Fetching courses from bundle "${bundleName}" ---`);
+    const bundleCourseIds = await fetchBundleCourseIds(baseUrl, accessToken, clientId, bundleName);
+    apiCallCount += 2; // Estimate for bundle list + detail calls
     
-    // Filter courses if needed
-    let coursesToProcess = allCourses;
-    if (options.courseTitleContains) {
-      const filter = options.courseTitleContains.toLowerCase();
-      coursesToProcess = allCourses.filter(c => c.title.toLowerCase().includes(filter));
-      console.log(`Filtered to ${coursesToProcess.length} courses containing "${options.courseTitleContains}"`);
+    if (bundleCourseIds.length === 0) {
+      console.warn(`No courses found in bundle "${bundleName}". Falling back to all courses.`);
+    }
+    
+    // Fetch all courses to get titles
+    const allCourses = await fetchAllCourses(baseUrl, accessToken, clientId);
+    apiCallCount += Math.ceil(allCourses.length / 50);
+    
+    // Filter to only courses in the bundle
+    let coursesToProcess: Array<{ id: string; title: string }>;
+    if (bundleCourseIds.length > 0) {
+      coursesToProcess = allCourses.filter(c => bundleCourseIds.includes(c.id));
+      console.log(`Filtered to ${coursesToProcess.length} courses from bundle "${bundleName}"`);
+    } else {
+      // Fallback: use old filter if bundle lookup failed
+      const filter = (options.courseTitleContains || '').toLowerCase();
+      coursesToProcess = filter 
+        ? allCourses.filter(c => c.title.toLowerCase().includes(filter))
+        : allCourses;
+      console.log(`Fallback filter: ${coursesToProcess.length} courses`);
     }
 
     console.log(`Will process ${coursesToProcess.length} courses`);
