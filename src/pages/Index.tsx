@@ -117,19 +117,24 @@ const Index = () => {
         return acc;
       }, {});
 
-      const formattedData: LeaderboardEntry[] = (data || []).map((item: any) => ({
-        rank: item.rank,
-        username: item.users.username,
-        user_id: item.user_id,
-        email: item.users.email,
-        total_score: item.total_score,
-        exam_count: item.exam_count,
-        average_score: item.average_score,
-        aruhaz: item.users.aruhaz || [],
-        beosztas: item.users.beosztas || [],
-        badges: badgesByUser[item.user_id] || [],
-        start_of_empl: item.users.start_of_empl,
-      }));
+      const EXCLUDED_USERNAMES = ['LW DEV', 'LWSupport Test'];
+      
+      const formattedData: LeaderboardEntry[] = (data || [])
+        .filter((item: any) => !EXCLUDED_USERNAMES.includes(item.users.username))
+        .map((item: any) => ({
+          rank: item.rank,
+          username: item.users.username,
+          user_id: item.user_id,
+          email: item.users.email,
+          total_score: item.total_score,
+          exam_count: item.exam_count,
+          average_score: item.average_score,
+          aruhaz: item.users.aruhaz || [],
+          beosztas: item.users.beosztas || [],
+          badges: badgesByUser[item.user_id] || [],
+          start_of_empl: item.users.start_of_empl,
+        }))
+        .map((entry, index) => ({ ...entry, rank: index + 1 }));
 
       setLeaderboard(formattedData);
       setFilteredLeaderboard(formattedData);
