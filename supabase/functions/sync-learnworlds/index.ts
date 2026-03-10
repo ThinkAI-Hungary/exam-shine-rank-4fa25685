@@ -253,14 +253,44 @@ async function fetchBundleCourseIds(
     return [];
   }
 
+  const collectCourseIds = (raw: any): string[] => {
+    const out = new Set<string>();
+
+    const collectFromValue = (value: any) => {
+      if (!value) return;
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const cId = typeof item === 'string'
+            ? item
+            : (item?.id || item?.course_id || item?.slug || item?.course_slug || '');
+          if (cId) out.add(String(cId));
+        }
+        return;
+      }
+      if (typeof value === 'object') {
+        // Covers shapes like: { courses: [...] } or nested product maps
+        for (const nested of Object.values(value)) {
+          collectFromValue(nested);
+        }
+      }
+    };
+
+    collectFromValue(raw?.courses);
+    collectFromValue(raw?.course_ids);
+    collectFromValue(raw?.products);
+    collectFromValue(raw?.products?.courses);
+    collectFromValue(raw?.products?.course_ids);
+    collectFromValue(raw?.data?.courses);
+    collectFromValue(raw?.data?.course_ids);
+    collectFromValue(raw?.data?.products);
+    collectFromValue(raw?.data?.products?.courses);
+
+    return Array.from(out);
+  };
+
   // Extract course IDs from the bundle
-  // LearnWorlds bundles typically have a "courses" array or "products" array
-  const courses = foundBundle.courses || foundBundle.products || foundBundle.course_ids || [];
-  if (Array.isArray(courses)) {
-    for (const c of courses) {
-      const cId = typeof c === 'string' ? c : (c.id || c.course_id || '');
-      if (cId) courseIds.push(cId);
-    }
+  for (const id of collectCourseIds(foundBundle)) {
+    courseIds.push(id);
   }
   
   // If no courses found in bundle data, try fetching bundle details
@@ -271,12 +301,8 @@ async function fetchBundleCourseIds(
       const detail = await makeLearnWorldsRequest(detailUrl, accessToken, clientId);
       console.log(`[Bundle] Detail response (first 2000 chars):`, JSON.stringify(detail).substring(0, 2000));
       
-      const detailCourses = detail.courses || detail.products || detail.course_ids || detail.data?.courses || [];
-      if (Array.isArray(detailCourses)) {
-        for (const c of detailCourses) {
-          const cId = typeof c === 'string' ? c : (c.id || c.course_id || '');
-          if (cId) courseIds.push(cId);
-        }
+      for (const id of collectCourseIds(detail)) {
+        courseIds.push(id);
       }
     } catch (error) {
       console.error(`Error fetching bundle details:`, error);
@@ -580,26 +606,20 @@ serve(async (req) => {
     apiCallCount += 2; // Estimate for bundle list + detail calls
     
     if (bundleCourseIds.length === 0) {
-      console.warn(`No courses found in bundle "${bundleName}". Falling back to all courses.`);
+      throw new Error(`A "${bundleName}" collection-ben nem találtam kurzusokat, ezért a szinkronizálás leállt (nincs fallback all courses).`);
     }
     
     // Fetch all courses to get titles
     const allCourses = await fetchAllCourses(baseUrl, accessToken, clientId);
     apiCallCount += Math.ceil(allCourses.length / 50);
     
-    // Filter to only courses in the bundle
-    let coursesToProcess: Array<{ id: string; title: string }>;
-    if (bundleCourseIds.length > 0) {
-      coursesToProcess = allCourses.filter(c => bundleCourseIds.includes(c.id));
-      console.log(`Filtered to ${coursesToProcess.length} courses from bundle "${bundleName}"`);
-    } else {
-      // Fallback: use old filter if bundle lookup failed
-      const filter = (options.courseTitleContains || '').toLowerCase();
-      coursesToProcess = filter 
-        ? allCourses.filter(c => c.title.toLowerCase().includes(filter))
-        : allCourses;
-      console.log(`Fallback filter: ${coursesToProcess.length} courses`);
+    // Strict filter: process ONLY courses from the selected bundle
+    const coursesToProcess = allCourses.filter(c => bundleCourseIds.includes(c.id));
+    if (coursesToProcess.length === 0) {
+      throw new Error(`A "${bundleName}" collection kurzusai nem találhatók a /courses listában.`);
     }
+
+    console.log(`Strict bundle filter: ${coursesToProcess.length} course from "${bundleName}"`);
 
     console.log(`Will process ${coursesToProcess.length} courses`);
 
@@ -650,7 +670,7 @@ serve(async (req) => {
       dbCountAfter: 0,
     };
 
-    // Batch upsert deduplicated exam results
+    // Batch upsert deduplicated exam results (keep historical attempts; table has unique key user_id+exam_id+completed_at)
     if (dedupedResults.length > 0) {
       const batchSize = 100;
       
@@ -693,13 +713,14 @@ serve(async (req) => {
       debugInfo.dbCountAfter = count;
     }
 
-    // Update leaderboard cache from the ACTUAL exam_results table (not just this sync batch)
+    // Update leaderboard cache from exam_results filtered to the selected collection only
     console.log('\n--- Step 4: Updating Leaderboard Cache ---');
     
-    // Query actual aggregated stats from exam_results table
+    // Query aggregated stats from exam_results, scoped strictly to selected bundle course IDs
     const { data: aggregatedStats, error: aggError } = await supabase
       .from('exam_results')
-      .select('user_id, username, score, completed_at');
+      .select('user_id, username, score, completed_at, course_id')
+      .in('course_id', bundleCourseIds);
     
     if (aggError) {
       console.error('Error fetching exam_results for leaderboard:', aggError);
@@ -793,8 +814,12 @@ serve(async (req) => {
       let page = 1;
       let hasMore = true;
       
+      let consecutiveDuplicateUserPages = 0;
+      const seenUserIds = new Set<string>();
+
       while (hasMore) {
-        const url = `${API_BASE}/users?page=${page}&per_page=100`;
+        const perPage = 100;
+        const url = `${API_BASE}/users?page=${page}&per_page=${perPage}`;
         console.log(`Fetching users list page ${page}...`);
         
         try {
@@ -807,8 +832,37 @@ serve(async (req) => {
             hasMore = false;
           } else {
             allLearnWorldsUsers.push(...users);
-            console.log(`Fetched users page ${page}: ${users.length} users (total so far: ${allLearnWorldsUsers.length})`);
-            page++;
+
+            let newUsersOnPage = 0;
+            for (const u of users) {
+              const uid = String(u?.id || u?.user_id || '');
+              if (!uid) continue;
+              if (!seenUserIds.has(uid)) {
+                seenUserIds.add(uid);
+                newUsersOnPage++;
+              }
+            }
+
+            console.log(`Fetched users page ${page}: ${users.length} users, ${newUsersOnPage} new (total so far: ${allLearnWorldsUsers.length})`);
+
+            if (newUsersOnPage === 0) {
+              consecutiveDuplicateUserPages++;
+              if (consecutiveDuplicateUserPages >= 2) {
+                console.warn(`Stopping user pagination: ${consecutiveDuplicateUserPages} consecutive duplicate pages at page ${page}`);
+                hasMore = false;
+                continue;
+              }
+            } else {
+              consecutiveDuplicateUserPages = 0;
+            }
+
+            // Normal pagination stop: short page means last page
+            if (users.length < perPage) {
+              console.log(`Users pagination finished at page ${page} (short page: ${users.length} < ${perPage})`);
+              hasMore = false;
+            } else {
+              page++;
+            }
             
             // Safety limit for very large platforms
             if (page > 200) {
