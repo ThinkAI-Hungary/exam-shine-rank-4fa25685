@@ -136,6 +136,7 @@ const Index = () => {
           badges: badgesByUser[item.user_id] || [],
           start_of_empl: item.users.start_of_empl,
         }))
+        .sort((a, b) => b.average_score - a.average_score)
         .map((entry, index) => ({ ...entry, rank: index + 1 }));
 
       setLeaderboard(formattedData);
