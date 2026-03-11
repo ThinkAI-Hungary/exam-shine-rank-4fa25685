@@ -7,10 +7,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
-import { Trophy, Code, RefreshCw, Menu, Users, User } from "lucide-react";
+import { Trophy, Code, RefreshCw, Menu, Users, User, BookOpen, ClipboardList } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Leaderboard from "@/components/Leaderboard";
 import StoreLeaderboard from "@/components/StoreLeaderboard";
+import UserExamsLeaderboard from "@/components/UserExamsLeaderboard";
+import CourseExamsLeaderboard from "@/components/CourseExamsLeaderboard";
 import Navigation from "@/components/Navigation";
 import { toast } from "sonner";
 
@@ -56,7 +58,7 @@ const Index = () => {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [user, setUser] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [leaderboardView, setLeaderboardView] = useState<'individual' | 'store'>('individual');
+  const [leaderboardView, setLeaderboardView] = useState<'individual' | 'store' | 'user_exams' | 'course_exams'>('individual');
 
   const embedCode = `<iframe 
   src="${window.location.origin}/embed" 
@@ -425,8 +427,8 @@ const Index = () => {
                   </CardDescription>
                 </div>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                  <Tabs value={leaderboardView} onValueChange={(v) => setLeaderboardView(v as 'individual' | 'store')}>
-                    <TabsList>
+                  <Tabs value={leaderboardView} onValueChange={(v) => setLeaderboardView(v as typeof leaderboardView)}>
+                    <TabsList className="flex-wrap h-auto">
                       <TabsTrigger value="individual" className="gap-1.5">
                         <User className="w-4 h-4" />
                         Egyéni
@@ -434,6 +436,14 @@ const Index = () => {
                       <TabsTrigger value="store" className="gap-1.5">
                         <Users className="w-4 h-4" />
                         Áruház szint
+                      </TabsTrigger>
+                      <TabsTrigger value="user_exams" className="gap-1.5">
+                        <ClipboardList className="w-4 h-4" />
+                        Ki miből vizsgázott
+                      </TabsTrigger>
+                      <TabsTrigger value="course_exams" className="gap-1.5">
+                        <BookOpen className="w-4 h-4" />
+                        Tárgyak szerint
                       </TabsTrigger>
                     </TabsList>
                   </Tabs>
@@ -458,8 +468,12 @@ const Index = () => {
               <CardContent>
                 {leaderboardView === 'individual' ? (
                   <Leaderboard entries={filteredLeaderboard} />
-                ) : (
+                ) : leaderboardView === 'store' ? (
                   <StoreLeaderboard entries={leaderboard} />
+                ) : leaderboardView === 'user_exams' ? (
+                  <UserExamsLeaderboard />
+                ) : (
+                  <CourseExamsLeaderboard />
                 )}
               </CardContent>
             </Card>
