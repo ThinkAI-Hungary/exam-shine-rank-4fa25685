@@ -4,20 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { BookOpen, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-interface ExamResult {
-  user_id: string;
-  username: string;
-  course_title: string;
-  exam_title: string;
-  score: number;
-  completed_at: string;
-}
-
 interface UserExamGroup {
   user_id: string;
   username: string;
   courses: { course_title: string; exam_title: string; score: number; completed_at: string }[];
 }
+
+const EXCLUDED = ['LW DEV', 'LWSupport Test'];
 
 const UserExamsLeaderboard = () => {
   const [data, setData] = useState<UserExamGroup[]>([]);
@@ -30,23 +23,32 @@ const UserExamsLeaderboard = () => {
 
   const fetchData = async () => {
     try {
-      const { data: exams, error } = await supabase
-        .from("exam_results")
-        .select("user_id, username, course_title, exam_title, score, completed_at")
-        .order("username", { ascending: true })
-        .order("completed_at", { ascending: false });
+      // Fetch users and exam results in parallel
+      const [usersRes, examsRes] = await Promise.all([
+        supabase.from("users").select("user_id, username"),
+        supabase.from("exam_results")
+          .select("user_id, course_title, exam_title, score, completed_at")
+          .order("completed_at", { ascending: false }),
+      ]);
 
-      if (error) throw error;
+      if (usersRes.error) throw usersRes.error;
+      if (examsRes.error) throw examsRes.error;
 
-      const EXCLUDED = ['LW DEV', 'LWSupport Test'];
+      const userMap = new Map<string, string>();
+      for (const u of usersRes.data || []) {
+        userMap.set(u.user_id, u.username);
+      }
+
       const grouped = new Map<string, UserExamGroup>();
 
-      for (const exam of (exams || [])) {
-        if (EXCLUDED.includes(exam.username)) continue;
+      for (const exam of (examsRes.data || [])) {
+        const username = userMap.get(exam.user_id) || exam.user_id;
+        if (EXCLUDED.includes(username)) continue;
+
         if (!grouped.has(exam.user_id)) {
           grouped.set(exam.user_id, {
             user_id: exam.user_id,
-            username: exam.username,
+            username,
             courses: [],
           });
         }
@@ -76,8 +78,7 @@ const UserExamsLeaderboard = () => {
   };
 
   const getUniqueCourses = (courses: UserExamGroup["courses"]) => {
-    const unique = new Set(courses.map(c => c.course_title));
-    return Array.from(unique);
+    return Array.from(new Set(courses.map(c => c.course_title)));
   };
 
   if (loading) {
