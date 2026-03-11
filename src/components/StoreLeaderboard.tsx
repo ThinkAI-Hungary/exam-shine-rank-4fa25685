@@ -115,15 +115,14 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
             <TableHead className="w-16 text-center">Helyezés</TableHead>
             <TableHead>Áruház</TableHead>
             <TableHead className="text-right">Kollégák</TableHead>
-            <TableHead className="text-right">Vizsgák</TableHead>
-            <TableHead className="text-right">Átlag pontszám</TableHead>
+            <TableHead className="text-right">Átlag vizsgaeredmény</TableHead>
             <TableHead className="hidden md:table-cell">Legjobb kolléga</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {storeStats.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+            <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                 <Store className="w-10 h-10 mx-auto mb-2 text-muted-foreground/30" />
                 <p>Nincs áruház szintű adat.</p>
               </TableCell>
@@ -147,9 +146,6 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
                     <Users className="w-3.5 h-3.5 text-muted-foreground" />
                     <span>{store.userCount}</span>
                   </div>
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {store.totalExams}
                 </TableCell>
                 <TableCell className="text-right">
                   <Badge variant={store.averageScore >= 80 ? "default" : "outline"}>

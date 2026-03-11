@@ -79,15 +79,13 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
           <TableRow className="bg-muted/50">
             <TableHead className="w-16 text-center">Helyezés</TableHead>
             <TableHead>Tanuló</TableHead>
-            <TableHead className="text-right">Összes pont</TableHead>
-            <TableHead className="text-right">Kurzusok</TableHead>
-            <TableHead className="text-right">Átlag pontszám</TableHead>
+            <TableHead className="text-right">Átlag vizsgaeredmény</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {entries.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
                 <Trophy className="w-10 h-10 mx-auto mb-2 text-muted-foreground/30" />
                 <p>Még nincsenek pontszámok. Légy te az első!</p>
               </TableCell>
@@ -118,17 +116,6 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                     )}
                     
                   </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Badge variant={entry.score_source === 'estimated' ? 'outline' : 'secondary'} className="font-mono">
-                    {entry.total_score.toLocaleString()}
-                    {entry.score_source === 'estimated' && (
-                      <span className="ml-1 text-xs opacity-70">(est)</span>
-                    )}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {entry.exam_count}
                 </TableCell>
                 <TableCell className="text-right">
                   <Badge variant={entry.average_score >= 80 ? "default" : "outline"}>
