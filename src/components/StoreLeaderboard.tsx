@@ -115,8 +115,7 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
             <TableHead className="w-16 text-center">Helyezés</TableHead>
             <TableHead>Áruház</TableHead>
             <TableHead className="text-right">Kollégák</TableHead>
-            <TableHead className="text-right">Vizsgák</TableHead>
-            <TableHead className="text-right">Átlag pontszám</TableHead>
+            <TableHead className="text-right">Átlag vizsgaeredmény</TableHead>
             <TableHead className="hidden md:table-cell">Legjobb kolléga</TableHead>
           </TableRow>
         </TableHeader>
