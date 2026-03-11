@@ -11,6 +11,8 @@ import { Trophy, Code, RefreshCw, Menu, Users, User, BookOpen, ClipboardList } f
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Leaderboard from "@/components/Leaderboard";
 import StoreLeaderboard from "@/components/StoreLeaderboard";
+import UserExamsLeaderboard from "@/components/UserExamsLeaderboard";
+import CourseExamsLeaderboard from "@/components/CourseExamsLeaderboard";
 import Navigation from "@/components/Navigation";
 import { toast } from "sonner";
 
