@@ -79,9 +79,7 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
           <TableRow className="bg-muted/50">
             <TableHead className="w-16 text-center">Helyezés</TableHead>
             <TableHead>Tanuló</TableHead>
-            <TableHead className="text-right">Összes pont</TableHead>
-            <TableHead className="text-right">Kurzusok</TableHead>
-            <TableHead className="text-right">Átlag pontszám</TableHead>
+            <TableHead className="text-right">Átlag vizsgaeredmény</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
