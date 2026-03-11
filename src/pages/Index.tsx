@@ -439,7 +439,7 @@ const Index = () => {
                       </TabsTrigger>
                       <TabsTrigger value="user_exams" className="gap-1.5">
                         <ClipboardList className="w-4 h-4" />
-                        Ki miből vizsgázott
+                        Dolgozók szint
                       </TabsTrigger>
                       <TabsTrigger value="course_exams" className="gap-1.5">
                         <BookOpen className="w-4 h-4" />
