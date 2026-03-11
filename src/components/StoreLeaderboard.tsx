@@ -147,9 +147,6 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
                     <span>{store.userCount}</span>
                   </div>
                 </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {store.totalExams}
-                </TableCell>
                 <TableCell className="text-right">
                   <Badge variant={store.averageScore >= 80 ? "default" : "outline"}>
                     {store.averageScore.toFixed(1)}%

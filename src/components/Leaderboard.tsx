@@ -118,17 +118,6 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                   </div>
                 </TableCell>
                 <TableCell className="text-right">
-                  <Badge variant={entry.score_source === 'estimated' ? 'outline' : 'secondary'} className="font-mono">
-                    {entry.total_score.toLocaleString()}
-                    {entry.score_source === 'estimated' && (
-                      <span className="ml-1 text-xs opacity-70">(est)</span>
-                    )}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground">
-                  {entry.exam_count}
-                </TableCell>
-                <TableCell className="text-right">
                   <Badge variant={entry.average_score >= 80 ? "default" : "outline"}>
                     {entry.average_score.toFixed(1)}%
                   </Badge>
