@@ -443,7 +443,7 @@ const Index = () => {
                       </TabsTrigger>
                       <TabsTrigger value="course_exams" className="gap-1.5">
                         <BookOpen className="w-4 h-4" />
-                        Tárgyak szerint
+                        Vizsgák szerint
                       </TabsTrigger>
                     </TabsList>
                   </Tabs>

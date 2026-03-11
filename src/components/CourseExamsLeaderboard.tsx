@@ -17,6 +17,8 @@ interface CourseGroup {
   users: ExamEntry[];
 }
 
+const EXCLUDED = ['LW DEV', 'LWSupport Test'];
+
 const getPeriodDates = (period: string): { start: Date; end: Date } => {
   const now = new Date();
   const year = now.getFullYear();
@@ -25,15 +27,10 @@ const getPeriodDates = (period: string): { start: Date; end: Date } => {
   switch (period) {
     case "this_month":
       return { start: new Date(year, month, 1), end: now };
-    case "last_month": {
-      const s = new Date(year, month - 1, 1);
-      const e = new Date(year, month, 0);
-      return { start: s, end: e };
-    }
-    case "this_quarter": {
-      const qStart = new Date(year, Math.floor(month / 3) * 3, 1);
-      return { start: qStart, end: now };
-    }
+    case "last_month":
+      return { start: new Date(year, month - 1, 1), end: new Date(year, month, 0) };
+    case "this_quarter":
+      return { start: new Date(year, Math.floor(month / 3) * 3, 1), end: now };
     case "this_year":
       return { start: new Date(year, 0, 1), end: now };
     case "all":
@@ -57,29 +54,34 @@ const CourseExamsLeaderboard = () => {
     try {
       const { start, end } = getPeriodDates(period);
 
-      const { data: exams, error } = await supabase
-        .from("exam_results")
-        .select("username, course_title, exam_title, score, completed_at")
-        .gte("completed_at", start.toISOString())
-        .lte("completed_at", end.toISOString())
-        .order("course_title", { ascending: true })
-        .order("username", { ascending: true });
+      const [usersRes, examsRes] = await Promise.all([
+        supabase.from("users").select("user_id, username"),
+        supabase.from("exam_results")
+          .select("user_id, course_title, exam_title, score, completed_at")
+          .gte("completed_at", start.toISOString())
+          .lte("completed_at", end.toISOString())
+          .order("course_title", { ascending: true }),
+      ]);
 
-      if (error) throw error;
+      if (usersRes.error) throw usersRes.error;
+      if (examsRes.error) throw examsRes.error;
 
-      const EXCLUDED = ['LW DEV', 'LWSupport Test'];
+      const userMap = new Map<string, string>();
+      for (const u of usersRes.data || []) {
+        userMap.set(u.user_id, u.username);
+      }
+
       const grouped = new Map<string, CourseGroup>();
 
-      for (const exam of (exams || [])) {
-        if (EXCLUDED.includes(exam.username)) continue;
+      for (const exam of (examsRes.data || [])) {
+        const username = userMap.get(exam.user_id) || exam.user_id;
+        if (EXCLUDED.includes(username)) continue;
+
         if (!grouped.has(exam.course_title)) {
-          grouped.set(exam.course_title, {
-            course_title: exam.course_title,
-            users: [],
-          });
+          grouped.set(exam.course_title, { course_title: exam.course_title, users: [] });
         }
         grouped.get(exam.course_title)!.users.push({
-          username: exam.username,
+          username,
           score: exam.score,
           completed_at: exam.completed_at,
           exam_title: exam.exam_title,
