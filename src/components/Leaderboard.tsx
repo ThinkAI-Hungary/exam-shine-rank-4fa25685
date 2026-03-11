@@ -85,7 +85,7 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
         <TableBody>
           {entries.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
                 <Trophy className="w-10 h-10 mx-auto mb-2 text-muted-foreground/30" />
                 <p>Még nincsenek pontszámok. Légy te az első!</p>
               </TableCell>
