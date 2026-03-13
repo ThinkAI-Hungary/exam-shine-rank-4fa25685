@@ -7,12 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
-import { Trophy, Code, RefreshCw, Menu, Users, User, BookOpen, ClipboardList } from "lucide-react";
+import { Trophy, Code, RefreshCw, Menu, Users, User } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Leaderboard from "@/components/Leaderboard";
 import StoreLeaderboard from "@/components/StoreLeaderboard";
-import UserExamsLeaderboard from "@/components/UserExamsLeaderboard";
-import CourseExamsLeaderboard from "@/components/CourseExamsLeaderboard";
 import Navigation from "@/components/Navigation";
 import { toast } from "sonner";
 
@@ -58,7 +56,7 @@ const Index = () => {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [user, setUser] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [leaderboardView, setLeaderboardView] = useState<'individual' | 'store' | 'user_exams' | 'course_exams'>('individual');
+  const [leaderboardView, setLeaderboardView] = useState<'individual' | 'store'>('individual');
 
   const embedCode = `<iframe 
   src="${window.location.origin}/embed" 
@@ -438,14 +436,6 @@ const Index = () => {
                         <Users className="w-4 h-4" />
                         Áruház szint
                       </TabsTrigger>
-                      <TabsTrigger value="user_exams" className="gap-1.5">
-                        <ClipboardList className="w-4 h-4" />
-                        Dolgozók szint
-                      </TabsTrigger>
-                      <TabsTrigger value="course_exams" className="gap-1.5">
-                        <BookOpen className="w-4 h-4" />
-                        Vizsgák szerint
-                      </TabsTrigger>
                     </TabsList>
                   </Tabs>
                   {availableTags.length > 0 && leaderboardView === 'individual' && (
@@ -469,12 +459,8 @@ const Index = () => {
               <CardContent>
                 {leaderboardView === 'individual' ? (
                   <Leaderboard entries={filteredLeaderboard} />
-                ) : leaderboardView === 'store' ? (
-                  <StoreLeaderboard entries={leaderboard} />
-                ) : leaderboardView === 'user_exams' ? (
-                  <UserExamsLeaderboard />
                 ) : (
-                  <CourseExamsLeaderboard />
+                  <StoreLeaderboard entries={leaderboard} />
                 )}
               </CardContent>
             </Card>

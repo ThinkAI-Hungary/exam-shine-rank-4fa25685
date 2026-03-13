@@ -553,6 +553,19 @@ export type Database = {
       }
     }
     Views: {
+      report_course_exams: {
+        Row: {
+          Áruház: string | null
+          Dátum: string | null
+          email: string | null
+          "Eredmény %": number | null
+          "Kolléga neve": string | null
+          Kurzus: string | null
+          Megfelelt: string | null
+          "Vizsga neve": string | null
+        }
+        Relationships: []
+      }
       report_monthly_detailed: {
         Row: {
           Áruház: string | null
@@ -591,6 +604,20 @@ export type Database = {
           "Sikertelen fő": number | null
           "Vizsga témakör": string | null
           "Vizsgázott fő": number | null
+        }
+        Relationships: []
+      }
+      report_user_exams: {
+        Row: {
+          Áruház: string | null
+          Dátum: string | null
+          email: string | null
+          "Eredmény %": number | null
+          "Kolléga neve": string | null
+          Kurzus: string | null
+          Megfelelt: string | null
+          Pozíció: string | null
+          "Vizsga neve": string | null
         }
         Relationships: []
       }
