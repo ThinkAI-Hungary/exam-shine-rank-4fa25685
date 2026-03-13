@@ -436,14 +436,6 @@ const Index = () => {
                         <Users className="w-4 h-4" />
                         Áruház szint
                       </TabsTrigger>
-                      <TabsTrigger value="user_exams" className="gap-1.5">
-                        <ClipboardList className="w-4 h-4" />
-                        Dolgozók szint
-                      </TabsTrigger>
-                      <TabsTrigger value="course_exams" className="gap-1.5">
-                        <BookOpen className="w-4 h-4" />
-                        Vizsgák szerint
-                      </TabsTrigger>
                     </TabsList>
                   </Tabs>
                   {availableTags.length > 0 && leaderboardView === 'individual' && (
