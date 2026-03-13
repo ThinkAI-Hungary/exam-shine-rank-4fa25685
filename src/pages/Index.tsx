@@ -459,12 +459,8 @@ const Index = () => {
               <CardContent>
                 {leaderboardView === 'individual' ? (
                   <Leaderboard entries={filteredLeaderboard} />
-                ) : leaderboardView === 'store' ? (
-                  <StoreLeaderboard entries={leaderboard} />
-                ) : leaderboardView === 'user_exams' ? (
-                  <UserExamsLeaderboard />
                 ) : (
-                  <CourseExamsLeaderboard />
+                  <StoreLeaderboard entries={leaderboard} />
                 )}
               </CardContent>
             </Card>
