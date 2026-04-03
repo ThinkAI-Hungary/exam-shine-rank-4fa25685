@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Embed from "./pages/Embed";
+import EmbedBadges from "./pages/EmbedBadges";
 import Auth from "./pages/Auth";
 import UserProfile from "./pages/UserProfile";
 import Profile from "./pages/Profile";
@@ -24,6 +25,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/embed" element={<Embed />} />
+          <Route path="/embed/badges" element={<EmbedBadges />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/profile/:userId" element={<UserProfile />} />
           <Route path="/profile" element={<Profile />} />
