@@ -25,6 +25,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/embed" element={<Embed />} />
+          <Route path="/embed/badges" element={<EmbedBadges />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/profile/:userId" element={<UserProfile />} />
           <Route path="/profile" element={<Profile />} />
