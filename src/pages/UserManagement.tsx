@@ -405,7 +405,7 @@ const UserManagement = () => {
                 <p>Nem található felhasználó</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[70vh] overflow-y-auto custom-scroll">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -418,8 +418,8 @@ const UserManagement = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredUsers.map((user) => (
-                      <TableRow key={user.user_id} className="group">
+                    {filteredUsers.map((user, idx) => (
+                      <TableRow key={user.user_id} className={`group animate-fade-up ${idx < 10 ? `stagger-${idx + 1}` : ''}`}>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center flex-shrink-0">

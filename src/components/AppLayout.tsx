@@ -22,6 +22,8 @@ import {
   Shield,
   Menu,
   GraduationCap,
+  Moon,
+  Sun,
 } from "lucide-react";
 
 interface NavTab {
@@ -69,6 +71,22 @@ const AppLayout = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('theme') === 'dark';
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
 
   useEffect(() => {
     checkAuth();
@@ -154,7 +172,7 @@ const AppLayout = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
       {/* Global Header */}
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50 glass-header">
         <div className="max-w-full px-4 sm:px-6">
           {/* Top row: Logo + User menu */}
           <div className="flex items-center justify-between h-14">
@@ -176,7 +194,7 @@ const AppLayout = () => {
                     <TabsTrigger
                       key={tab.value}
                       value={tab.value}
-                      className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm px-3"
+                      className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 transition-all duration-200 hover:bg-background/60 hover:text-foreground"
                     >
                       {tab.icon}
                       <span className="hidden lg:inline">{tab.label}</span>
@@ -186,8 +204,21 @@ const AppLayout = () => {
               </Tabs>
             </div>
 
-            {/* Right side: User menu */}
-            <div className="flex items-center gap-2">
+            {/* Right side: Theme toggle + User menu */}
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setDarkMode(!darkMode)}
+                className="w-8 h-8 rounded-lg hover:bg-muted transition-colors"
+                title={darkMode ? 'Világos mód' : 'Sötét mód'}
+              >
+                {darkMode ? (
+                  <Sun className="w-4 h-4 text-yellow-500 transition-transform hover:rotate-45" />
+                ) : (
+                  <Moon className="w-4 h-4 text-muted-foreground transition-transform hover:-rotate-12" />
+                )}
+              </Button>
               {user && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

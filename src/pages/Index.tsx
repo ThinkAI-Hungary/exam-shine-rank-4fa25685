@@ -337,11 +337,11 @@ const Index = () => {
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                   <Tabs value={leaderboardView} onValueChange={(v) => setLeaderboardView(v as typeof leaderboardView)}>
                     <TabsList className="flex-wrap h-auto">
-                      <TabsTrigger value="individual" className="gap-1.5">
+                      <TabsTrigger value="individual" className="gap-1.5 transition-all duration-200 hover:bg-background/60 hover:text-foreground">
                         <User className="w-4 h-4" />
                         Egyéni
                       </TabsTrigger>
-                      <TabsTrigger value="store" className="gap-1.5">
+                      <TabsTrigger value="store" className="gap-1.5 transition-all duration-200 hover:bg-background/60 hover:text-foreground">
                         <Users className="w-4 h-4" />
                         Áruház szint
                       </TabsTrigger>

@@ -191,7 +191,7 @@ const Students = () => {
                 <p>Nem található hallgató a szűrési feltételekkel</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[70vh] overflow-y-auto custom-scroll">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -205,8 +205,8 @@ const Students = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredStudents.map((student) => (
-                      <TableRow key={student.user_id} className="group cursor-pointer hover:bg-muted/50" onClick={() => setSelectedStudent({ id: student.user_id, name: student.username })}>
+                    {filteredStudents.map((student, idx) => (
+                      <TableRow key={student.user_id} className={`group cursor-pointer hover:bg-muted/50 animate-fade-up ${idx < 10 ? `stagger-${idx + 1}` : ''}`} onClick={() => setSelectedStudent({ id: student.user_id, name: student.username })}>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0">

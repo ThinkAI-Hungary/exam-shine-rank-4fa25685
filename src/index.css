@@ -122,3 +122,113 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* ── Custom Scrollbar ── */
+/* Hide ALL native scrollbars globally */
+* {
+  scrollbar-width: none !important;
+}
+*::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* Utility class for elements that need visible thin scrollbar on hover */
+.custom-scroll {
+  scrollbar-width: thin !important;
+  scrollbar-color: transparent transparent;
+}
+.custom-scroll:hover {
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+}
+.custom-scroll::-webkit-scrollbar {
+  display: block !important;
+  width: 5px;
+  height: 5px;
+}
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+.custom-scroll:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+.custom-scroll::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0;
+  height: 0;
+}
+
+/* ── Animations ── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes growWidth {
+  from { width: 0; }
+}
+
+@keyframes countUp {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-up {
+  animation: fadeSlideUp 0.4s ease-out both;
+}
+
+.animate-grow-width {
+  animation: growWidth 0.8s ease-out both;
+}
+
+.animate-count-up {
+  animation: countUp 0.3s ease-out both;
+}
+
+/* Staggered row delays */
+.stagger-1 { animation-delay: 0.03s; }
+.stagger-2 { animation-delay: 0.06s; }
+.stagger-3 { animation-delay: 0.09s; }
+.stagger-4 { animation-delay: 0.12s; }
+.stagger-5 { animation-delay: 0.15s; }
+.stagger-6 { animation-delay: 0.18s; }
+.stagger-7 { animation-delay: 0.21s; }
+.stagger-8 { animation-delay: 0.24s; }
+.stagger-9 { animation-delay: 0.27s; }
+.stagger-10 { animation-delay: 0.30s; }
+
+/* KPI card hover lift */
+.kpi-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -5px hsl(var(--primary) / 0.15);
+}
+
+/* Glassmorphism header */
+.glass-header {
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  background: hsl(var(--card) / 0.7) !important;
+}
+
+/* Medal row highlights */
+.medal-gold {
+  background: linear-gradient(90deg, hsl(45 90% 50% / 0.08), transparent 60%);
+  border-left: 3px solid hsl(45, 90%, 50%);
+}
+.medal-silver {
+  background: linear-gradient(90deg, hsl(0 0% 70% / 0.08), transparent 60%);
+  border-left: 3px solid hsl(0, 0%, 72%);
+}
+.medal-bronze {
+  background: linear-gradient(90deg, hsl(25 70% 45% / 0.08), transparent 60%);
+  border-left: 3px solid hsl(25, 70%, 50%);
+}

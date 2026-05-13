@@ -73,7 +73,7 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
   };
 
   const content = (
-    <div className="rounded-lg border overflow-hidden">
+    <div className="rounded-lg border overflow-hidden max-h-[70vh] overflow-y-auto custom-scroll">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
@@ -91,10 +91,13 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
               </TableCell>
             </TableRow>
           ) : (
-            entries.map((entry) => (
+            entries.map((entry, idx) => {
+              const medalClass = entry.rank === 1 ? "medal-gold" : entry.rank === 2 ? "medal-silver" : entry.rank === 3 ? "medal-bronze" : "";
+              const staggerClass = idx < 10 ? `stagger-${idx + 1}` : "";
+              return (
               <TableRow 
                 key={entry.rank}
-                className="hover:bg-muted/30 transition-colors cursor-pointer"
+                className={`hover:bg-muted/30 transition-colors cursor-pointer animate-fade-up ${staggerClass} ${medalClass}`}
                 onClick={() => handleRowClick(entry)}
               >
                 <TableCell className="text-center">
@@ -123,7 +126,8 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                   </Badge>
                 </TableCell>
               </TableRow>
-            ))
+              );
+            })
           )}
         </TableBody>
       </Table>

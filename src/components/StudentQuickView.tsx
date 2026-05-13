@@ -19,6 +19,7 @@ import {
   Loader2,
   Calendar,
   Mail,
+  GraduationCap,
 } from "lucide-react";
 
 interface StudentQuickViewProps {
@@ -26,6 +27,13 @@ interface StudentQuickViewProps {
   username: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+interface Enrollment {
+  lw_course_id: string;
+  courseTitle: string;
+  completion_percentage: number;
+  enrolled_at: string | null;
 }
 
 interface QuickStats {
@@ -39,6 +47,7 @@ interface QuickStats {
   beosztas: string[];
   startOfEmpl: string | null;
   category: string | null;
+  enrollments: Enrollment[];
 }
 
 const StudentQuickView = ({ userId, username, open, onOpenChange }: StudentQuickViewProps) => {
@@ -55,11 +64,30 @@ const StudentQuickView = ({ userId, username, open, onOpenChange }: StudentQuick
   const fetchQuickStats = async (uid: string) => {
     setLoading(true);
     try {
-      const [userRes, examRes, badgeRes] = await Promise.all([
+      const [userRes, examRes, badgeRes, enrollRes] = await Promise.all([
         supabase.from("users").select("email, aruhaz, beosztas, start_of_empl, current_category").eq("user_id", uid).single(),
         supabase.from("exam_results").select("score").eq("user_id", uid),
         supabase.from("user_badges").select("id", { count: "exact", head: true }).eq("user_id", uid).is("revoked_at", null),
+        supabase.from("lw_enrollments").select("lw_course_id, completion_percentage, enrolled_at").eq("user_id", uid),
       ]);
+
+      // Map enrollment course IDs to titles
+      const enrollments: Enrollment[] = [];
+      const rawEnrollments = enrollRes.data || [];
+      if (rawEnrollments.length > 0) {
+        const courseIds = rawEnrollments.map((e: any) => e.lw_course_id);
+        const { data: courses } = await supabase.from("lw_courses").select("lw_course_id, title").in("lw_course_id", courseIds);
+        const courseMap = new Map((courses || []).map((c: any) => [c.lw_course_id, c.title]));
+        for (const e of rawEnrollments) {
+          enrollments.push({
+            lw_course_id: e.lw_course_id,
+            courseTitle: courseMap.get(e.lw_course_id) || e.lw_course_id,
+            completion_percentage: e.completion_percentage || 0,
+            enrolled_at: e.enrolled_at,
+          });
+        }
+        enrollments.sort((a, b) => a.courseTitle.localeCompare(b.courseTitle));
+      }
 
       const exams = examRes.data || [];
       const totalExams = exams.length;
@@ -77,6 +105,7 @@ const StudentQuickView = ({ userId, username, open, onOpenChange }: StudentQuick
         beosztas: (userRes.data?.beosztas || []).map((s: string) => s.replace(/^cf_munkakorod_?/, "")).filter((s: string) => s.trim() !== ""),
         startOfEmpl: userRes.data?.start_of_empl || null,
         category: userRes.data?.current_category || null,
+        enrollments,
       });
     } catch (e) {
       console.error("Error fetching quick stats:", e);
@@ -92,7 +121,7 @@ const StudentQuickView = ({ userId, username, open, onOpenChange }: StudentQuick
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center flex-shrink-0">
@@ -191,6 +220,24 @@ const StudentQuickView = ({ userId, username, open, onOpenChange }: StudentQuick
               </div>
               <Progress value={stats.passRate} className="h-2" />
             </div>
+
+            {/* Enrollments */}
+            {stats.enrollments.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  Beiratkozások ({stats.enrollments.length})
+                </div>
+                <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                  {stats.enrollments.map((e) => (
+                    <div key={e.lw_course_id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/30 border text-xs">
+                      <span className="truncate font-medium" title={e.courseTitle}>{e.courseTitle}</span>
+                      <span className="flex-shrink-0 text-muted-foreground">{e.completion_percentage}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Navigate to full dashboard */}
             <Button

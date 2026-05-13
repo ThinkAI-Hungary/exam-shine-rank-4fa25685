@@ -108,7 +108,7 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
   };
 
   return (
-    <div className="rounded-lg border overflow-hidden">
+    <div className="rounded-lg border overflow-hidden max-h-[70vh] overflow-y-auto custom-scroll">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
@@ -128,8 +128,11 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
               </TableCell>
             </TableRow>
           ) : (
-            storeStats.map((store) => (
-              <TableRow key={store.storeName} className="hover:bg-muted/30 transition-colors">
+            storeStats.map((store, idx) => {
+              const medalClass = store.rank === 1 ? "medal-gold" : store.rank === 2 ? "medal-silver" : store.rank === 3 ? "medal-bronze" : "";
+              const staggerClass = idx < 10 ? `stagger-${idx + 1}` : "";
+              return (
+              <TableRow key={store.storeName} className={`hover:bg-muted/30 transition-colors animate-fade-up ${staggerClass} ${medalClass}`}>
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center">
                     {getRankIcon(store.rank)}
@@ -160,7 +163,8 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
                   )}
                 </TableCell>
               </TableRow>
-            ))
+              );
+            })
           )}
         </TableBody>
       </Table>
