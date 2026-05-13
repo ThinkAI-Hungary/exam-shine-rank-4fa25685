@@ -123,10 +123,26 @@ serve(async (req) => {
       if (username) lwBody.username = username;
       if (password) lwBody.password = password;
       if (tags && tags.length > 0) lwBody.tags = tags;
-      if (fields) lwBody.fields = fields;
+      // NOTE: LW v2 POST /users does NOT accept custom `fields` — they must be set via PUT after creation.
 
-      const lwUser = await lwRequest(`${API_BASE}/users`, accessToken, clientId, "POST", lwBody);
+      let lwUser = await lwRequest(`${API_BASE}/users`, accessToken, clientId, "POST", lwBody);
       console.log(`[create] LW user created: ${lwUser.id}`);
+
+      // Set custom fields via PUT if provided
+      if (fields && Object.keys(fields).length > 0) {
+        try {
+          lwUser = await lwRequest(
+            `${API_BASE}/users/${lwUser.id}`,
+            accessToken,
+            clientId,
+            "PUT",
+            { fields }
+          );
+          console.log(`[create] Custom fields set for user: ${lwUser.id}`);
+        } catch (e) {
+          console.error(`[create] Failed to set custom fields:`, e);
+        }
+      }
 
       // Sync to local DB
       const dbRow = mapLwUserToDbRow(lwUser);
