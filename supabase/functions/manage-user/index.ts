@@ -171,11 +171,17 @@ serve(async (req) => {
       const { user_id, username, email, tags, fields } = payload;
       if (!user_id) throw new Error("user_id is required");
 
+      const normalizedFields = fields && typeof fields === "object" ? { ...(fields as Record<string, unknown>) } : undefined;
+      if (normalizedFields?.cf_munkaviszonyod_kezdete) {
+        normalizedFields.cf_munkaviszonyodkezdete = normalizedFields.cf_munkaviszonyod_kezdete;
+        delete normalizedFields.cf_munkaviszonyod_kezdete;
+      }
+
       const lwBody: Record<string, unknown> = {};
       if (username) lwBody.username = username;
       if (email) lwBody.email = email;
       if (tags) lwBody.tags = tags;
-      if (fields) lwBody.fields = fields;
+      if (normalizedFields) lwBody.fields = normalizedFields;
 
       const lwUser = await lwRequest(`${API_BASE}/users/${user_id}`, accessToken, clientId, "PUT", lwBody);
       console.log(`[update] LW user updated: ${user_id}`);
