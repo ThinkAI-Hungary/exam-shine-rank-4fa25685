@@ -216,6 +216,102 @@ export type Database = {
           },
         ]
       }
+      lw_certificates: {
+        Row: {
+          certificate_id: string | null
+          certificate_url: string | null
+          id: string
+          issued_at: string | null
+          lw_course_id: string | null
+          synced_at: string | null
+          user_id: string
+        }
+        Insert: {
+          certificate_id?: string | null
+          certificate_url?: string | null
+          id?: string
+          issued_at?: string | null
+          lw_course_id?: string | null
+          synced_at?: string | null
+          user_id: string
+        }
+        Update: {
+          certificate_id?: string | null
+          certificate_url?: string | null
+          id?: string
+          issued_at?: string | null
+          lw_course_id?: string | null
+          synced_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      lw_courses: {
+        Row: {
+          categories: string[] | null
+          description: string | null
+          id: string
+          lw_course_id: string
+          price: number | null
+          sections: Json | null
+          status: string | null
+          synced_at: string | null
+          title: string | null
+        }
+        Insert: {
+          categories?: string[] | null
+          description?: string | null
+          id?: string
+          lw_course_id: string
+          price?: number | null
+          sections?: Json | null
+          status?: string | null
+          synced_at?: string | null
+          title?: string | null
+        }
+        Update: {
+          categories?: string[] | null
+          description?: string | null
+          id?: string
+          lw_course_id?: string
+          price?: number | null
+          sections?: Json | null
+          status?: string | null
+          synced_at?: string | null
+          title?: string | null
+        }
+        Relationships: []
+      }
+      lw_enrollments: {
+        Row: {
+          completed_at: string | null
+          completion_percentage: number | null
+          enrolled_at: string | null
+          id: string
+          lw_course_id: string
+          synced_at: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completion_percentage?: number | null
+          enrolled_at?: string | null
+          id?: string
+          lw_course_id: string
+          synced_at?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          completion_percentage?: number | null
+          enrolled_at?: string | null
+          id?: string
+          lw_course_id?: string
+          synced_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       performance_warnings: {
         Row: {
           action_plan_due_date: string | null
