@@ -614,19 +614,34 @@ serve(async (req) => {
       throw new Error(`A "${bundleName}" collection-ben nem találtam kurzusokat, ezért a szinkronizálás leállt (nincs fallback all courses).`);
     }
     
-    // Fetch all courses to get titles
-    const allCourses = await fetchAllCourses(baseUrl, accessToken, clientId);
-    apiCallCount += Math.ceil(allCourses.length / 50);
+    // Fetch ONLY bundle courses individually (instead of all 373 courses via paginated list)
+    // This avoids the slow /courses?page=N endpoint that causes 504 timeouts
+    console.log(`Fetching details for ${bundleCourseIds.length} bundle courses individually...`);
+    const allCourses: Array<{ id: string; title: string }> = [];
+    for (const courseId of bundleCourseIds) {
+      try {
+        await throttle(200); // rate limit protection
+        const url = withClientId(`${baseUrl}/courses/${courseId}`, clientId);
+        const data = await makeLearnWorldsRequest(url, accessToken, clientId);
+        apiCallCount++;
+        const course = data.course || data;
+        const title = course?.title || course?.name || courseId;
+        allCourses.push({ id: courseId, title });
+        console.log(`  ✓ ${courseId}: "${title}"`);
+      } catch (err) {
+        // If individual course detail fails, still include it with ID as title
+        console.warn(`  ✗ ${courseId}: detail fetch failed, using ID as title`);
+        allCourses.push({ id: courseId, title: courseId });
+      }
+    }
     
-    // Strict filter: process ONLY courses from the selected bundle
-    const coursesToProcess = allCourses.filter(c => bundleCourseIds.includes(c.id));
+    // All fetched courses ARE the bundle courses — no filtering needed
+    const coursesToProcess = allCourses;
     if (coursesToProcess.length === 0) {
-      throw new Error(`A "${bundleName}" collection kurzusai nem találhatók a /courses listában.`);
+      throw new Error(`A "${bundleName}" collection kurzusai nem érhetők el az API-n keresztül.`);
     }
 
-    console.log(`Strict bundle filter: ${coursesToProcess.length} course from "${bundleName}"`);
-
-    console.log(`Will process ${coursesToProcess.length} courses`);
+    console.log(`Will process ${coursesToProcess.length} courses from "${bundleName}"`);
 
     // Step 2 & 3: Iterate through courses
     const allExamResults: ExamResult[] = [];
