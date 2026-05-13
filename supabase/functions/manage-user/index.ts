@@ -116,13 +116,14 @@ serve(async (req) => {
     // ACTION: create
     // ════════════════════════════════════════════
     if (action === "create") {
-      const { email, username, password, tags } = payload;
+      const { email, username, password, tags, fields } = payload;
       if (!email) throw new Error("Email is required");
 
       const lwBody: Record<string, unknown> = { email };
       if (username) lwBody.username = username;
       if (password) lwBody.password = password;
       if (tags && tags.length > 0) lwBody.tags = tags;
+      if (fields) lwBody.fields = fields;
 
       const lwUser = await lwRequest(`${API_BASE}/users`, accessToken, clientId, "POST", lwBody);
       console.log(`[create] LW user created: ${lwUser.id}`);

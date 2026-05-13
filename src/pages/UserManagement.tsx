@@ -77,6 +77,8 @@ interface UserFormData {
   username: string;
   password: string;
   tags: string[];
+  uj_kollega: string;
+  munkaviszony_kezdete: string;
 }
 
 // ── Edge Function caller ──
@@ -107,7 +109,7 @@ const UserManagement = () => {
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
 
   // Form state
-  const [form, setForm] = useState<UserFormData>({ email: "", username: "", password: "", tags: [] });
+  const [form, setForm] = useState<UserFormData>({ email: "", username: "", password: "", tags: [], uj_kollega: "", munkaviszony_kezdete: "" });
   const [editTags, setEditTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
 
@@ -131,10 +133,20 @@ const UserManagement = () => {
     }
   };
 
-  // ── Available áruház tags ──
+  // ── Available áruház tags (for filter) ──
   const availableAruhaz = useMemo(() => {
     const tags = new Set<string>();
     users.forEach((u) => (u.aruhaz || []).forEach((t) => tags.add(t)));
+    return Array.from(tags).sort();
+  }, [users]);
+
+  // ── All available tags from existing users (for tag picker) ──
+  const allAvailableTags = useMemo(() => {
+    const tags = new Set<string>();
+    users.forEach((u) => {
+      (u.aruhaz || []).forEach((t) => tags.add(t));
+      (u.beosztas || []).forEach((t) => tags.add(t));
+    });
     return Array.from(tags).sort();
   }, [users]);
 
@@ -163,15 +175,20 @@ const UserManagement = () => {
     }
     setActionLoading(true);
     try {
+      const fields: Record<string, string> = {};
+      if (form.uj_kollega) fields.cf_uj_kollega_vagy = form.uj_kollega;
+      if (form.munkaviszony_kezdete) fields.cf_munkaviszony_kezdete = form.munkaviszony_kezdete;
+
       await callManageUser("create", {
         email: form.email,
         username: form.username || undefined,
         password: form.password || undefined,
         tags: form.tags.length > 0 ? form.tags : undefined,
+        fields: Object.keys(fields).length > 0 ? fields : undefined,
       });
       toast({ title: "Siker", description: `Felhasználó létrehozva: ${form.email}` });
       setCreateDialogOpen(false);
-      setForm({ email: "", username: "", password: "", tags: [] });
+      setForm({ email: "", username: "", password: "", tags: [], uj_kollega: "", munkaviszony_kezdete: "" });
       await fetchUsers();
     } catch (e: any) {
       toast({ title: "Hiba", description: e.message, variant: "destructive" });
@@ -489,21 +506,64 @@ const UserManagement = () => {
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
               />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="create-uj-kollega">Új kolléga vagy?</Label>
+                <Select
+                  value={form.uj_kollega || ""}
+                  onValueChange={(v) => setForm({ ...form, uj_kollega: v })}
+                >
+                  <SelectTrigger id="create-uj-kollega">
+                    <SelectValue placeholder="Válassz..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="igen">Igen</SelectItem>
+                    <SelectItem value="nem">Nem</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-munkaviszony">Munkaviszony kezdete</Label>
+                <Input
+                  id="create-munkaviszony"
+                  type="date"
+                  value={form.munkaviszony_kezdete}
+                  onChange={(e) => setForm({ ...form, munkaviszony_kezdete: e.target.value })}
+                />
+              </div>
+            </div>
             <div className="space-y-2">
               <Label>Címkék (tags)</Label>
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {form.tags.map((tag) => (
                   <Badge key={tag} variant="secondary" className="text-xs gap-1">
-                    {tag}
+                    {tag.replace(/^cf_aruhaz_/, "").replace(/^cf_munkakorod_?/, "")}
                     <button onClick={() => removeTag(tag, "form")} className="hover:text-destructive">
                       <X className="w-3 h-3" />
                     </button>
                   </Badge>
                 ))}
               </div>
+              <Select
+                value=""
+                onValueChange={(v) => addTag(v, "form")}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Válassz címkét..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {allAvailableTags
+                    .filter((t) => !form.tags.includes(t))
+                    .map((tag) => (
+                      <SelectItem key={tag} value={tag}>
+                        {tag.replace(/^cf_aruhaz_/, "").replace(/^cf_munkakorod_?/, "")}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Új címke..."
+                  placeholder="Egyéni címke..."
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   onKeyDown={(e) => {
@@ -512,6 +572,7 @@ const UserManagement = () => {
                       addTag(newTag, "form");
                     }
                   }}
+                  className="text-sm"
                 />
                 <Button type="button" variant="outline" size="icon" onClick={() => addTag(newTag, "form")}>
                   <Plus className="w-4 h-4" />
@@ -575,9 +636,26 @@ const UserManagement = () => {
                     </Badge>
                   ))}
                 </div>
+                <Select
+                  value=""
+                  onValueChange={(v) => addTag(v, "edit")}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Válassz címkét..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allAvailableTags
+                      .filter((t) => !editTags.includes(t))
+                      .map((tag) => (
+                        <SelectItem key={tag} value={tag}>
+                          {tag.replace(/^cf_aruhaz_/, "").replace(/^cf_munkakorod_?/, "")}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Új címke..."
+                    placeholder="Egyéni címke..."
                     value={newTag}
                     onChange={(e) => setNewTag(e.target.value)}
                     onKeyDown={(e) => {
@@ -586,6 +664,7 @@ const UserManagement = () => {
                         addTag(newTag, "edit");
                       }
                     }}
+                    className="text-sm"
                   />
                   <Button type="button" variant="outline" size="icon" onClick={() => addTag(newTag, "edit")}>
                     <Plus className="w-4 h-4" />
