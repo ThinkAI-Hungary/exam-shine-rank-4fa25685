@@ -79,7 +79,11 @@ function mapLwUserToDbRow(lwUser: any): Record<string, unknown> {
   const tags = lwUser.tags || [];
   const aruhaz = tags.filter((t: string) => t.startsWith("cf_aruhaz_"));
   const beosztas = tags.filter((t: string) => t.startsWith("cf_munkakorod"));
-  const startOfEmpl = lwUser.fields?.cf_munkaviszony_kezdete || null;
+  const startOfEmpl =
+    lwUser.fields?.cf_munkaviszonyodkezdete ||
+    lwUser.fields?.cf_munkaviszonyod_kezdete ||
+    lwUser.fields?.cf_munkaviszony_kezdete ||
+    null;
 
   return {
     user_id: lwUser.id,
@@ -119,6 +123,12 @@ serve(async (req) => {
       const { email, username, password, tags, fields } = payload;
       if (!email) throw new Error("Email is required");
 
+      const normalizedFields = fields && typeof fields === "object" ? { ...(fields as Record<string, unknown>) } : undefined;
+      if (normalizedFields?.cf_munkaviszonyod_kezdete) {
+        normalizedFields.cf_munkaviszonyodkezdete = normalizedFields.cf_munkaviszonyod_kezdete;
+        delete normalizedFields.cf_munkaviszonyod_kezdete;
+      }
+
       const lwBody: Record<string, unknown> = { email };
       if (username) lwBody.username = username;
       if (password) lwBody.password = password;
@@ -129,14 +139,14 @@ serve(async (req) => {
       console.log(`[create] LW user created: ${lwUser.id}`);
 
       // Set custom fields via PUT if provided
-      if (fields && Object.keys(fields).length > 0) {
+      if (normalizedFields && Object.keys(normalizedFields).length > 0) {
         try {
           lwUser = await lwRequest(
             `${API_BASE}/users/${lwUser.id}`,
             accessToken,
             clientId,
             "PUT",
-            { fields }
+            { fields: normalizedFields }
           );
           console.log(`[create] Custom fields set for user: ${lwUser.id}`);
         } catch (e) {
