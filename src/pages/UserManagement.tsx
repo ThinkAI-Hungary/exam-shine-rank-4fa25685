@@ -136,6 +136,7 @@ const UserManagement = () => {
   }, []);
 
   const fetchUsers = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from("users")
