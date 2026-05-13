@@ -243,11 +243,13 @@ const UserManagement = () => {
     if (!selectedUser) return;
     setActionLoading(true);
     try {
+      const { fields, tags } = buildFieldsFromTags(editTags);
       await callManageUser("update", {
         user_id: selectedUser.user_id,
         username: selectedUser.username,
         email: selectedUser.email,
-        tags: editTags,
+        tags,
+        fields: Object.keys(fields).length > 0 ? fields : undefined,
       });
       toast({ title: "Siker", description: `${selectedUser.username} frissítve` });
       setEditDialogOpen(false);
