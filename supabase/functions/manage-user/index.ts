@@ -29,7 +29,9 @@ async function lwRequest(
       Accept: "application/json",
     };
 
-    const opts: RequestInit = { method, headers, redirect: "manual" };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const opts: RequestInit = { method, headers, redirect: "manual", signal: controller.signal };
     if (body && (method === "POST" || method === "PUT")) {
       opts.body = JSON.stringify(body);
     }
@@ -38,9 +40,15 @@ async function lwRequest(
     try {
       resp = await fetch(url, opts);
     } catch (e) {
+      clearTimeout(timeoutId);
+      if (method !== "GET") {
+        throw new Error(`LearnWorlds API timeout or network error: ${e}`);
+      }
       if (attempt === maxRetries) throw new Error(`Network error: ${e}`);
       await new Promise((r) => setTimeout(r, baseDelay * Math.pow(2, attempt)));
       continue;
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     if (resp.status === 429 && attempt < maxRetries) {
@@ -79,7 +87,11 @@ function mapLwUserToDbRow(lwUser: any): Record<string, unknown> {
   const tags = lwUser.tags || [];
   const aruhaz = tags.filter((t: string) => t.startsWith("cf_aruhaz_"));
   const beosztas = tags.filter((t: string) => t.startsWith("cf_munkakorod"));
-  const startOfEmpl = lwUser.fields?.cf_munkaviszony_kezdete || null;
+  const startOfEmpl =
+    lwUser.fields?.cf_munkaviszonyodkezdete ||
+    lwUser.fields?.cf_munkaviszonyod_kezdete ||
+    lwUser.fields?.cf_munkaviszony_kezdete ||
+    null;
 
   return {
     user_id: lwUser.id,
@@ -119,6 +131,12 @@ serve(async (req) => {
       const { email, username, password, tags, fields } = payload;
       if (!email) throw new Error("Email is required");
 
+      const normalizedFields = fields && typeof fields === "object" ? { ...(fields as Record<string, unknown>) } : undefined;
+      if (normalizedFields?.cf_munkaviszonyod_kezdete) {
+        normalizedFields.cf_munkaviszonyodkezdete = normalizedFields.cf_munkaviszonyod_kezdete;
+        delete normalizedFields.cf_munkaviszonyod_kezdete;
+      }
+
       const lwBody: Record<string, unknown> = { email };
       if (username) lwBody.username = username;
       if (password) lwBody.password = password;
@@ -129,14 +147,14 @@ serve(async (req) => {
       console.log(`[create] LW user created: ${lwUser.id}`);
 
       // Set custom fields via PUT if provided
-      if (fields && Object.keys(fields).length > 0) {
+      if (normalizedFields && Object.keys(normalizedFields).length > 0) {
         try {
           lwUser = await lwRequest(
             `${API_BASE}/users/${lwUser.id}`,
             accessToken,
             clientId,
             "PUT",
-            { fields }
+            { fields: normalizedFields }
           );
           console.log(`[create] Custom fields set for user: ${lwUser.id}`);
         } catch (e) {
@@ -161,11 +179,17 @@ serve(async (req) => {
       const { user_id, username, email, tags, fields } = payload;
       if (!user_id) throw new Error("user_id is required");
 
+      const normalizedFields = fields && typeof fields === "object" ? { ...(fields as Record<string, unknown>) } : undefined;
+      if (normalizedFields?.cf_munkaviszonyod_kezdete) {
+        normalizedFields.cf_munkaviszonyodkezdete = normalizedFields.cf_munkaviszonyod_kezdete;
+        delete normalizedFields.cf_munkaviszonyod_kezdete;
+      }
+
       const lwBody: Record<string, unknown> = {};
       if (username) lwBody.username = username;
       if (email) lwBody.email = email;
       if (tags) lwBody.tags = tags;
-      if (fields) lwBody.fields = fields;
+      if (normalizedFields) lwBody.fields = normalizedFields;
 
       const lwUser = await lwRequest(`${API_BASE}/users/${user_id}`, accessToken, clientId, "PUT", lwBody);
       console.log(`[update] LW user updated: ${user_id}`);
