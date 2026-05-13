@@ -998,6 +998,7 @@ serve(async (req) => {
 
     // ── Step 6: Sync course catalog into lw_courses (0 extra API calls) ──
     console.log('\n--- Step 6: Syncing Course Catalog ---');
+    console.log('Step 6 starting - course count:', allCourses.length);
     try {
       const courseRows = allCourses.map(c => ({
         lw_course_id: c.id,
