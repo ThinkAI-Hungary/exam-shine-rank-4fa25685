@@ -84,9 +84,18 @@ interface UserFormData {
 // ── Edge Function caller ──
 async function callManageUser(action: string, payload: Record<string, unknown>) {
   console.log("[callManageUser]", action, payload);
-  const { data, error } = await supabase.functions.invoke("manage-user", {
+  const invokePromise = supabase.functions.invoke("manage-user", {
     body: { action, ...payload },
   });
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    window.setTimeout(
+      () => reject(new Error("A LearnWorlds művelet túl sokáig tartott. Ellenőrizd pár perc múlva, hogy létrejött-e, majd frissítsd a listát.")),
+      45000
+    );
+  });
+
+  const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
   // When edge fn returns non-2xx, error is generic but data may have details
   if (data && !data.success) {
     throw new Error(data.error || "Ismeretlen hiba az Edge Function-ben");
@@ -198,7 +207,7 @@ const UserManagement = () => {
       if (!allTags.includes(ujTag)) allTags.push(ujTag);
     }
 
-    if (munkaviszony) fields.cf_munkaviszonyod_kezdete = munkaviszony;
+    if (munkaviszony) fields.cf_munkaviszonyodkezdete = munkaviszony;
 
     return { fields, tags: allTags };
   };
@@ -223,7 +232,7 @@ const UserManagement = () => {
       toast({ title: "Siker", description: `Felhasználó létrehozva: ${form.email}` });
       setCreateDialogOpen(false);
       setForm({ email: "", username: "", password: "", tags: [], uj_kollega: "", munkaviszony_kezdete: "" });
-      await fetchUsers();
+      void fetchUsers();
     } catch (e: any) {
       toast({ title: "Hiba", description: e.message, variant: "destructive" });
     } finally {
@@ -254,7 +263,7 @@ const UserManagement = () => {
       toast({ title: "Siker", description: `${selectedUser.username} frissítve` });
       setEditDialogOpen(false);
       setSelectedUser(null);
-      await fetchUsers();
+      void fetchUsers();
     } catch (e: any) {
       toast({ title: "Hiba", description: e.message, variant: "destructive" });
     } finally {
