@@ -1000,7 +1000,9 @@ serve(async (req) => {
     console.log('\n--- Step 6: Syncing Course Catalog ---');
     console.log('Step 6 starting - course count:', allCourses.length);
     try {
-      const courseRows = allCourses.map(c => ({
+      const uniqueCourses = Array.from(new Map(allCourses.map(c => [c.id, c])).values());
+      console.log(`Deduped ${allCourses.length} → ${uniqueCourses.length} unique courses`);
+      const courseRows = uniqueCourses.map(c => ({
         lw_course_id: c.id,
         title: c.title || null,
         synced_at: new Date().toISOString(),
