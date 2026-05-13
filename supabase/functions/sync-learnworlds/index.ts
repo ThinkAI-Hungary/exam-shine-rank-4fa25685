@@ -649,9 +649,9 @@ serve(async (req) => {
     for (const course of coursesToProcess) {
       console.log(`\n--- Processing Course: ${course.title} (${course.id}) ---`);
       
-      // 2A: Fetch course content to get unit titles
-      const unitTitleMap = await fetchCourseContent(baseUrl, course.id, accessToken, clientId);
-      apiCallCount++;
+      // 2A: Skip /content fetch — vizsga courses return 404 and waste ~5s each with retries.
+      // processGrades falls back to grade.learningUnit.title or "${courseTitle} - Vizsga"
+      const unitTitleMap = new Map<string, string>();
       
       // 2B: Fetch all grades for this course
       const grades = await fetchCourseGrades(baseUrl, course.id, accessToken, clientId);
