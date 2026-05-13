@@ -178,6 +178,31 @@ const UserManagement = () => {
     return list;
   }, [users, searchQuery, selectedAruhaz]);
 
+  // Build LW custom fields from tags + form values
+  const buildFieldsFromTags = (tags: string[], ujKollega?: string, munkaviszony?: string) => {
+    const fields: Record<string, string> = {};
+    const allTags = [...tags];
+
+    // Extract cf_aruhaz_X → fields.cf_aruhaz = X (use last one if multiple)
+    const aruhazTag = tags.filter((t) => t.startsWith("cf_aruhaz_")).pop();
+    if (aruhazTag) fields.cf_aruhaz = aruhazTag.replace(/^cf_aruhaz_/, "");
+
+    // Extract cf_munkakorod_X (or cf_munkakorodX) → fields.cf_munkakorod = X
+    const munkakorTag = tags.filter((t) => t.startsWith("cf_munkakorod")).pop();
+    if (munkakorTag) fields.cf_munkakorod = munkakorTag.replace(/^cf_munkakorod_?/, "");
+
+    if (ujKollega) {
+      const cap = ujKollega.charAt(0).toUpperCase() + ujKollega.slice(1).toLowerCase();
+      fields.cf_ujkollegavagy = cap;
+      const ujTag = `cf_ujkollegavagy_${cap}`;
+      if (!allTags.includes(ujTag)) allTags.push(ujTag);
+    }
+
+    if (munkaviszony) fields.cf_munkaviszonyod_kezdete = munkaviszony;
+
+    return { fields, tags: allTags };
+  };
+
   // ── Handlers ──
   const handleCreate = async () => {
     if (!form.email) {
@@ -186,15 +211,13 @@ const UserManagement = () => {
     }
     setActionLoading(true);
     try {
-      const fields: Record<string, string> = {};
-      if (form.uj_kollega) fields.cf_uj_kollega_vagy = form.uj_kollega;
-      if (form.munkaviszony_kezdete) fields.cf_munkaviszony_kezdete = form.munkaviszony_kezdete;
+      const { fields, tags } = buildFieldsFromTags(form.tags, form.uj_kollega, form.munkaviszony_kezdete);
 
       await callManageUser("create", {
         email: form.email,
         username: form.username || undefined,
         password: form.password || undefined,
-        tags: form.tags.length > 0 ? form.tags : undefined,
+        tags: tags.length > 0 ? tags : undefined,
         fields: Object.keys(fields).length > 0 ? fields : undefined,
       });
       toast({ title: "Siker", description: `Felhasználó létrehozva: ${form.email}` });
