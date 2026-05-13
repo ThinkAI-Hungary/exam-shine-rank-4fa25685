@@ -1,0 +1,314 @@
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation, Outlet } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
+import {
+  Trophy,
+  Users,
+  BarChart3,
+  UserCog,
+  User,
+  LogOut,
+  UserCircle,
+  Shield,
+  Menu,
+  GraduationCap,
+} from "lucide-react";
+
+interface NavTab {
+  value: string;
+  label: string;
+  icon: React.ReactNode;
+  path: string;
+  adminOnly?: boolean;
+}
+
+const NAV_TABS: NavTab[] = [
+  {
+    value: "leaderboard",
+    label: "Ranglista",
+    icon: <Trophy className="w-4 h-4" />,
+    path: "/",
+  },
+  {
+    value: "students",
+    label: "Hallgatók",
+    icon: <Users className="w-4 h-4" />,
+    path: "/students",
+    adminOnly: true,
+  },
+  {
+    value: "dashboard",
+    label: "Teljesítmény",
+    icon: <BarChart3 className="w-4 h-4" />,
+    path: "/performance",
+    adminOnly: true,
+  },
+  {
+    value: "management",
+    label: "Kezelés",
+    icon: <UserCog className="w-4 h-4" />,
+    path: "/management",
+    adminOnly: true,
+  },
+];
+
+const AppLayout = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    checkAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setUser(session.user);
+        checkAdminRole(session.user.id);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const checkAuth = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) {
+      navigate("/auth");
+      return;
+    }
+    setUser(session.user);
+    await checkAdminRole(session.user.id);
+    setLoading(false);
+  };
+
+  const checkAdminRole = async (userId: string) => {
+    try {
+      const { data } = await supabase.rpc("has_role", {
+        _user_id: userId,
+        _role: "admin",
+      });
+      setIsAdmin(data || false);
+    } catch (error) {
+      console.error("Error checking admin role:", error);
+      setIsAdmin(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth");
+  };
+
+  // Determine active tab from current path
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path === "/" || path === "/embed") return "leaderboard";
+    if (path.startsWith("/students")) return "students";
+    if (path.startsWith("/performance")) return "dashboard";
+    if (path.startsWith("/management")) return "management";
+    if (path.startsWith("/admin")) return "management";
+    return "leaderboard";
+  };
+
+  const handleTabChange = (value: string) => {
+    const tab = NAV_TABS.find((t) => t.value === value);
+    if (tab) {
+      navigate(tab.path);
+    }
+  };
+
+  const visibleTabs = NAV_TABS.filter((tab) => !tab.adminOnly || isAdmin);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary-glow rounded-xl flex items-center justify-center shadow-glow animate-pulse">
+            <GraduationCap className="w-6 h-6 text-primary-foreground" />
+          </div>
+          <p className="text-sm text-muted-foreground animate-pulse">Betöltés...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
+      {/* Global Header */}
+      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-full px-4 sm:px-6">
+          {/* Top row: Logo + User menu */}
+          <div className="flex items-center justify-between h-14">
+            {/* Logo */}
+            <Link to="/" className="flex items-center gap-2 group">
+              <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-glow rounded-xl flex items-center justify-center shadow-glow transition-transform group-hover:scale-105">
+                <GraduationCap className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent whitespace-nowrap hidden sm:block">
+                LearnWorlds Dashboard
+              </h1>
+            </Link>
+
+            {/* Desktop: Navigation Tabs */}
+            <div className="hidden md:flex items-center">
+              <Tabs value={getActiveTab()} onValueChange={handleTabChange}>
+                <TabsList className="bg-muted/50 h-9">
+                  {visibleTabs.map((tab) => (
+                    <TabsTrigger
+                      key={tab.value}
+                      value={tab.value}
+                      className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm px-3"
+                    >
+                      {tab.icon}
+                      <span className="hidden lg:inline">{tab.label}</span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
+
+            {/* Right side: User menu */}
+            <div className="flex items-center gap-2">
+              {user && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="gap-2">
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                        <User className="w-4 h-4 text-primary" />
+                      </div>
+                      <span className="hidden sm:inline text-sm max-w-[150px] truncate">
+                        {user.email}
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <div className="px-2 py-1.5">
+                      <p className="text-sm font-medium truncate">{user.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isAdmin ? "Adminisztrátor" : "Felhasználó"}
+                      </p>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link to="/profile" className="cursor-pointer">
+                        <UserCircle className="w-4 h-4 mr-2" />
+                        Profil
+                      </Link>
+                    </DropdownMenuItem>
+                    {isAdmin && (
+                      <>
+                        <DropdownMenuItem asChild>
+                          <Link to="/admin/dashboard" className="cursor-pointer">
+                            <Shield className="w-4 h-4 mr-2" />
+                            Admin Vezérlőpult
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link to="/admin/user-linking" className="cursor-pointer">
+                            <Users className="w-4 h-4 mr-2" />
+                            Felhasználó Összekapcsolás
+                          </Link>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive">
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Kijelentkezés
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              {/* Mobile Menu Button */}
+              <Drawer open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                <DrawerTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="md:hidden border-2 hover:bg-accent/10"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </Button>
+                </DrawerTrigger>
+                <DrawerContent className="max-h-[85vh]">
+                  <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-muted mt-4 mb-2" />
+                  <DrawerHeader className="pb-4">
+                    <DrawerTitle className="text-xl">Navigáció</DrawerTitle>
+                  </DrawerHeader>
+                  <div className="flex flex-col gap-2 px-6 pb-8 overflow-y-auto">
+                    {visibleTabs.map((tab) => (
+                      <Button
+                        key={tab.value}
+                        variant={getActiveTab() === tab.value ? "default" : "ghost"}
+                        className="w-full justify-start gap-3 h-12 text-base"
+                        onClick={() => {
+                          handleTabChange(tab.value);
+                          setMobileMenuOpen(false);
+                        }}
+                      >
+                        {tab.icon}
+                        {tab.label}
+                      </Button>
+                    ))}
+                    <div className="border-t my-2" />
+                    {isAdmin && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          className="w-full justify-start gap-3 h-12 text-base"
+                          onClick={() => {
+                            navigate("/admin/dashboard");
+                            setMobileMenuOpen(false);
+                          }}
+                        >
+                          <Shield className="w-4 h-4" />
+                          Admin Vezérlőpult
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="w-full justify-start gap-3 h-12 text-base"
+                          onClick={() => {
+                            navigate("/admin/badges");
+                            setMobileMenuOpen(false);
+                          }}
+                        >
+                          <Trophy className="w-4 h-4" />
+                          Jelvények Kezelése
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </DrawerContent>
+              </Drawer>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Page Content */}
+      <Outlet context={{ user, isAdmin }} />
+    </div>
+  );
+};
+
+export default AppLayout;

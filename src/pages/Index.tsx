@@ -1,18 +1,16 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
-import { Trophy, Code, RefreshCw, Menu, Users, User } from "lucide-react";
+import { Trophy, Code, RefreshCw, Users, User } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Leaderboard from "@/components/Leaderboard";
 import StoreLeaderboard from "@/components/StoreLeaderboard";
-import Navigation from "@/components/Navigation";
 import { toast } from "sonner";
+
 
 interface BadgeData {
   id: string;
@@ -44,7 +42,6 @@ interface LeaderboardEntry {
 }
 
 const Index = () => {
-  const navigate = useNavigate();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [filteredLeaderboard, setFilteredLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,8 +51,6 @@ const Index = () => {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [apiCallsUsed, setApiCallsUsed] = useState<number | null>(null);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [user, setUser] = useState<any>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [leaderboardView, setLeaderboardView] = useState<'individual' | 'store'>('individual');
 
   const embedCode = `<iframe 
@@ -67,28 +62,8 @@ const Index = () => {
 ></iframe>`;
 
   useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      navigate("/auth");
-      return;
-    }
-    setUser(session.user);
     fetchLeaderboard();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!session) {
-        navigate("/auth");
-      } else {
-        setUser(session.user);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  };
+  }, []);
 
   const fetchLeaderboard = async () => {
     try {
@@ -252,24 +227,13 @@ const Index = () => {
     }
   };
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-full px-6 py-3">
-          <div className="flex items-center justify-between gap-8">
-            {/* Left Section */}
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-glow rounded-xl flex items-center justify-center shadow-glow">
-                <Trophy className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent whitespace-nowrap">
-                LearnWorlds Leaderboard
-              </h1>
-            </div>
-
-            {/* Desktop Navigation - Hidden on Mobile */}
-            <div className="hidden lg:flex items-center gap-2">
-              <Navigation />
-              
+    <div>
+      {/* Leaderboard-specific toolbar */}
+      <div className="border-b bg-muted/30">
+        <div className="max-w-full px-4 sm:px-6 py-2">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            {/* Desktop Controls */}
+            <div className="hidden lg:flex items-center gap-2 ml-auto">
               <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
                 <SelectTrigger className="w-[250px]">
                   <SelectValue placeholder="Válassz felhasználót (vagy mindet)" />
@@ -303,7 +267,7 @@ const Index = () => {
           
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button variant="default" size="sm">
+                  <Button variant="outline" size="sm">
                     <Code className="w-4 h-4 mr-2" />
                     Kód beágyazása
                   </Button>
@@ -325,90 +289,35 @@ const Index = () => {
               </Dialog>
             </div>
 
-            {/* Mobile Menu Button */}
-            <Drawer open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <DrawerTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className="lg:hidden border-2 hover:bg-accent"
-                >
-                  <Menu className="w-6 h-6" />
-                </Button>
-              </DrawerTrigger>
-              <DrawerContent className="max-h-[85vh]">
-                <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-muted mt-4 mb-2" />
-                <DrawerHeader className="pb-4">
-                  <DrawerTitle className="text-xl">Menü</DrawerTitle>
-                </DrawerHeader>
-                <div className="flex flex-col gap-6 px-6 pb-8 overflow-y-auto">
-                  <Navigation />
-                  
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Felhasználó kiválasztása</label>
-                    <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Válassz felhasználót" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">🌐 Összes felhasználó</SelectItem>
-                        <SelectSeparator />
-                        {leaderboard.map((entry) => (
-                          <SelectItem key={entry.user_id} value={entry.user_id}>
-                            {entry.username}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <Button
-                    variant="default" 
-                    onClick={() => {
-                      handleCourseSync();
-                      setMobileMenuOpen(false);
-                    }}
-                    disabled={refreshing || syncing}
-                    className="w-full"
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                    {syncing ? 'Szinkronizálás...' : 'Összes felhasználó frissítése'}
-                  </Button>
-                  
-                  {apiCallsUsed && (
-                    <span className="text-xs text-muted-foreground text-center">
-                      Utolsó: {apiCallsUsed} API hívás
-                    </span>
-                  )}
+            {/* Mobile Controls */}
+            <div className="flex lg:hidden items-center gap-2 w-full">
+              <Select value={selectedUserId || "all"} onValueChange={(value) => setSelectedUserId(value === "all" ? null : value)}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Válassz felhasználót" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">🌐 Összes felhasználó</SelectItem>
+                  <SelectSeparator />
+                  {leaderboard.map((entry) => (
+                    <SelectItem key={entry.user_id} value={entry.user_id}>
+                      {entry.username}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="default" className="w-full">
-                        <Code className="w-4 h-4 mr-2" />
-                        Kód beágyazása
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Ranglista beágyazása</DialogTitle>
-                        <DialogDescription>
-                          Másold ki ezt a kódot a ranglista weboldaladba történő beágyazásához
-                        </DialogDescription>
-                      </DialogHeader>
-                      <Textarea 
-                        value={embedCode} 
-                        readOnly 
-                        className="font-mono text-sm h-32"
-                        onClick={(e) => e.currentTarget.select()}
-                      />
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </DrawerContent>
-            </Drawer>
+              <Button
+                variant="default" 
+                size="sm" 
+                onClick={handleCourseSync}
+                disabled={refreshing || syncing}
+              >
+                <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </div>
         </div>
-      </header>
+      </div>
 
       <main className="container mx-auto px-4 py-8">
         {loading ? (
