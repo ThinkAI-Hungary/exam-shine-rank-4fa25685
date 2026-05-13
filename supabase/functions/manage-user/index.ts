@@ -29,7 +29,9 @@ async function lwRequest(
       Accept: "application/json",
     };
 
-    const opts: RequestInit = { method, headers, redirect: "manual" };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const opts: RequestInit = { method, headers, redirect: "manual", signal: controller.signal };
     if (body && (method === "POST" || method === "PUT")) {
       opts.body = JSON.stringify(body);
     }
@@ -38,9 +40,15 @@ async function lwRequest(
     try {
       resp = await fetch(url, opts);
     } catch (e) {
+      clearTimeout(timeoutId);
+      if (method !== "GET") {
+        throw new Error(`LearnWorlds API timeout or network error: ${e}`);
+      }
       if (attempt === maxRetries) throw new Error(`Network error: ${e}`);
       await new Promise((r) => setTimeout(r, baseDelay * Math.pow(2, attempt)));
       continue;
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     if (resp.status === 429 && attempt < maxRetries) {
