@@ -83,11 +83,19 @@ interface UserFormData {
 
 // ── Edge Function caller ──
 async function callManageUser(action: string, payload: Record<string, unknown>) {
+  console.log("[callManageUser]", action, payload);
   const { data, error } = await supabase.functions.invoke("manage-user", {
     body: { action, ...payload },
   });
-  if (error) throw new Error(error.message || "Edge function error");
-  if (data && !data.success) throw new Error(data.error || "Unknown error");
+  // When edge fn returns non-2xx, error is generic but data may have details
+  if (data && !data.success) {
+    throw new Error(data.error || "Ismeretlen hiba az Edge Function-ben");
+  }
+  if (error) {
+    // Try to parse error context from the response
+    const msg = data?.error || error.message || "Edge function hiba";
+    throw new Error(msg);
+  }
   return data;
 }
 
@@ -140,13 +148,16 @@ const UserManagement = () => {
     return Array.from(tags).sort();
   }, [users]);
 
-  // ── All available tags from existing users (for tag picker) ──
-  const allAvailableTags = useMemo(() => {
+  // ── Grouped tags from existing users (for tag picker) ──
+  const aruhazTags = useMemo(() => {
     const tags = new Set<string>();
-    users.forEach((u) => {
-      (u.aruhaz || []).forEach((t) => tags.add(t));
-      (u.beosztas || []).forEach((t) => tags.add(t));
-    });
+    users.forEach((u) => (u.aruhaz || []).forEach((t) => tags.add(t)));
+    return Array.from(tags).sort();
+  }, [users]);
+
+  const beosztasTags = useMemo(() => {
+    const tags = new Set<string>();
+    users.forEach((u) => (u.beosztas || []).forEach((t) => tags.add(t)));
     return Array.from(tags).sort();
   }, [users]);
 
@@ -552,11 +563,21 @@ const UserManagement = () => {
                   <SelectValue placeholder="Válassz címkét..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {allAvailableTags
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Áruház</div>
+                  {aruhazTags
                     .filter((t) => !form.tags.includes(t))
                     .map((tag) => (
                       <SelectItem key={tag} value={tag}>
-                        {tag.replace(/^cf_aruhaz_/, "").replace(/^cf_munkakorod_?/, "")}
+                        {tag.replace(/^cf_aruhaz_/, "")}
+                      </SelectItem>
+                    ))}
+                  <div className="my-1 h-px bg-border" />
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Beosztás</div>
+                  {beosztasTags
+                    .filter((t) => !form.tags.includes(t))
+                    .map((tag) => (
+                      <SelectItem key={tag} value={tag}>
+                        {tag.replace(/^cf_munkakorod_?/, "")}
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -644,11 +665,21 @@ const UserManagement = () => {
                     <SelectValue placeholder="Válassz címkét..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {allAvailableTags
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Áruház</div>
+                    {aruhazTags
                       .filter((t) => !editTags.includes(t))
                       .map((tag) => (
                         <SelectItem key={tag} value={tag}>
-                          {tag.replace(/^cf_aruhaz_/, "").replace(/^cf_munkakorod_?/, "")}
+                          {tag.replace(/^cf_aruhaz_/, "")}
+                        </SelectItem>
+                      ))}
+                    <div className="my-1 h-px bg-border" />
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Beosztás</div>
+                    {beosztasTags
+                      .filter((t) => !editTags.includes(t))
+                      .map((tag) => (
+                        <SelectItem key={tag} value={tag}>
+                          {tag.replace(/^cf_munkakorod_?/, "")}
                         </SelectItem>
                       ))}
                   </SelectContent>
