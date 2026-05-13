@@ -992,105 +992,105 @@ serve(async (req) => {
         console.warn(`Reconcile skipped: only ${allLearnWorldsUsers.length} LW users fetched (< 50 safety threshold)`);
       }
       (globalThis as any).__usersDeleted = usersDeleted;
-
-      // ── Step 6: Sync course catalog into lw_courses (0 extra API calls) ──
-      console.log('\n--- Step 6: Syncing Course Catalog ---');
-      try {
-        const courseRows = allCourses.map(c => ({
-          lw_course_id: c.id,
-          title: c.title || null,
-          synced_at: new Date().toISOString(),
-        }));
-
-        if (courseRows.length > 0) {
-          const { error: courseUpsertErr } = await supabase
-            .from('lw_courses')
-            .upsert(courseRows, { onConflict: 'lw_course_id' });
-
-          if (courseUpsertErr) {
-            console.error('Error upserting courses:', courseUpsertErr);
-          } else {
-            coursesSynced = courseRows.length;
-            console.log(`Synced ${coursesSynced} courses to lw_courses`);
-          }
-        }
-      } catch (err) {
-        console.error('Course catalog sync failed:', err instanceof Error ? err.message : err);
-      }
-
-      // ── Step 7: Sync enrollments per bundle course (throttled) ──
-      console.log('\n--- Step 7: Syncing Enrollments (throttled) ---');
-      try {
-        for (const course of coursesToProcess) {
-          // Throttle: 350ms between calls → max ~2.8 req/s (well under 30/10s limit)
-          await throttle(350);
-
-          try {
-            const allEnrollments: any[] = [];
-            let ePage = 1;
-            let eHasMore = true;
-
-            while (eHasMore) {
-              const url = `${API_BASE}/courses/${course.id}/users?page=${ePage}&per_page=100`;
-              const eData = await makeLearnWorldsRequest(url, accessToken, clientId);
-              apiCallCount++;
-
-              const enrollments = eData.data || eData || [];
-              if (!Array.isArray(enrollments) || enrollments.length === 0) {
-                eHasMore = false;
-              } else {
-                allEnrollments.push(...enrollments);
-                if (enrollments.length < 100) {
-                  eHasMore = false;
-                } else {
-                  ePage++;
-                  await throttle(350);
-                }
-              }
-              if (ePage > 50) eHasMore = false; // safety
-            }
-
-            if (allEnrollments.length > 0) {
-              const enrollmentRows = allEnrollments.map((e: any) => {
-                const userId = String(e.user_id || e.id || '');
-                const enrolledAt = e.enrolled_at || e.created || null;
-                const completedAt = e.completed_at || null;
-                const pct = e.completion_percentage ?? e.progress ?? 0;
-
-                return {
-                  user_id: userId,
-                  lw_course_id: course.id,
-                  enrolled_at: enrolledAt ? normalizeTimestamp(enrolledAt) : null,
-                  completed_at: completedAt ? normalizeTimestamp(completedAt) : null,
-                  completion_percentage: typeof pct === 'number' ? pct : 0,
-                  synced_at: new Date().toISOString(),
-                };
-              }).filter(r => r.user_id);
-
-              // Batch upsert
-              for (let i = 0; i < enrollmentRows.length; i += 100) {
-                const batch = enrollmentRows.slice(i, i + 100);
-                const { error: enrErr } = await supabase
-                  .from('lw_enrollments')
-                  .upsert(batch, { onConflict: 'user_id,lw_course_id' });
-                if (enrErr) {
-                  console.error(`Error upserting enrollments batch for course ${course.id}:`, enrErr.message);
-                }
-              }
-
-              enrollmentsSynced += enrollmentRows.length;
-              console.log(`[Course ${course.id}] ${enrollmentRows.length} enrollments synced`);
-            }
-          } catch (err) {
-            console.warn(`[Course ${course.id}] Enrollment sync failed:`, err instanceof Error ? err.message : err);
-          }
-        }
-        console.log(`Total enrollments synced: ${enrollmentsSynced}`);
-      } catch (err) {
-        console.error('Enrollment sync failed:', err instanceof Error ? err.message : err);
-      }
     } catch (error) {
       console.error('User tag sync failed:', error instanceof Error ? error.message : error);
+    }
+
+    // ── Step 6: Sync course catalog into lw_courses (0 extra API calls) ──
+    console.log('\n--- Step 6: Syncing Course Catalog ---');
+    try {
+      const courseRows = allCourses.map(c => ({
+        lw_course_id: c.id,
+        title: c.title || null,
+        synced_at: new Date().toISOString(),
+      }));
+
+      if (courseRows.length > 0) {
+        const { error: courseUpsertErr } = await supabase
+          .from('lw_courses')
+          .upsert(courseRows, { onConflict: 'lw_course_id' });
+
+        if (courseUpsertErr) {
+          console.error('Error upserting courses:', courseUpsertErr);
+        } else {
+          coursesSynced = courseRows.length;
+          console.log(`Synced ${coursesSynced} courses to lw_courses`);
+        }
+      }
+    } catch (err) {
+      console.error('Course catalog sync failed:', err instanceof Error ? err.message : err);
+    }
+
+    // ── Step 7: Sync enrollments per bundle course (throttled) ──
+    console.log('\n--- Step 7: Syncing Enrollments (throttled) ---');
+    try {
+      for (const course of coursesToProcess) {
+        // Throttle: 350ms between calls → max ~2.8 req/s (well under 30/10s limit)
+        await throttle(350);
+
+        try {
+          const allEnrollments: any[] = [];
+          let ePage = 1;
+          let eHasMore = true;
+
+          while (eHasMore) {
+            const url = `${API_BASE}/courses/${course.id}/users?page=${ePage}&per_page=100`;
+            const eData = await makeLearnWorldsRequest(url, accessToken, clientId);
+            apiCallCount++;
+
+            const enrollments = eData.data || eData || [];
+            if (!Array.isArray(enrollments) || enrollments.length === 0) {
+              eHasMore = false;
+            } else {
+              allEnrollments.push(...enrollments);
+              if (enrollments.length < 100) {
+                eHasMore = false;
+              } else {
+                ePage++;
+                await throttle(350);
+              }
+            }
+            if (ePage > 50) eHasMore = false; // safety
+          }
+
+          if (allEnrollments.length > 0) {
+            const enrollmentRows = allEnrollments.map((e: any) => {
+              const userId = String(e.user_id || e.id || '');
+              const enrolledAt = e.enrolled_at || e.created || null;
+              const completedAt = e.completed_at || null;
+              const pct = e.completion_percentage ?? e.progress ?? 0;
+
+              return {
+                user_id: userId,
+                lw_course_id: course.id,
+                enrolled_at: enrolledAt ? normalizeTimestamp(enrolledAt) : null,
+                completed_at: completedAt ? normalizeTimestamp(completedAt) : null,
+                completion_percentage: typeof pct === 'number' ? pct : 0,
+                synced_at: new Date().toISOString(),
+              };
+            }).filter(r => r.user_id);
+
+            // Batch upsert
+            for (let i = 0; i < enrollmentRows.length; i += 100) {
+              const batch = enrollmentRows.slice(i, i + 100);
+              const { error: enrErr } = await supabase
+                .from('lw_enrollments')
+                .upsert(batch, { onConflict: 'user_id,lw_course_id' });
+              if (enrErr) {
+                console.error(`Error upserting enrollments batch for course ${course.id}:`, enrErr.message);
+              }
+            }
+
+            enrollmentsSynced += enrollmentRows.length;
+            console.log(`[Course ${course.id}] ${enrollmentRows.length} enrollments synced`);
+          }
+        } catch (err) {
+          console.warn(`[Course ${course.id}] Enrollment sync failed:`, err instanceof Error ? err.message : err);
+        }
+      }
+      console.log(`Total enrollments synced: ${enrollmentsSynced}`);
+    } catch (err) {
+      console.error('Enrollment sync failed:', err instanceof Error ? err.message : err);
     }
 
     const duration = Date.now() - startTime;
