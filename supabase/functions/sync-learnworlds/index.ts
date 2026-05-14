@@ -969,44 +969,9 @@ serve(async (req) => {
         console.log(`Users with aruhaz tags: ${withAruhaz.length}, with beosztas tags: ${withBeosztas.length}`);
       }
 
-      // ── Reconcile: delete local users no longer present in LearnWorlds ──
-      // Safety guard: only run if we fetched a sensible number of users (avoids wiping DB on partial fetches)
-      let usersDeleted = 0;
-      if (allLearnWorldsUsers.length >= 50) {
-        const lwIds = new Set(allLearnWorldsUsers.map((u: any) => u.id).filter(Boolean));
-        const { data: localUsers, error: localErr } = await supabase
-          .from('users')
-          .select('user_id');
-
-        if (localErr) {
-          console.error('Reconcile: failed to fetch local users:', localErr);
-        } else {
-          const toDelete = (localUsers || [])
-            .map((u: any) => u.user_id)
-            .filter((id: string) => id && !lwIds.has(id));
-
-          console.log(`Reconcile: ${toDelete.length} local users no longer in LearnWorlds`);
-
-          if (toDelete.length > 0) {
-            // Delete dependent rows first, then user
-            const tables = ['exam_results', 'course_time_tracking', 'leaderboard_cache', 'user_badges'];
-            for (const t of tables) {
-              const { error } = await supabase.from(t).delete().in('user_id', toDelete);
-              if (error) console.error(`Reconcile: failed to delete from ${t}:`, error.message);
-            }
-            const { error: delErr } = await supabase.from('users').delete().in('user_id', toDelete);
-            if (delErr) {
-              console.error('Reconcile: failed to delete users:', delErr.message);
-            } else {
-              usersDeleted = toDelete.length;
-              console.log(`Reconcile: deleted ${usersDeleted} stale users`);
-            }
-          }
-        }
-      } else {
-        console.warn(`Reconcile skipped: only ${allLearnWorldsUsers.length} LW users fetched (< 50 safety threshold)`);
-      }
-      (globalThis as any).__usersDeleted = usersDeleted;
+      // Reconcile moved to Step 7.5 (after enrollments are synced) so we can use
+      // the enrollment set as a "known alive" signal and only verify the rest via per-user GET.
+      (globalThis as any).__lwUserIds = new Set(allLearnWorldsUsers.map((u: any) => u.id).filter(Boolean));
     } catch (error) {
       console.error('User tag sync failed:', error instanceof Error ? error.message : error);
     }
