@@ -1054,6 +1054,8 @@ serve(async (req) => {
               };
             }).filter(r => r.user_id);
 
+            for (const r of enrollmentRows) enrolledUserIds.add(r.user_id);
+
             // Batch upsert
             for (let i = 0; i < enrollmentRows.length; i += 100) {
               const batch = enrollmentRows.slice(i, i + 100);
