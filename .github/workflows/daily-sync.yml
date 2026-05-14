@@ -1,0 +1,33 @@
+name: Daily LearnWorlds Sync
+
+on:
+  schedule:
+    # Minden nap hajnali 5:00 UTC (7:00 Budapest)
+    - cron: '0 5 * * *'
+  workflow_dispatch: # Kézi indítás is lehetséges a GitHub Actions UI-ból
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call sync-learnworlds Edge Function
+        run: |
+          response=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/sync-learnworlds")
+
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -n -1)
+
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+
+          if [ "$http_code" -ge 400 ]; then
+            echo "::error::Sync failed with HTTP $http_code"
+            exit 1
+          fi
+
+          echo "✅ Sync completed successfully"
