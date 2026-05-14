@@ -148,20 +148,46 @@ serve(async (req) => {
       if (tags && tags.length > 0) lwBody.tags = tags;
       // NOTE: LW v2 POST /users does NOT accept custom `fields` — they must be set via PUT after creation.
 
-      let lwUser = await lwRequest(`${API_BASE}/users`, accessToken, clientId, "POST", lwBody);
-      console.log(`[create] LW user created: ${lwUser.id}`);
+      let lwUser: any;
+      try {
+        lwUser = await lwRequest(`${API_BASE}/users`, accessToken, clientId, "POST", lwBody);
+        console.log(`[create] LW user created: ${lwUser.id}`);
+      } catch (postErr) {
+        // POST may have actually succeeded on LW side but timed out before responding.
+        // Try to find the user by email and continue with PUT to set fields/tags.
+        console.warn(`[create] POST failed (${postErr}); attempting lookup by email`);
+        const lookup = await lwRequest(
+          `${API_BASE}/users?email=${encodeURIComponent(email)}`,
+          accessToken,
+          clientId,
+          "GET"
+        );
+        const found = Array.isArray(lookup?.data) ? lookup.data[0] : (Array.isArray(lookup) ? lookup[0] : lookup?.users?.[0]);
+        if (!found?.id) {
+          throw postErr;
+        }
+        lwUser = found;
+        console.log(`[create] Recovered LW user via lookup: ${lwUser.id}`);
+      }
 
-      // Set custom fields via PUT if provided
+      // Set custom fields and ensure tags via PUT (PUT is idempotent and retries on timeout)
+      const putBody: Record<string, unknown> = {};
       if (normalizedFields && Object.keys(normalizedFields).length > 0) {
+        putBody.fields = normalizedFields;
+      }
+      if (tags && tags.length > 0) {
+        putBody.tags = tags;
+      }
+      if (Object.keys(putBody).length > 0) {
         try {
           lwUser = await lwRequest(
             `${API_BASE}/users/${lwUser.id}`,
             accessToken,
             clientId,
             "PUT",
-            { fields: normalizedFields }
+            putBody
           );
-          console.log(`[create] Custom fields set for user: ${lwUser.id}`);
+          console.log(`[create] Custom fields/tags set for user: ${lwUser.id}`);
         } catch (e) {
           console.error(`[create] Failed to set custom fields:`, e);
         }
