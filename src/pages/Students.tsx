@@ -68,7 +68,7 @@ const Students = () => {
       className={`sortable-header ${className}`}
       onClick={() => toggleSort(field)}
     >
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
         {children}
         <ArrowUp className={`w-3.5 h-3.5 sort-icon ${sortField === field ? 'active' : ''} ${sortField === field && sortDir === 'desc' ? 'desc' : ''}`} />
       </span>
@@ -270,7 +270,7 @@ const Students = () => {
                       <SortHeader field="beosztas" className="hidden lg:table-cell">Beosztás</SortHeader>
                       <SortHeader field="category" className="hidden lg:table-cell">Kategória</SortHeader>
                       <SortHeader field="enrollments" className="hidden md:table-cell">Kurzusok</SortHeader>
-                      <SortHeader field="start_of_empl" className="hidden xl:table-cell">Munkaviszony kezdete</SortHeader>
+                      <SortHeader field="start_of_empl" className="hidden xl:table-cell">Kezdés</SortHeader>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
