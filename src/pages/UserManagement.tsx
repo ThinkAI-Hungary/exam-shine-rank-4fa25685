@@ -133,6 +133,7 @@ const UserManagement = () => {
   const [courses, setCourses] = useState<{ lw_course_id: string; title: string }[]>([]);
   const [userEnrollments, setUserEnrollments] = useState<{ lw_course_id: string }[]>([]);
   const [enrollLoading, setEnrollLoading] = useState(false);
+  const [enrollSearchQuery, setEnrollSearchQuery] = useState("");
 
   // Form state
   const [form, setForm] = useState<UserFormData>({ email: "", username: "", password: "", tags: [], uj_kollega: "", munkaviszony_kezdete: "" });
@@ -860,8 +861,8 @@ const UserManagement = () => {
       </AlertDialog>
 
       {/* ── Enrollment Management Dialog ── */}
-      <Dialog open={enrollDialogOpen} onOpenChange={setEnrollDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+      <Dialog open={enrollDialogOpen} onOpenChange={(open) => { setEnrollDialogOpen(open); if (!open) setEnrollSearchQuery(""); }}>
+        <DialogContent className="sm:max-w-[420px] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <GraduationCap className="w-5 h-5 text-primary" />
@@ -871,74 +872,89 @@ const UserManagement = () => {
               {selectedUser?.username} – Kurzusok kezelése
             </DialogDescription>
           </DialogHeader>
-          <div className="py-2">
-            {enrollLoading && courses.length === 0 ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="space-y-1 max-h-[50vh] overflow-y-auto custom-scroll pr-1">
-                {courses.map((course) => {
-                  const isEnrolled = userEnrollments.some(
-                    (e) => e.lw_course_id === course.lw_course_id
-                  );
-                  return (
-                    <div
-                      key={course.lw_course_id}
-                      className={`flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors ${
-                        isEnrolled
-                          ? "bg-primary/5 border border-primary/20"
-                          : "hover:bg-muted/50 border border-transparent"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <BookOpen className={`w-4 h-4 flex-shrink-0 ${
-                          isEnrolled ? "text-primary" : "text-muted-foreground"
-                        }`} />
-                        <span className="text-sm truncate">
-                          {course.title || course.lw_course_id}
-                        </span>
-                        {isEnrolled && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary/30 text-primary flex-shrink-0">
-                            Beiratva
-                          </Badge>
-                        )}
-                      </div>
-                      <Button
-                        variant={isEnrolled ? "ghost" : "outline"}
-                        size="sm"
-                        className={`h-7 text-xs flex-shrink-0 ml-2 ${
-                          isEnrolled
-                            ? "text-destructive hover:text-destructive hover:bg-destructive/10"
-                            : "text-primary hover:text-primary hover:bg-primary/10"
-                        }`}
-                        disabled={enrollLoading}
-                        onClick={() =>
-                          isEnrolled
-                            ? handleUnenroll(course.lw_course_id)
-                            : handleEnroll(course.lw_course_id)
-                        }
-                      >
-                        {enrollLoading ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : isEnrolled ? (
-                          <><UserMinus className="w-3 h-3 mr-1" />Kiírás</>
-                        ) : (
-                          <><Plus className="w-3 h-3 mr-1" />Beiratás</>
-                        )}
-                      </Button>
-                    </div>
-                  );
-                })}
-                {courses.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    Nincs elérhető kurzus. Futtasd a szinkronizálást.
-                  </div>
-                )}
-              </div>
-            )}
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Kurzus keresése..."
+              value={enrollSearchQuery}
+              onChange={(e) => setEnrollSearchQuery(e.target.value)}
+              className="pl-8 h-8 text-sm w-full"
+            />
           </div>
-          <DialogFooter>
+          {/* Course list */}
+          {enrollLoading && courses.length === 0 ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-0.5 max-h-[45vh] overflow-y-auto custom-scroll">
+              {courses
+                .filter((c) => {
+                  if (!enrollSearchQuery) return true;
+                  const q = enrollSearchQuery.toLowerCase();
+                  return (c.title || c.lw_course_id).toLowerCase().includes(q);
+                })
+                .map((course) => {
+                const isEnrolled = userEnrollments.some(
+                  (e) => e.lw_course_id === course.lw_course_id
+                );
+                return (
+                  <div
+                    key={course.lw_course_id}
+                    className={`flex items-center justify-between rounded-md px-2.5 py-1.5 transition-colors ${
+                      isEnrolled
+                        ? "bg-primary/5 border border-primary/20"
+                        : "hover:bg-muted/50 border border-transparent"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                      <BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${
+                        isEnrolled ? "text-primary" : "text-muted-foreground"
+                      }`} />
+                      <span className="text-xs truncate">
+                        {course.title || course.lw_course_id}
+                      </span>
+                      {isEnrolled && (
+                        <Badge variant="outline" className="text-[10px] leading-none px-1.5 py-0 border-primary/30 text-primary flex-shrink-0">
+                          Beiratva
+                        </Badge>
+                      )}
+                    </div>
+                    <Button
+                      variant={isEnrolled ? "ghost" : "outline"}
+                      size="sm"
+                      className={`h-6 text-[11px] px-2 flex-shrink-0 ml-2 ${
+                        isEnrolled
+                          ? "text-destructive hover:text-destructive hover:bg-destructive/10"
+                          : "text-primary hover:text-primary hover:bg-primary/10"
+                      }`}
+                      disabled={enrollLoading}
+                      onClick={() =>
+                        isEnrolled
+                          ? handleUnenroll(course.lw_course_id)
+                          : handleEnroll(course.lw_course_id)
+                      }
+                    >
+                      {enrollLoading ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : isEnrolled ? (
+                        <><UserMinus className="w-3 h-3 mr-1" />Kiírás</>
+                      ) : (
+                        <><Plus className="w-3 h-3 mr-1" />Beiratás</>
+                      )}
+                    </Button>
+                  </div>
+                );
+              })}
+              {courses.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  Nincs elérhető kurzus. Futtasd a szinkronizálást.
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter className="sm:justify-end">
             <Button variant="outline" onClick={() => setEnrollDialogOpen(false)}>
               Bezárás
             </Button>
