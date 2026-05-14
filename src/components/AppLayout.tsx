@@ -170,7 +170,7 @@ const AppLayout = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
+    <div className="h-screen flex flex-col bg-gradient-to-br from-background via-background to-muted overflow-hidden">
       {/* Global Header */}
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50 glass-header">
         <div className="max-w-full px-4 sm:px-6">
@@ -337,7 +337,9 @@ const AppLayout = () => {
       </header>
 
       {/* Page Content */}
-      <Outlet context={{ user, isAdmin }} />
+      <main className="flex-1 overflow-y-auto custom-scroll">
+        <Outlet context={{ user, isAdmin }} />
+      </main>
     </div>
   );
 };

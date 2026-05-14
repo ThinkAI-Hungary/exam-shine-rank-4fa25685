@@ -1111,6 +1111,70 @@ serve(async (req) => {
       console.error('Enrollment sync failed:', err instanceof Error ? err.message : err);
     }
 
+    // ── Step 8: Sync certificates for enrolled users ──
+    console.log('\n--- Step 8: Syncing Certificates ---');
+    let certificatesSynced = 0;
+    try {
+      // Collect unique user IDs from enrollment data
+      const { data: enrolledUsers, error: euErr } = await supabase
+        .from('lw_enrollments')
+        .select('user_id');
+
+      if (euErr) {
+        console.error('Failed to fetch enrolled users for cert sync:', euErr.message);
+      } else {
+        const uniqueUserIds = [...new Set((enrolledUsers || []).map((e: any) => e.user_id))];
+        console.log(`Found ${uniqueUserIds.length} unique users for certificate check`);
+
+        for (const userId of uniqueUserIds) {
+          await throttle(350);
+
+          try {
+            const url = `${API_BASE}/users/${userId}/certificates`;
+            const certData = await makeLearnWorldsRequest(url, accessToken, clientId, { maxRetries: 1 });
+            apiCallCount++;
+
+            const certificates = certData.data || certData || [];
+            if (!Array.isArray(certificates) || certificates.length === 0) {
+              continue;
+            }
+
+            const certRows = certificates.map((cert: any) => ({
+              user_id: userId,
+              lw_course_id: cert.course_id || cert.courseId || null,
+              certificate_id: cert.id || cert.certificate_id || null,
+              issued_at: cert.issued_at || cert.created
+                ? normalizeTimestamp(cert.issued_at || cert.created)
+                : null,
+              certificate_url: cert.certificate_url || cert.url || null,
+              synced_at: new Date().toISOString(),
+            })).filter((r: any) => r.certificate_id);
+
+            if (certRows.length > 0) {
+              const { error: certErr } = await supabase
+                .from('lw_certificates')
+                .upsert(certRows, { onConflict: 'user_id,certificate_id' });
+
+              if (certErr) {
+                console.error(`Error upserting certificates for user ${userId}:`, certErr.message);
+              } else {
+                certificatesSynced += certRows.length;
+              }
+            }
+          } catch (err) {
+            // 404 = user has no certificates, that's fine
+            const msg = err instanceof Error ? err.message : String(err);
+            if (!msg.includes('404')) {
+              console.warn(`[User ${userId}] Certificate sync failed:`, msg);
+            }
+          }
+        }
+        console.log(`Total certificates synced: ${certificatesSynced}`);
+      }
+    } catch (err) {
+      console.error('Certificate sync failed:', err instanceof Error ? err.message : err);
+    }
+
     const duration = Date.now() - startTime;
     console.log(`\n=== Sync Complete ===`);
     console.log(`Duration: ${duration}ms`);
@@ -1118,6 +1182,7 @@ serve(async (req) => {
     console.log(`Courses processed: ${coursesProcessed}`);
     console.log(`Exam results saved: ${totalExamResults}`);
     console.log(`Users updated: ${usersUpdated}`);
+    console.log(`Certificates synced: ${certificatesSynced}`);
 
     return new Response(
       JSON.stringify({
@@ -1128,6 +1193,7 @@ serve(async (req) => {
         usersUpdated,
         coursesSynced,
         enrollmentsSynced,
+        certificatesSynced,
         durationMs: duration,
         debug: debugInfo,
       }),
