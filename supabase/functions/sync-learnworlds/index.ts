@@ -108,7 +108,14 @@ async function getAccessToken(clientId: string): Promise<string> {
   if (!resp.ok) {
     const errorText = await resp.text();
     console.error(`OAuth2 token request failed (${resp.status}):`, errorText.substring(0, 500));
-    throw new Error(`OAuth2 token request failed: ${resp.status}`);
+    const staticToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN')?.trim() || '';
+    if (staticToken) {
+      console.warn('OAuth2 failed, falling back to static LEARNWORLDS_ACCESS_TOKEN');
+      cachedAccessToken = staticToken;
+      tokenExpiresAt = Date.now() + 3600_000;
+      return staticToken;
+    }
+    throw new Error(`OAuth2 token request failed: ${resp.status} - ${errorText.substring(0, 200)}`);
   }
 
   const data = await resp.json();
