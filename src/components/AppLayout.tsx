@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation, Outlet } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +26,7 @@ import {
   Moon,
   Sun,
   BookOpen,
+  RefreshCw,
 } from "lucide-react";
 
 interface NavTab {
@@ -79,6 +81,8 @@ const AppLayout = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const { toast } = useToast();
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('theme') === 'dark';
@@ -136,6 +140,30 @@ const AppLayout = () => {
     } catch (error) {
       console.error("Error checking admin role:", error);
       setIsAdmin(false);
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    toast({ title: "Szinkronizálás indítása...", description: "A LearnWorlds adatok frissítése folyamatban." });
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-learnworlds', {
+        body: {},
+      });
+      if (error) throw error;
+      toast({
+        title: "✅ Szinkronizálás kész",
+        description: `${data?.coursesProcessed || 0} kurzus, ${data?.examResultsSaved || 0} vizsga, ${data?.enrollmentsSynced || 0} beiratkozás, ${data?.certificatesSynced || 0} tanúsítvány (${((data?.durationMs || 0) / 1000).toFixed(1)}s)`,
+      });
+    } catch (err) {
+      console.error('Sync error:', err);
+      toast({
+        title: "❌ Szinkronizálás sikertelen",
+        description: err instanceof Error ? err.message : "Ismeretlen hiba",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -267,6 +295,11 @@ const AppLayout = () => {
                             <Users className="w-4 h-4 mr-2" />
                             Felhasználó Összekapcsolás
                           </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={handleSync} disabled={syncing} className="cursor-pointer">
+                          <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                          {syncing ? 'Szinkronizálás...' : 'LearnWorlds Szinkronizálás'}
                         </DropdownMenuItem>
                       </>
                     )}

@@ -301,7 +301,8 @@ const Courses = () => {
             {filteredCourses.map((course, idx) => (
               <Card
                 key={course.lw_course_id}
-                className={`group hover:shadow-md transition-all duration-300 animate-fade-up cursor-pointer ${idx < 9 ? `stagger-${idx + 1}` : ""}`}
+                className="group hover:shadow-md transition-all duration-300 animate-fade-up cursor-pointer"
+                style={{ animationDelay: `${idx * 0.03}s` }}
                 onClick={() => handleCourseClick(course)}
               >
                 <CardHeader className="pb-3">

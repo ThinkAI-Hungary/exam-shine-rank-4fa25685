@@ -372,19 +372,47 @@ Deno.serve(async (req) => {
     const payload: LearnWorldsWebhookPayload = await req.json();
     console.log('Payload:', JSON.stringify(payload, null, 2));
 
-    // Check if this is a course completion event
-    if (payload.trigger !== 'course_completed') {
-      console.log('Ignoring non-course-completion event:', payload.trigger);
-      return new Response(
-        JSON.stringify({ message: 'Event ignored - not a course completion' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // ── Handle enrollment events ──
+    if (payload.trigger === 'enrollmentCreated' || payload.trigger === 'enrollment_created') {
+      const userId = payload.data?.user?.id;
+      const courseId = payload.data?.course?.id;
+      if (!userId || !courseId) {
+        return new Response(
+          JSON.stringify({ error: 'Missing user_id or course_id for enrollment' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      console.log(`Enrollment event: user ${userId} enrolled in course ${courseId}`);
+      const { error } = await supabase
+        .from('lw_enrollments')
+        .upsert({
+          user_id: userId,
+          lw_course_id: courseId,
+          enrolled_at: new Date().toISOString(),
+          completion_percentage: 0,
+          synced_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,lw_course_id' });
+      if (error) console.error('Error upserting enrollment:', error);
+      else console.log('Enrollment upserted successfully');
+      return new Response(
+        JSON.stringify({ success: true, message: 'Enrollment recorded', user_id: userId, course_id: courseId }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ── Ignore events that are not course completion ──
+    if (payload.trigger !== 'course_completed' && payload.trigger !== 'courseCompleted') {
+      console.log('Ignoring event:', payload.trigger);
+      return new Response(
+        JSON.stringify({ message: `Event ignored: ${payload.trigger}` }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Extract user and course data from LearnWorlds webhook
     const userId = payload.data?.user?.id;
@@ -523,6 +551,22 @@ Deno.serve(async (req) => {
     }
 
     console.log('Leaderboard_cache updated successfully');
+
+    // Also update lw_enrollments with completion
+    const { error: enrollErr } = await supabase
+      .from('lw_enrollments')
+      .upsert({
+        user_id: userId,
+        lw_course_id: courseId,
+        completed_at: new Date().toISOString(),
+        completion_percentage: 100,
+        synced_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,lw_course_id' });
+    if (enrollErr) {
+      console.warn('Error updating enrollment completion:', enrollErr.message);
+    } else {
+      console.log('Enrollment marked as completed');
+    }
 
     // Recalculate ranks for all users
     const { data: allUsers, error: rankError } = await supabase

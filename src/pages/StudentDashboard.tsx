@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   XCircle,
   Calendar,
+  GraduationCap,
 } from "lucide-react";
 import {
   BarChart,
@@ -65,6 +66,14 @@ interface BadgeData {
   awarded_at: string;
 }
 
+interface EnrollmentProgress {
+  lw_course_id: string;
+  courseTitle: string;
+  completion_percentage: number;
+  enrolled_at: string | null;
+  completed_at: string | null;
+}
+
 const CHART_COLORS = [
   "hsl(356, 93%, 45%)",
   "hsl(200, 98%, 48%)",
@@ -90,6 +99,7 @@ const StudentDashboard = () => {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [badges, setBadges] = useState<BadgeData[]>([]);
+  const [enrollments, setEnrollments] = useState<EnrollmentProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -129,6 +139,34 @@ const StudentDashboard = () => {
         .is("revoked_at", null);
 
       setBadges(badgeData || []);
+
+      // Fetch course enrollment progress
+      const { data: enrollData } = await supabase
+        .from("lw_enrollments")
+        .select("lw_course_id, completion_percentage, enrolled_at, completed_at")
+        .eq("user_id", uid);
+
+      if (enrollData && enrollData.length > 0) {
+        const courseIds = enrollData.map((e: any) => e.lw_course_id);
+        const { data: courses } = await supabase
+          .from("lw_courses")
+          .select("lw_course_id, title")
+          .in("lw_course_id", courseIds);
+        const titleMap = new Map<string, string>();
+        (courses || []).forEach((c: any) => titleMap.set(c.lw_course_id, c.title));
+
+        setEnrollments(
+          enrollData
+            .map((e: any) => ({
+              lw_course_id: e.lw_course_id,
+              courseTitle: titleMap.get(e.lw_course_id) || e.lw_course_id,
+              completion_percentage: e.completion_percentage || 0,
+              enrolled_at: e.enrolled_at,
+              completed_at: e.completed_at,
+            }))
+            .sort((a: EnrollmentProgress, b: EnrollmentProgress) => b.completion_percentage - a.completion_percentage)
+        );
+      }
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
@@ -320,6 +358,48 @@ const StudentDashboard = () => {
             <Progress value={passRate} className="h-2" />
           </CardContent>
         </Card>
+
+        {/* Course Progress */}
+        {enrollments.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <GraduationCap className="w-4 h-4 text-primary" />
+                Kurzus haladás
+              </CardTitle>
+              <CardDescription>{enrollments.length} kurzusba iratkozott be</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {enrollments.map((e) => (
+                <div key={e.lw_course_id} className="p-3 rounded-lg border bg-muted/20">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium truncate max-w-[70%]">{e.courseTitle}</span>
+                    {e.completed_at ? (
+                      <Badge className="bg-green-500/10 text-green-600 border-green-500/20 text-xs">Teljesítve</Badge>
+                    ) : e.completion_percentage > 0 ? (
+                      <Badge variant="secondary" className="text-xs">Folyamatban</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs text-muted-foreground">Nem kezdte el</Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Progress value={e.completion_percentage} className="h-2 flex-1" />
+                    <span className={`text-xs font-mono w-10 text-right ${e.completion_percentage >= 100 ? 'text-green-600 font-semibold' : 'text-muted-foreground'}`}>
+                      {e.completion_percentage.toFixed(0)}%
+                    </span>
+                  </div>
+                  {e.enrolled_at && (
+                    <p className="text-[11px] text-muted-foreground mt-1.5 flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      Beiratkozás: {new Date(e.enrolled_at).toLocaleDateString("hu-HU")}
+                      {e.completed_at && (<> · Teljesítés: {new Date(e.completed_at).toLocaleDateString("hu-HU")}</>)}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Charts Row */}
         <div className="grid gap-6 lg:grid-cols-2">
