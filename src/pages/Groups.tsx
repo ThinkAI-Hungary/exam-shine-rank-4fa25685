@@ -99,7 +99,7 @@ const Groups = () => {
           <h1 className="text-3xl font-bold tracking-tight">Csoportok</h1>
           <p className="text-muted-foreground">LearnWorlds csoportok és tagjaik kezelése</p>
         </div>
-        <SkeletonTable rows={6} cols={4} />
+        <SkeletonTable rows={6} columns={4} />
       </div>
     );
   }
