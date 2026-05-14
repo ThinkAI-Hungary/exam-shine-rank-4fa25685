@@ -1004,8 +1004,9 @@ serve(async (req) => {
       console.error('Course catalog sync failed:', err instanceof Error ? err.message : err);
     }
 
-    // ── Step 7: Sync enrollments per bundle course (throttled) ──
+    // Step 7: Sync enrollments per bundle course (throttled)
     console.log('\n--- Step 7: Syncing Enrollments (throttled) ---');
+    const enrolledUserIds = new Set<string>();
     try {
       for (const course of coursesToProcess) {
         // Throttle: 350ms between calls → max ~2.8 req/s (well under 30/10s limit)
