@@ -1079,7 +1079,68 @@ serve(async (req) => {
       console.error('Enrollment sync failed:', err instanceof Error ? err.message : err);
     }
 
-    // ── Step 8: Sync certificates for enrolled users ──
+    // Step 7.5: Reconcile — verify only candidates not seen in enrollments or user list
+    console.log('\n--- Step 7.5: Reconciling stale local users ---');
+    let usersDeleted = 0;
+    try {
+      const lwUserIds: Set<string> = (globalThis as any).__lwUserIds || new Set<string>();
+      const knownAlive = new Set<string>([...enrolledUserIds, ...lwUserIds]);
+
+      const { data: localUsers, error: localErr } = await supabase
+        .from('users')
+        .select('user_id');
+
+      if (localErr) {
+        console.error('Reconcile: failed to fetch local users:', localErr.message);
+      } else {
+        const candidates = (localUsers || [])
+          .map((u: any) => u.user_id)
+          .filter((id: string) => id && !knownAlive.has(id));
+
+        console.log(`Reconcile: ${candidates.length} candidate users not in enrollments/list — verifying via GET /users/{id}`);
+
+        const toDelete: string[] = [];
+        for (const uid of candidates) {
+          await throttle(150);
+          try {
+            const url = `${API_BASE}/users/${uid}`;
+            await makeLearnWorldsRequest(url, accessToken, clientId);
+            apiCallCount++;
+            // exists → keep
+          } catch (err) {
+            apiCallCount++;
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes('404')) {
+              toDelete.push(uid);
+            } else {
+              console.warn(`Reconcile: skipping ${uid} due to non-404 error: ${msg}`);
+            }
+          }
+        }
+
+        if (toDelete.length > 0) {
+          console.log(`Reconcile: deleting ${toDelete.length} confirmed-missing users`);
+          const tables = ['exam_results', 'course_time_tracking', 'leaderboard_cache', 'user_badges', 'lw_enrollments', 'lw_certificates'];
+          for (const t of tables) {
+            const { error } = await supabase.from(t).delete().in('user_id', toDelete);
+            if (error) console.error(`Reconcile: failed to delete from ${t}:`, error.message);
+          }
+          const { error: delErr } = await supabase.from('users').delete().in('user_id', toDelete);
+          if (delErr) {
+            console.error('Reconcile: failed to delete users:', delErr.message);
+          } else {
+            usersDeleted = toDelete.length;
+            console.log(`Reconcile: deleted ${usersDeleted} stale users`);
+          }
+        } else {
+          console.log('Reconcile: no stale users to delete');
+        }
+      }
+    } catch (err) {
+      console.error('Reconcile failed:', err instanceof Error ? err.message : err);
+    }
+    (globalThis as any).__usersDeleted = usersDeleted;
+
     console.log('\n--- Step 8: Syncing Certificates ---');
     let certificatesSynced = 0;
     try {
