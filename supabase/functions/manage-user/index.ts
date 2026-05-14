@@ -251,7 +251,11 @@ serve(async (req) => {
         accessToken,
         clientId,
         "POST",
-        { courseId: course_id }
+        {
+          productId: course_id,
+          productType: "course",
+          price: 0,
+        }
       );
       console.log(`[enroll] User ${user_id} enrolled in course ${course_id}`);
 
