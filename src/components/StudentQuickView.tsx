@@ -20,6 +20,8 @@ import {
   Calendar,
   Mail,
   GraduationCap,
+  ShieldCheck,
+  ExternalLink,
 } from "lucide-react";
 
 interface StudentQuickViewProps {
@@ -48,6 +50,15 @@ interface QuickStats {
   startOfEmpl: string | null;
   category: string | null;
   enrollments: Enrollment[];
+  certificates: Certificate[];
+}
+
+interface Certificate {
+  certificate_id: string;
+  lw_course_id: string | null;
+  courseTitle: string;
+  issued_at: string | null;
+  certificate_url: string | null;
 }
 
 const StudentQuickView = ({ userId, username, open, onOpenChange }: StudentQuickViewProps) => {
@@ -64,11 +75,12 @@ const StudentQuickView = ({ userId, username, open, onOpenChange }: StudentQuick
   const fetchQuickStats = async (uid: string) => {
     setLoading(true);
     try {
-      const [userRes, examRes, badgeRes, enrollRes] = await Promise.all([
+      const [userRes, examRes, badgeRes, enrollRes, certRes] = await Promise.all([
         supabase.from("users").select("email, aruhaz, beosztas, start_of_empl, current_category").eq("user_id", uid).single(),
         supabase.from("exam_results").select("score").eq("user_id", uid),
         supabase.from("user_badges").select("id", { count: "exact", head: true }).eq("user_id", uid).is("revoked_at", null),
         supabase.from("lw_enrollments").select("lw_course_id, completion_percentage, enrolled_at").eq("user_id", uid),
+        supabase.from("lw_certificates").select("certificate_id, lw_course_id, issued_at, certificate_url").eq("user_id", uid),
       ]);
 
       // Map enrollment course IDs to titles
@@ -89,6 +101,30 @@ const StudentQuickView = ({ userId, username, open, onOpenChange }: StudentQuick
         enrollments.sort((a, b) => a.courseTitle.localeCompare(b.courseTitle));
       }
 
+      // Map certificates
+      const certificates: Certificate[] = [];
+      const rawCerts = certRes.data || [];
+      if (rawCerts.length > 0) {
+        // Reuse course map if available, or fetch course titles for cert course IDs
+        const certCourseIds = rawCerts.map((c: any) => c.lw_course_id).filter(Boolean);
+        const allCourseIds = [...new Set([...certCourseIds])];
+        let certCourseMap = new Map<string, string>();
+        if (allCourseIds.length > 0) {
+          const { data: certCourses } = await supabase.from("lw_courses").select("lw_course_id, title").in("lw_course_id", allCourseIds);
+          certCourseMap = new Map((certCourses || []).map((c: any) => [c.lw_course_id, c.title]));
+        }
+        for (const c of rawCerts) {
+          certificates.push({
+            certificate_id: c.certificate_id,
+            lw_course_id: c.lw_course_id,
+            courseTitle: c.lw_course_id ? (certCourseMap.get(c.lw_course_id) || c.lw_course_id) : "Tanúsítvány",
+            issued_at: c.issued_at,
+            certificate_url: c.certificate_url,
+          });
+        }
+        certificates.sort((a, b) => a.courseTitle.localeCompare(b.courseTitle));
+      }
+
       const exams = examRes.data || [];
       const totalExams = exams.length;
       const avgScore = totalExams > 0 ? exams.reduce((s, e) => s + e.score, 0) / totalExams : 0;
@@ -106,6 +142,7 @@ const StudentQuickView = ({ userId, username, open, onOpenChange }: StudentQuick
         startOfEmpl: userRes.data?.start_of_empl || null,
         category: userRes.data?.current_category || null,
         enrollments,
+        certificates,
       });
     } catch (e) {
       console.error("Error fetching quick stats:", e);
@@ -233,6 +270,38 @@ const StudentQuickView = ({ userId, username, open, onOpenChange }: StudentQuick
                     <div key={e.lw_course_id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/30 border text-xs">
                       <span className="truncate font-medium" title={e.courseTitle}>{e.courseTitle}</span>
                       <span className="flex-shrink-0 text-muted-foreground">{e.completion_percentage}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Certificates */}
+            {stats.certificates.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Tanúsítványok ({stats.certificates.length})
+                </div>
+                <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
+                  {stats.certificates.map((c) => (
+                    <div key={c.certificate_id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-green-500/5 border border-green-500/20 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <ShieldCheck className="w-3 h-3 text-green-600 flex-shrink-0" />
+                        <span className="truncate font-medium" title={c.courseTitle}>{c.courseTitle}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {c.issued_at && (
+                          <span className="text-muted-foreground">
+                            {new Date(c.issued_at).toLocaleDateString("hu-HU")}
+                          </span>
+                        )}
+                        {c.certificate_url && (
+                          <a href={c.certificate_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

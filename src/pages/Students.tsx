@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, Search, Mail, Calendar, Tag, Loader2, ChevronRight } from "lucide-react";
+import { Users, Search, Mail, Calendar, Tag, Loader2, ChevronRight, BookOpen } from "lucide-react";
 import StudentQuickView from "@/components/StudentQuickView";
 
 
@@ -44,9 +44,11 @@ const Students = () => {
   const [selectedAruhaz, setSelectedAruhaz] = useState<string | null>(null);
   const [availableAruhaz, setAvailableAruhaz] = useState<string[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string } | null>(null);
+  const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     fetchStudents();
+    fetchEnrollmentCounts();
   }, []);
 
   useEffect(() => {
@@ -92,6 +94,22 @@ const Students = () => {
       console.error("Error fetching students:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchEnrollmentCounts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("lw_enrollments")
+        .select("user_id");
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      (data || []).forEach((row: any) => {
+        counts[row.user_id] = (counts[row.user_id] || 0) + 1;
+      });
+      setEnrollmentCounts(counts);
+    } catch (e) {
+      console.error("Error fetching enrollment counts:", e);
     }
   };
 
@@ -191,7 +209,7 @@ const Students = () => {
                 <p>Nem található hallgató a szűrési feltételekkel</p>
               </div>
             ) : (
-              <div className="overflow-x-auto max-h-[70vh] overflow-y-auto custom-scroll">
+              <div className="rounded-lg border overflow-hidden max-h-[70vh] overflow-y-auto custom-scroll">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -200,6 +218,7 @@ const Students = () => {
                       <TableHead className="hidden md:table-cell">Áruház</TableHead>
                       <TableHead className="hidden lg:table-cell">Beosztás</TableHead>
                       <TableHead className="hidden lg:table-cell">Kategória</TableHead>
+                      <TableHead className="hidden md:table-cell">Kurzusok</TableHead>
                       <TableHead className="hidden xl:table-cell">Munkaviszony kezdete</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
@@ -254,6 +273,14 @@ const Students = () => {
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <div className="flex items-center gap-1.5">
+                            <BookOpen className="w-3.5 h-3.5 text-muted-foreground" />
+                            <span className="text-sm font-medium">
+                              {enrollmentCounts[student.user_id] || 0}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell className="hidden xl:table-cell">
                           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">

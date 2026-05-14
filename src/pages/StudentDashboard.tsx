@@ -74,6 +74,16 @@ const CHART_COLORS = [
   "hsl(280, 70%, 60%)",
 ];
 
+const tooltipStyle = {
+  background: "hsl(var(--card))",
+  border: "1px solid hsl(var(--border))",
+  borderRadius: "8px",
+  fontSize: "12px",
+  color: "hsl(var(--card-foreground))",
+};
+const tooltipLabelStyle = { color: "hsl(var(--card-foreground))" };
+const tooltipItemStyle = { color: "hsl(var(--card-foreground))" };
+
 const StudentDashboard = () => {
   const { userId } = useParams<{ userId: string }>();
   const { isAdmin } = useOutletContext<{ user: any; isAdmin: boolean }>();
@@ -338,12 +348,9 @@ const StudentDashboard = () => {
                       stroke="hsl(var(--muted-foreground))"
                     />
                     <Tooltip
-                      contentStyle={{
-                        background: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                      }}
+                      contentStyle={tooltipStyle}
+                      labelStyle={tooltipLabelStyle}
+                      itemStyle={tooltipItemStyle}
                       formatter={(value: number, name: string, props: any) => [
                         `${value}%`,
                         props.payload.exam,
@@ -395,12 +402,9 @@ const StudentDashboard = () => {
                       stroke="hsl(var(--muted-foreground))"
                     />
                     <Tooltip
-                      contentStyle={{
-                        background: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                      }}
+                      contentStyle={tooltipStyle}
+                      labelStyle={tooltipLabelStyle}
+                      itemStyle={tooltipItemStyle}
                       formatter={(value: number, name: string, props: any) => [
                         `${value}% (${props.payload.count} vizsga)`,
                         props.payload.fullName,
@@ -448,11 +452,9 @@ const StudentDashboard = () => {
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{
-                          background: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
+                        contentStyle={tooltipStyle}
+                        labelStyle={tooltipLabelStyle}
+                        itemStyle={tooltipItemStyle}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -465,11 +467,11 @@ const StudentDashboard = () => {
               <div className="flex justify-center gap-6 mt-2">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full" style={{ background: CHART_COLORS[2] }} />
-                  <span className="text-sm">Sikeres ({passedExams})</span>
+                  <span className="text-sm text-foreground">Sikeres ({passedExams})</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full" style={{ background: CHART_COLORS[4] }} />
-                  <span className="text-sm">Sikertelen ({totalExams - passedExams})</span>
+                  <span className="text-sm text-foreground">Sikertelen ({totalExams - passedExams})</span>
                 </div>
               </div>
             </CardContent>

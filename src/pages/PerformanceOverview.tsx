@@ -22,6 +22,7 @@ import {
   Search,
   Mail,
   Eye,
+  GraduationCap,
 } from "lucide-react";
 import {
   BarChart,
@@ -84,6 +85,7 @@ const PerformanceOverview = () => {
   const [allExams, setAllExams] = useState<ExamRow[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [badgeCount, setBadgeCount] = useState(0);
+  const [courseCompletionData, setCourseCompletionData] = useState<{name: string; fullName: string; avg: number; count: number}[]>([]);
 
   // View and filter state
   const [activeView, setActiveView] = useState<"overview" | "users">("overview");
@@ -105,6 +107,38 @@ const PerformanceOverview = () => {
       setAllExams(examRes.data || []);
       setUsers(userRes.data || []);
       setBadgeCount(badgeRes.count || 0);
+
+      // Fetch course completion data
+      try {
+        const [enrollData, courseData] = await Promise.all([
+          supabase.from("lw_enrollments").select("lw_course_id, completion_percentage"),
+          supabase.from("lw_courses").select("lw_course_id, title"),
+        ]);
+        const courseMap = new Map<string, string>();
+        (courseData.data || []).forEach((c: any) => courseMap.set(c.lw_course_id, c.title));
+
+        const aggMap = new Map<string, { total: number; count: number }>();
+        (enrollData.data || []).forEach((e: any) => {
+          const existing = aggMap.get(e.lw_course_id) || { total: 0, count: 0 };
+          existing.total += e.completion_percentage || 0;
+          existing.count++;
+          aggMap.set(e.lw_course_id, existing);
+        });
+
+        const completionArr = Array.from(aggMap.entries())
+          .map(([id, agg]) => ({
+            name: (courseMap.get(id) || id).substring(0, 25) + ((courseMap.get(id) || id).length > 25 ? "..." : ""),
+            fullName: courseMap.get(id) || id,
+            avg: Math.round(agg.total / agg.count),
+            count: agg.count,
+          }))
+          .filter((c) => c.count >= 1)
+          .sort((a, b) => b.avg - a.avg)
+          .slice(0, 10);
+        setCourseCompletionData(completionArr);
+      } catch (e2) {
+        console.error("Error fetching course completion:", e2);
+      }
     } catch (e) {
       console.error("Error fetching performance data:", e);
     } finally {
@@ -524,6 +558,50 @@ const PerformanceOverview = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Course Completion Rates */}
+        {courseCompletionData.length > 0 && (
+          <Card className="animate-fade-up">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <GraduationCap className="w-4 h-4 text-primary" />
+                Kurzus teljesítési arány (Top 10)
+              </CardTitle>
+              <CardDescription>Átlagos kurzusteljesítés a beiratkozott hallgatók alapján</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={Math.max(250, courseCompletionData.length * 36)}>
+                <BarChart data={courseCompletionData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis
+                    type="number"
+                    domain={[0, 100]}
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    stroke="hsl(var(--muted-foreground))"
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={170}
+                    tick={{ fontSize: 10, fill: "hsl(var(--foreground))" }}
+                    stroke="hsl(var(--muted-foreground))"
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    labelStyle={tooltipLabelStyle}
+                    itemStyle={tooltipItemStyle}
+                    formatter={(value: number, _: string, props: any) => [
+                      `${value}% (${props.payload.count} hallgató)`,
+                      props.payload.fullName,
+                    ]}
+                  />
+                  <Bar dataKey="avg" fill="hsl(142, 76%, 36%)" radius={[0, 6, 6, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Recent exams */}
         <Card>

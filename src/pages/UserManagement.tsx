@@ -481,7 +481,7 @@ const UserManagement = () => {
                 <p>Nem található felhasználó</p>
               </div>
             ) : (
-              <div className="overflow-x-auto max-h-[70vh] overflow-y-auto custom-scroll">
+              <div className="rounded-lg border overflow-hidden max-h-[70vh] overflow-y-auto custom-scroll">
                 <Table>
                   <TableHeader>
                     <TableRow>

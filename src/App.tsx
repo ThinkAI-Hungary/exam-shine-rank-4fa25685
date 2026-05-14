@@ -17,6 +17,7 @@ import Students from "./pages/Students";
 import StudentDashboard from "./pages/StudentDashboard";
 import PerformanceOverview from "./pages/PerformanceOverview";
 import UserManagement from "./pages/UserManagement";
+import Courses from "./pages/Courses";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/performance/:userId" element={<StudentDashboard />} />
             <Route path="/performance" element={<PerformanceOverview />} />
             <Route path="/management" element={<UserManagement />} />
+            <Route path="/courses" element={<Courses />} />
             <Route path="/profile/:userId" element={<UserProfile />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/admin/user-linking" element={<AdminUserLinking />} />

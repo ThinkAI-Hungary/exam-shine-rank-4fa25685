@@ -24,6 +24,7 @@ import {
   GraduationCap,
   Moon,
   Sun,
+  BookOpen,
 } from "lucide-react";
 
 interface NavTab {
@@ -60,6 +61,13 @@ const NAV_TABS: NavTab[] = [
     label: "Kezelés",
     icon: <UserCog className="w-4 h-4" />,
     path: "/management",
+    adminOnly: true,
+  },
+  {
+    value: "courses",
+    label: "Kurzusok",
+    icon: <BookOpen className="w-4 h-4" />,
+    path: "/courses",
     adminOnly: true,
   },
 ];
@@ -143,6 +151,7 @@ const AppLayout = () => {
     if (path.startsWith("/students")) return "students";
     if (path.startsWith("/performance")) return "dashboard";
     if (path.startsWith("/management")) return "management";
+    if (path.startsWith("/courses")) return "courses";
     if (path.startsWith("/admin")) return "management";
     return "leaderboard";
   };
@@ -182,7 +191,7 @@ const AppLayout = () => {
                 <GraduationCap className="w-5 h-5 text-primary-foreground" />
               </div>
               <h1 className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent whitespace-nowrap hidden sm:block">
-                LearnWorlds Dashboard
+                Diego Learning Dashboard
               </h1>
             </Link>
 

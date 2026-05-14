@@ -9,6 +9,49 @@ const corsHeaders = {
 };
 
 const API_BASE = "https://api.eu-w3.learnworlds.com/v2";
+const LW_SCHOOL_DOMAIN = 'diego.learnworlds.com';
+
+// ── OAuth2 Token Management ──
+let cachedAccessToken: string | null = null;
+let tokenExpiresAt: number = 0;
+
+async function getAccessToken(clientId: string): Promise<string> {
+  if (cachedAccessToken && Date.now() < tokenExpiresAt - 60_000) {
+    return cachedAccessToken;
+  }
+
+  const clientSecret = Deno.env.get('LEARNWORLDS_CLIENT_SECRET')?.trim() || '';
+  if (!clientSecret) {
+    const staticToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN')?.trim() || Deno.env.get('LW_ACCESS_TOKEN')?.trim() || '';
+    if (!staticToken) {
+      throw new Error('Missing LearnWorlds credentials: neither CLIENT_SECRET nor ACCESS_TOKEN set');
+    }
+    cachedAccessToken = staticToken;
+    tokenExpiresAt = Date.now() + 3600_000;
+    return staticToken;
+  }
+
+  console.log('Requesting new OAuth2 access token...');
+  const resp = await fetch(`https://${LW_SCHOOL_DOMAIN}/admin/api/oauth2/access_token`, {
+    method: 'POST',
+    headers: { 'Lw-Client': clientId, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }),
+  });
+
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    throw new Error(`OAuth2 token request failed: ${resp.status} - ${errorText.substring(0, 200)}`);
+  }
+
+  const data = await resp.json();
+  cachedAccessToken = data.access_token || data.tokenData?.access_token;
+  const expiresIn = data.expires_in || data.tokenData?.expires_in || 3600;
+  tokenExpiresAt = Date.now() + (expiresIn * 1000);
+
+  if (!cachedAccessToken) throw new Error('OAuth2 response did not contain access_token');
+  console.log(`OAuth2 token obtained, expires in ${expiresIn}s`);
+  return cachedAccessToken;
+}
 
 // ── LW API helper (POST/PUT/GET with retry) ──
 async function lwRequest(
@@ -115,13 +158,13 @@ serve(async (req) => {
   }
 
   try {
-    const accessToken = Deno.env.get("LEARNWORLDS_ACCESS_TOKEN") || Deno.env.get("LW_ACCESS_TOKEN") || "";
-    const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID") || Deno.env.get("LW_CLIENT_ID") || "";
+    const clientId = Deno.env.get("LEARNWORLDS_CLIENT_ID")?.trim() || Deno.env.get("LW_CLIENT_ID")?.trim() || "";
+    const accessToken = await getAccessToken(clientId);
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-    if (!accessToken || !clientId) {
-      throw new Error("Missing LearnWorlds API credentials");
+    if (!clientId) {
+      throw new Error("Missing LearnWorlds CLIENT_ID");
     }
 
     const sb = createClient(supabaseUrl, supabaseKey);

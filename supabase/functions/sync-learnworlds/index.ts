@@ -56,9 +56,77 @@ interface ExamResult {
 // LearnWorlds EU cluster API host (school context is provided via headers)
 const API_BASE = 'https://api.eu-w3.learnworlds.com/v2';
 
+// LearnWorlds school domain for OAuth2 token endpoint
+const LW_SCHOOL_DOMAIN = 'diego.learnworlds.com';
+
 // Previously we injected client_id into the URL; for the EU cluster we rely on headers.
 function withClientId(url: string, _clientId: string): string {
   return url;
+}
+
+// ============= OAuth2 Token Management =============
+let cachedAccessToken: string | null = null;
+let tokenExpiresAt: number = 0; // unix ms
+
+async function getAccessToken(clientId: string): Promise<string> {
+  // If we have a valid cached token, return it
+  if (cachedAccessToken && Date.now() < tokenExpiresAt - 60_000) {
+    return cachedAccessToken;
+  }
+
+  const clientSecret = Deno.env.get('LEARNWORLDS_CLIENT_SECRET')?.trim() || '';
+
+  // If no client_secret is configured, fall back to static access token
+  if (!clientSecret) {
+    const staticToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN')?.trim() || '';
+    if (!staticToken) {
+      throw new Error('Missing LearnWorlds credentials: neither CLIENT_SECRET nor ACCESS_TOKEN set');
+    }
+    console.log('Using static LEARNWORLDS_ACCESS_TOKEN (no CLIENT_SECRET for OAuth2)');
+    cachedAccessToken = staticToken;
+    tokenExpiresAt = Date.now() + 3600_000; // assume 1 hour validity
+    return staticToken;
+  }
+
+  // Request new token via OAuth2 client_credentials grant
+  console.log('Requesting new OAuth2 access token...');
+  const tokenUrl = `https://${LW_SCHOOL_DOMAIN}/admin/api/oauth2/access_token`;
+
+  const resp = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: {
+      'Lw-Client': clientId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'client_credentials',
+    }),
+  });
+
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    console.error(`OAuth2 token request failed (${resp.status}):`, errorText.substring(0, 500));
+    throw new Error(`OAuth2 token request failed: ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  cachedAccessToken = data.access_token || data.tokenData?.access_token;
+  const expiresIn = data.expires_in || data.tokenData?.expires_in || 3600;
+  tokenExpiresAt = Date.now() + (expiresIn * 1000);
+
+  if (!cachedAccessToken) {
+    throw new Error('OAuth2 response did not contain access_token');
+  }
+
+  console.log(`OAuth2 token obtained, expires in ${expiresIn}s`);
+  return cachedAccessToken;
+}
+
+function invalidateCachedToken(): void {
+  cachedAccessToken = null;
+  tokenExpiresAt = 0;
 }
 
 async function makeLearnWorldsRequest(
@@ -139,6 +207,19 @@ async function makeLearnWorldsRequest(
         const backoff = baseDelayMs * Math.pow(2, attempt);
         console.warn(`Server ${resp.status} for ${url}. Retry in ${backoff}ms.`);
         await new Promise(r => setTimeout(r, backoff));
+        continue;
+      }
+
+      // Retry on 401 Unauthorized – token may have expired
+      if (resp.status === 401 && attempt < maxRetries) {
+        console.warn(`401 Unauthorized for ${url}. Refreshing token and retrying...`);
+        invalidateCachedToken();
+        try {
+          accessToken = await getAccessToken(clientId);
+        } catch (refreshErr) {
+          console.error('Token refresh failed:', refreshErr);
+          throw new Error(`LearnWorlds API returned 401 and token refresh failed`);
+        }
         continue;
       }
 
@@ -574,16 +655,11 @@ serve(async (req) => {
   let enrollmentsSynced = 0;
 
   try {
-    // Hardcode Client ID for this test to eliminate any secret mismatch.
-    const clientId = '68664e416816e727f0a2d038';
-    const accessToken = Deno.env.get('LEARNWORLDS_ACCESS_TOKEN')?.trim() || '';
+    const clientId = Deno.env.get('LEARNWORLDS_CLIENT_ID')?.trim() || '68664e416816e727f0a2d038';
+    const accessToken = await getAccessToken(clientId);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-    if (!accessToken) {
-      throw new Error('Missing LearnWorlds credentials (LEARNWORLDS_ACCESS_TOKEN)');
-    }
 
     // Use the EU cluster API host.
     const baseUrl = API_BASE;
