@@ -16,10 +16,15 @@ async function lwRequest(
   accessToken: string,
   clientId: string,
   method: string = "GET",
-  body?: Record<string, unknown>
+  body?: Record<string, unknown>,
+  options?: { allowRetryOnTimeout?: boolean; timeoutMs?: number }
 ): Promise<any> {
   const maxRetries = 3;
   const baseDelay = 500;
+  const timeoutMs = options?.timeoutMs ?? 60000;
+  // GET is always idempotent; PUT/DELETE are idempotent in LW. POST is not, unless explicitly allowed.
+  const retryOnTimeout =
+    options?.allowRetryOnTimeout ?? (method === "GET" || method === "PUT" || method === "DELETE");
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const headers: Record<string, string> = {
@@ -30,7 +35,7 @@ async function lwRequest(
     };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     const opts: RequestInit = { method, headers, redirect: "manual", signal: controller.signal };
     if (body && (method === "POST" || method === "PUT")) {
       opts.body = JSON.stringify(body);
@@ -41,7 +46,7 @@ async function lwRequest(
       resp = await fetch(url, opts);
     } catch (e) {
       clearTimeout(timeoutId);
-      if (method !== "GET") {
+      if (!retryOnTimeout) {
         throw new Error(`LearnWorlds API timeout or network error: ${e}`);
       }
       if (attempt === maxRetries) throw new Error(`Network error: ${e}`);
