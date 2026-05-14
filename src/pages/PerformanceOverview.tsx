@@ -23,6 +23,7 @@ import {
   Mail,
   Eye,
   GraduationCap,
+  ArrowUp,
 } from "lucide-react";
 import {
   BarChart,
@@ -38,6 +39,8 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { SkeletonTable } from "@/components/ui/skeleton-table";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
 
 // Diego-themed chart palette (reds, warm neutrals, accents)
 const COLORS = [
@@ -73,6 +76,8 @@ interface UserRow {
   user_id: string;
   username: string;
   aruhaz: string[] | null;
+  nps_score: number | null;
+  nps_comment: string | null;
 }
 
 // Test/dev user names to exclude from rankings
@@ -92,6 +97,13 @@ const PerformanceOverview = () => {
   const [selectedYear, setSelectedYear] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [userSearch, setUserSearch] = useState("");
+  const [userSortField, setUserSortField] = useState<"username" | "count" | "avg">("username");
+  const [userSortDir, setUserSortDir] = useState<"asc" | "desc">("asc");
+
+  const toggleUserSort = (field: typeof userSortField) => {
+    if (userSortField === field) setUserSortDir(userSortDir === "asc" ? "desc" : "asc");
+    else { setUserSortField(field); setUserSortDir("asc"); }
+  };
 
   useEffect(() => {
     fetchData();
@@ -101,7 +113,7 @@ const PerformanceOverview = () => {
     try {
       const [examRes, userRes, badgeRes] = await Promise.all([
         supabase.from("exam_results").select("user_id, username, email, course_id, course_title, score, completed_at"),
-        supabase.from("users").select("user_id, username, aruhaz"),
+        supabase.from("users").select("user_id, username, aruhaz, nps_score, nps_comment"),
         supabase.from("user_badges").select("id", { count: "exact", head: true }).is("revoked_at", null),
       ]);
       setAllExams(examRes.data || []);
@@ -168,8 +180,17 @@ const PerformanceOverview = () => {
   if (loading) {
     return (
       <main className="container mx-auto px-4 py-12">
-        <div className="flex items-center justify-center">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="h-6 w-48 bg-muted rounded animate-pulse" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="rounded-lg border bg-card p-5 space-y-3">
+                <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+                <div className="h-8 w-16 bg-muted rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+          <SkeletonTable rows={6} columns={5} />
         </div>
       </main>
     );
@@ -277,9 +298,18 @@ const PerformanceOverview = () => {
     }))
     .sort((a, b) => a.username.localeCompare(b.username, "hu"));
 
-  const filteredUserList = userSearch
+  const filteredUserList = (userSearch
     ? allUserStats.filter((u) => u.username.toLowerCase().includes(userSearch.toLowerCase()))
-    : allUserStats;
+    : allUserStats
+  ).sort((a, b) => {
+    const dir = userSortDir === "asc" ? 1 : -1;
+    switch (userSortField) {
+      case "username": return dir * a.username.localeCompare(b.username, "hu");
+      case "count": return dir * (a.count - b.count);
+      case "avg": return dir * (a.avg - b.avg);
+      default: return 0;
+    }
+  });
 
   // ── Score distribution (pie) ──
   const distBuckets = [
@@ -307,11 +337,11 @@ const PerformanceOverview = () => {
 
   return (
     <main className="container mx-auto px-4 py-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6 page-enter">
         {/* Header + View Tabs + Date Filter */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-3">
-            <h2 className="text-2xl font-bold tracking-tight">Teljesítmény</h2>
+            <h2 className="text-2xl font-bold tracking-tight gradient-text">Teljesítmény</h2>
             <Tabs value={activeView} onValueChange={(v) => setActiveView(v as "overview" | "users")}>
               <TabsList className="h-9">
                 <TabsTrigger value="overview" className="gap-1.5 text-sm transition-all duration-200 hover:bg-background/60 hover:text-foreground"><BarChart3 className="w-4 h-4" /> Áttekintés</TabsTrigger>
@@ -369,23 +399,23 @@ const PerformanceOverview = () => {
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
           <Card className="kpi-card animate-fade-up stagger-1"><CardContent className="pt-6"><div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><Users className="w-5 h-5 text-primary" /></div>
-            <div><p className="text-2xl font-bold animate-count-up">{totalStudents}</p><p className="text-xs text-muted-foreground">Aktív hallgató</p></div>
+            <div><p className="text-2xl font-bold animate-count-up stat-value"><AnimatedCounter value={totalStudents} /></p><p className="text-xs text-muted-foreground">Aktív hallgató</p></div>
           </div></CardContent></Card>
           <Card className="kpi-card animate-fade-up stagger-2"><CardContent className="pt-6"><div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><BookOpen className="w-5 h-5 text-primary" /></div>
-            <div><p className="text-2xl font-bold animate-count-up">{totalExams}</p><p className="text-xs text-muted-foreground">Összes vizsga</p></div>
+            <div><p className="text-2xl font-bold animate-count-up stat-value"><AnimatedCounter value={totalExams} /></p><p className="text-xs text-muted-foreground">Összes vizsga</p></div>
           </div></CardContent></Card>
           <Card className="kpi-card animate-fade-up stagger-3"><CardContent className="pt-6"><div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><TrendingUp className="w-5 h-5 text-primary" /></div>
-            <div><p className="text-2xl font-bold animate-count-up">{avgScore.toFixed(1)}%</p><p className="text-xs text-muted-foreground">Átlag pontszám</p></div>
+            <div><p className="text-2xl font-bold animate-count-up stat-value"><AnimatedCounter value={Math.round(avgScore * 10) / 10} suffix="%" /></p><p className="text-xs text-muted-foreground">Átlag pontszám</p></div>
           </div></CardContent></Card>
           <Card className="kpi-card animate-fade-up stagger-4"><CardContent className="pt-6"><div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center"><Target className="w-5 h-5 text-green-600" /></div>
-            <div><p className="text-2xl font-bold animate-count-up">{passRate.toFixed(0)}%</p><p className="text-xs text-muted-foreground">Sikerességi arány</p></div>
+            <div><p className="text-2xl font-bold animate-count-up stat-value"><AnimatedCounter value={Math.round(passRate)} suffix="%" /></p><p className="text-xs text-muted-foreground">Sikerességi arány</p></div>
           </div></CardContent></Card>
           <Card className="kpi-card animate-fade-up stagger-5"><CardContent className="pt-6"><div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center"><Award className="w-5 h-5 text-yellow-600" /></div>
-            <div><p className="text-2xl font-bold animate-count-up">{badgeCount}</p><p className="text-xs text-muted-foreground">Kiosztott jelvény</p></div>
+            <div><p className="text-2xl font-bold animate-count-up stat-value">{badgeCount}</p><p className="text-xs text-muted-foreground">Kiosztott jelvény</p></div>
           </div></CardContent></Card>
         </div>
 
@@ -414,7 +444,7 @@ const PerformanceOverview = () => {
             <CardContent>
               {monthlyTrend.length > 0 ? (
                 <ResponsiveContainer width="100%" height={280}>
-                  <ComposedChart data={monthlyTrend}>
+                  <ComposedChart data={monthlyTrend} margin={{ top: 20, right: 5, left: 5, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                     <YAxis yAxisId="left" domain={[0, 100]} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" label={{ value: "%", position: "insideTopLeft", offset: -5, fontSize: 10 }} />
@@ -603,6 +633,111 @@ const PerformanceOverview = () => {
           </Card>
         )}
 
+        {/* ── NPS Section ── */}
+        {(() => {
+          const npsUsers = users.filter(u => u.nps_score !== null && u.nps_score !== undefined);
+          if (npsUsers.length === 0) return null;
+          const avgNps = Math.round(npsUsers.reduce((s, u) => s + (u.nps_score ?? 0), 0) / npsUsers.length * 10) / 10;
+          const promoters = npsUsers.filter(u => (u.nps_score ?? 0) >= 9).length;
+          const passives = npsUsers.filter(u => (u.nps_score ?? 0) >= 7 && (u.nps_score ?? 0) <= 8).length;
+          const detractors = npsUsers.filter(u => (u.nps_score ?? 0) <= 6).length;
+          const npsScore = Math.round((promoters / npsUsers.length - detractors / npsUsers.length) * 100);
+          const recentComments = npsUsers
+            .filter(u => u.nps_comment)
+            .sort((a, b) => (b.nps_score ?? 0) - (a.nps_score ?? 0))
+            .slice(0, 10);
+          const npsColor = npsScore >= 50 ? "text-green-500" : npsScore >= 0 ? "text-yellow-500" : "text-red-500";
+
+          return (
+            <div className="grid gap-4 lg:grid-cols-3">
+              {/* NPS Score Card */}
+              <Card className="lg:col-span-1">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-primary" />
+                    NPS Pontszám
+                  </CardTitle>
+                  <CardDescription>Net Promoter Score összesítés</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-center">
+                    <p className={`text-5xl font-bold ${npsColor}`}>
+                      <AnimatedCounter value={npsScore} />
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">NPS ({npsUsers.length} válasz)</p>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-green-500" />
+                        Promoter (9-10)
+                      </span>
+                      <span className="font-medium">{promoters} ({Math.round(promoters / npsUsers.length * 100)}%)</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                        Passzív (7-8)
+                      </span>
+                      <span className="font-medium">{passives} ({Math.round(passives / npsUsers.length * 100)}%)</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500" />
+                        Detractor (0-6)
+                      </span>
+                      <span className="font-medium">{detractors} ({Math.round(detractors / npsUsers.length * 100)}%)</span>
+                    </div>
+                  </div>
+                  {/* Stacked bar */}
+                  <div className="flex h-3 rounded-full overflow-hidden">
+                    <div className="bg-green-500 transition-all" style={{ width: `${promoters / npsUsers.length * 100}%` }} />
+                    <div className="bg-yellow-500 transition-all" style={{ width: `${passives / npsUsers.length * 100}%` }} />
+                    <div className="bg-red-500 transition-all" style={{ width: `${detractors / npsUsers.length * 100}%` }} />
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Átlag pontszám: <span className="font-semibold text-foreground">{avgNps}/10</span>
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* NPS Comments */}
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-primary" />
+                    NPS Visszajelzések
+                  </CardTitle>
+                  <CardDescription>Legutóbbi hallgatói vélemények ({recentComments.length} db)</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {recentComments.length > 0 ? (
+                    <div className="space-y-3 max-h-[280px] overflow-y-auto custom-scroll pr-2">
+                      {recentComments.map((u, idx) => (
+                        <div key={idx} className="flex gap-3 p-3 rounded-lg bg-muted/40 border border-border/50">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold ${
+                            (u.nps_score ?? 0) >= 9 ? "bg-green-500/15 text-green-600" :
+                            (u.nps_score ?? 0) >= 7 ? "bg-yellow-500/15 text-yellow-600" :
+                            "bg-red-500/15 text-red-600"
+                          }`}>
+                            {u.nps_score}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium">{u.username}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5 break-words user-select-text">{u.nps_comment}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-8">Nincs szöveges visszajelzés</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          );
+        })()}
+
         {/* Recent exams */}
         <Card>
           <CardHeader>
@@ -730,10 +865,16 @@ const PerformanceOverview = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left py-2 font-medium text-muted-foreground">Hallgató</th>
+                        <th className="text-left py-2 font-medium text-muted-foreground sortable-header" onClick={() => toggleUserSort("username")}>
+                          <span className="inline-flex items-center gap-1">Hallgató <ArrowUp className={`w-3.5 h-3.5 sort-icon ${userSortField === 'username' ? 'active' : ''} ${userSortField === 'username' && userSortDir === 'desc' ? 'desc' : ''}`} /></span>
+                        </th>
                         <th className="text-left py-2 font-medium text-muted-foreground hidden md:table-cell">Áruház</th>
-                        <th className="text-right py-2 font-medium text-muted-foreground">Vizsgák</th>
-                        <th className="text-right py-2 font-medium text-muted-foreground">Átlag</th>
+                        <th className="text-right py-2 font-medium text-muted-foreground sortable-header" onClick={() => toggleUserSort("count")}>
+                          <span className="inline-flex items-center gap-1">Vizsgák <ArrowUp className={`w-3.5 h-3.5 sort-icon ${userSortField === 'count' ? 'active' : ''} ${userSortField === 'count' && userSortDir === 'desc' ? 'desc' : ''}`} /></span>
+                        </th>
+                        <th className="text-right py-2 font-medium text-muted-foreground sortable-header" onClick={() => toggleUserSort("avg")}>
+                          <span className="inline-flex items-center gap-1">Átlag <ArrowUp className={`w-3.5 h-3.5 sort-icon ${userSortField === 'avg' ? 'active' : ''} ${userSortField === 'avg' && userSortDir === 'desc' ? 'desc' : ''}`} /></span>
+                        </th>
                         <th className="text-right py-2 font-medium text-muted-foreground w-10"></th>
                       </tr>
                     </thead>
@@ -741,7 +882,7 @@ const PerformanceOverview = () => {
                       {filteredUserList.map((u) => (
                         <tr
                           key={u.user_id}
-                          className="border-b last:border-0 hover:bg-muted/30 group cursor-pointer"
+                          className="border-b last:border-0 table-row-interactive group cursor-pointer"
                           onClick={() => navigate(`/performance/${u.user_id}`)}
                         >
                           <td className="py-2.5">

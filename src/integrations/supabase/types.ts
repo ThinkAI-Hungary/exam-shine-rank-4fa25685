@@ -612,6 +612,8 @@ export type Database = {
           demoted_from_category: string | null
           email: string | null
           last_demotion_date: string | null
+          nps_score: number | null
+          nps_comment: string | null
           start_of_empl: string | null
           updated_at: string | null
           user_id: string
@@ -626,6 +628,8 @@ export type Database = {
           demoted_from_category?: string | null
           email?: string | null
           last_demotion_date?: string | null
+          nps_score?: number | null
+          nps_comment?: string | null
           start_of_empl?: string | null
           updated_at?: string | null
           user_id: string
@@ -640,6 +644,8 @@ export type Database = {
           demoted_from_category?: string | null
           email?: string | null
           last_demotion_date?: string | null
+          nps_score?: number | null
+          nps_comment?: string | null
           start_of_empl?: string | null
           updated_at?: string | null
           user_id?: string

@@ -60,7 +60,11 @@ import {
   GraduationCap,
   BookOpen,
   UserMinus,
+  ArrowUp,
 } from "lucide-react";
+import { SkeletonTable } from "@/components/ui/skeleton-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
 
 // ── Types ──
 interface UserRow {
@@ -121,6 +125,22 @@ const UserManagement = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAruhaz, setSelectedAruhaz] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [sortField, setSortField] = useState<"username" | "email" | "aruhaz" | "beosztas" | "category">("username");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const toggleSort = (field: typeof sortField) => {
+    if (sortField === field) setSortDir(sortDir === "asc" ? "desc" : "asc");
+    else { setSortField(field); setSortDir("asc"); }
+  };
+
+  const SortHeader = ({ field, children, className = "" }: { field: typeof sortField; children: React.ReactNode; className?: string }) => (
+    <TableHead className={`sortable-header ${className}`} onClick={() => toggleSort(field)}>
+      <span className="inline-flex items-center gap-1">
+        {children}
+        <ArrowUp className={`w-3.5 h-3.5 sort-icon ${sortField === field ? 'active' : ''} ${sortField === field && sortDir === 'desc' ? 'desc' : ''}`} />
+      </span>
+    </TableHead>
+  );
 
   // Dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -261,8 +281,20 @@ const UserManagement = () => {
     if (selectedAruhaz) {
       list = list.filter((u) => u.aruhaz && u.aruhaz.includes(selectedAruhaz));
     }
+    // Sort
+    list = [...list].sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      switch (sortField) {
+        case "username": return dir * a.username.localeCompare(b.username, "hu");
+        case "email": return dir * (a.email || "").localeCompare(b.email || "", "hu");
+        case "aruhaz": return dir * ((a.aruhaz || [])[0] || "").localeCompare((b.aruhaz || [])[0] || "", "hu");
+        case "beosztas": return dir * ((a.beosztas || [])[0] || "").localeCompare((b.beosztas || [])[0] || "", "hu");
+        case "category": return dir * (a.current_category || "").localeCompare(b.current_category || "", "hu");
+        default: return 0;
+      }
+    });
     return list;
-  }, [users, searchQuery, selectedAruhaz]);
+  }, [users, searchQuery, selectedAruhaz, sortField, sortDir]);
 
   // Build LW custom fields from tags + form values
   const buildFieldsFromTags = (tags: string[], ujKollega?: string, munkaviszony?: string) => {
@@ -402,11 +434,11 @@ const UserManagement = () => {
   // ── Render ──
   return (
     <main className="container mx-auto px-4 py-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6 page-enter">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Felhasználókezelés</h2>
+            <h2 className="text-2xl font-bold tracking-tight gradient-text">Felhasználókezelés</h2>
             <p className="text-muted-foreground">
               LearnWorlds felhasználók létrehozása, szerkesztése és kezelése
             </p>
@@ -455,7 +487,7 @@ const UserManagement = () => {
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 rounded-lg flex-shrink-0">
                 <Users className="w-4 h-4 text-primary" />
                 <span className="text-sm font-medium text-primary">
-                  {filteredUsers.length} felhasználó
+                  <AnimatedCounter value={filteredUsers.length} /> felhasználó
                 </span>
               </div>
             </div>
@@ -472,30 +504,29 @@ const UserManagement = () => {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
+              <SkeletonTable rows={8} columns={5} />
             ) : filteredUsers.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p>Nem található felhasználó</p>
-              </div>
+              <EmptyState
+                icon={<Users className="w-7 h-7 opacity-60" />}
+                title="Nem található felhasználó"
+                description="Próbáld módosítani a keresési feltételeket."
+              />
             ) : (
               <div className="rounded-lg border overflow-hidden max-h-[70vh] overflow-y-auto custom-scroll">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Felhasználó</TableHead>
-                      <TableHead className="hidden sm:table-cell">Email</TableHead>
-                      <TableHead className="hidden md:table-cell">Áruház</TableHead>
-                      <TableHead className="hidden lg:table-cell">Beosztás</TableHead>
-                      <TableHead className="hidden lg:table-cell">Kategória</TableHead>
+                      <SortHeader field="username">Felhasználó</SortHeader>
+                      <SortHeader field="email" className="hidden sm:table-cell">Email</SortHeader>
+                      <SortHeader field="aruhaz" className="hidden md:table-cell">Áruház</SortHeader>
+                      <SortHeader field="beosztas" className="hidden lg:table-cell">Beosztás</SortHeader>
+                      <SortHeader field="category" className="hidden lg:table-cell">Kategória</SortHeader>
                       <TableHead className="text-right">Műveletek</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredUsers.map((user, idx) => (
-                      <TableRow key={user.user_id} className={`group animate-fade-up ${idx < 10 ? `stagger-${idx + 1}` : ''}`}>
+                      <TableRow key={user.user_id} className="group table-row-interactive animate-fade-up" style={{ animationDelay: `${idx * 0.02}s` }}>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center flex-shrink-0">

@@ -322,14 +322,18 @@ const Index = () => {
       <main className="container mx-auto px-4 py-8">
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <div className="animate-pulse text-muted-foreground">Ranglista betöltése...</div>
+            <div className="flex flex-col items-center gap-3">
+              <div className="skeleton-shimmer w-48 h-8"></div>
+              <div className="skeleton-shimmer w-32 h-4"></div>
+              <div className="skeleton-shimmer w-full max-w-md h-64 mt-4"></div>
+            </div>
           </div>
         ) : (
           <div className="max-w-5xl mx-auto">
-            <Card className="shadow-card">
+            <Card className="shadow-card card-glow">
               <CardHeader className="text-center space-y-4">
                 <div>
-                  <CardTitle className="text-3xl font-bold">Ranglista</CardTitle>
+                  <CardTitle className="text-3xl font-bold gradient-text">Ranglista</CardTitle>
                   <CardDescription>
                     Az összes kurzuson szerzett átlag pontszám alapján rangsorolva
                   </CardDescription>

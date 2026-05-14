@@ -65,6 +65,7 @@ const StudentQuickView = ({ userId, username, open, onOpenChange }: StudentQuick
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<QuickStats | null>(null);
+  const [emailCopied, setEmailCopied] = useState(false);
 
   useEffect(() => {
     if (open && userId) {
@@ -171,9 +172,18 @@ const StudentQuickView = ({ userId, username, open, onOpenChange }: StudentQuick
               {stats && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                   {stats.email && (
-                    <span className="flex items-center gap-1">
+                    <span
+                        className="flex items-center gap-1 cursor-pointer hover:text-primary transition-colors"
+                        title="Kattints a másoláshoz"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(stats.email || "");
+                          setEmailCopied(true);
+                          setTimeout(() => setEmailCopied(false), 1500);
+                        }}
+                      >
                       <Mail className="w-3 h-3" />
-                      {stats.email}
+                      {emailCopied ? "✓ Másolva!" : stats.email}
                     </span>
                   )}
                   {stats.startOfEmpl && (

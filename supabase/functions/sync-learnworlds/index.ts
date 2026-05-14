@@ -1005,6 +1005,12 @@ serve(async (req) => {
           } catch (_) { /* invalid date */ }
         }
         
+        // Extract NPS data (top-level fields on LW user object)
+        const npsScore = typeof user.nps_score === 'number' ? user.nps_score : null;
+        const npsComment = typeof user.nps_comment === 'string' && user.nps_comment.trim()
+          ? user.nps_comment.trim()
+          : null;
+        
         userDataToUpsert.push({
           user_id: userId,
           username: user.username || user.name || user.email?.split('@')[0] || 'Unknown',
@@ -1012,6 +1018,8 @@ serve(async (req) => {
           aruhaz,
           beosztas,
           start_of_empl: startOfEmpl,
+          nps_score: npsScore,
+          nps_comment: npsComment,
           updated_at: new Date().toISOString(),
         });
       }
@@ -1049,7 +1057,8 @@ serve(async (req) => {
         
         const withAruhaz = dedupedUsers.filter((u: any) => u.aruhaz.length > 0);
         const withBeosztas = dedupedUsers.filter((u: any) => u.beosztas.length > 0);
-        console.log(`Users with aruhaz tags: ${withAruhaz.length}, with beosztas tags: ${withBeosztas.length}`);
+        const withNps = dedupedUsers.filter((u: any) => u.nps_score !== null);
+        console.log(`Users with aruhaz tags: ${withAruhaz.length}, with beosztas tags: ${withBeosztas.length}, with NPS: ${withNps.length}`);
       }
 
       // Reconcile moved to Step 7.5 (after enrollments are synced) so we can use

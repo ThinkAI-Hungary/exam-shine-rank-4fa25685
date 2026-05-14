@@ -51,6 +51,8 @@ interface UserData {
   beosztas: string[] | null;
   start_of_empl: string | null;
   current_category: string | null;
+  nps_score: number | null;
+  nps_comment: string | null;
 }
 
 interface BadgeData {
@@ -177,8 +179,16 @@ const StudentDashboard = () => {
   if (loading) {
     return (
       <main className="container mx-auto px-4 py-12">
-        <div className="flex items-center justify-center">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="skeleton-shimmer w-20 h-8"></div>
+          <div className="skeleton-shimmer w-full h-32 rounded-xl"></div>
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+            <div className="skeleton-shimmer h-24 rounded-xl"></div>
+            <div className="skeleton-shimmer h-24 rounded-xl"></div>
+            <div className="skeleton-shimmer h-24 rounded-xl"></div>
+            <div className="skeleton-shimmer h-24 rounded-xl"></div>
+          </div>
+          <div className="skeleton-shimmer w-full h-64 rounded-xl"></div>
         </div>
       </main>
     );
@@ -242,7 +252,7 @@ const StudentDashboard = () => {
 
   return (
     <main className="container mx-auto px-4 py-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6 page-enter">
         {/* Back button */}
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-2">
           <ArrowLeft className="w-4 h-4" />
@@ -286,7 +296,21 @@ const StudentDashboard = () => {
                       {userData.current_category}
                     </Badge>
                   )}
+                  {userData.nps_score !== null && userData.nps_score !== undefined && (
+                    <Badge className={`text-xs ${
+                      userData.nps_score >= 9 ? "bg-green-500/10 text-green-600 border-green-500/20" :
+                      userData.nps_score >= 7 ? "bg-yellow-500/10 text-yellow-600 border-yellow-500/20" :
+                      "bg-red-500/10 text-red-600 border-red-500/20"
+                    }`}>
+                      NPS: {userData.nps_score}/10
+                    </Badge>
+                  )}
                 </div>
+                {userData.nps_comment && (
+                  <p className="text-xs text-muted-foreground mt-2 italic border-l-2 border-primary/30 pl-2 user-select-text">
+                    „{userData.nps_comment}”
+                  </p>
+                )}
               </div>
             </div>
           </CardHeader>

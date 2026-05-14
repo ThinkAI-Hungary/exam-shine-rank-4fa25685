@@ -20,8 +20,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, Search, Mail, Calendar, Tag, Loader2, ChevronRight, BookOpen } from "lucide-react";
+import { Users, Search, Mail, Calendar, Tag, Loader2, ChevronRight, BookOpen, ArrowUp } from "lucide-react";
 import StudentQuickView from "@/components/StudentQuickView";
+import { SkeletonTable } from "@/components/ui/skeleton-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
 
 
 interface Student {
@@ -35,6 +38,9 @@ interface Student {
   current_category: string | null;
 }
 
+type SortField = "username" | "email" | "aruhaz" | "beosztas" | "category" | "enrollments" | "start_of_empl";
+type SortDir = "asc" | "desc";
+
 const Students = () => {
   const { isAdmin } = useOutletContext<{ user: any; isAdmin: boolean }>();
   const [students, setStudents] = useState<Student[]>([]);
@@ -45,6 +51,29 @@ const Students = () => {
   const [availableAruhaz, setAvailableAruhaz] = useState<string[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string } | null>(null);
   const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({});
+  const [sortField, setSortField] = useState<SortField>("username");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  };
+
+  const SortHeader = ({ field, children, className = "" }: { field: SortField; children: React.ReactNode; className?: string }) => (
+    <TableHead
+      className={`sortable-header ${className}`}
+      onClick={() => toggleSort(field)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {children}
+        <ArrowUp className={`w-3.5 h-3.5 sort-icon ${sortField === field ? 'active' : ''} ${sortField === field && sortDir === 'desc' ? 'desc' : ''}`} />
+      </span>
+    </TableHead>
+  );
 
   useEffect(() => {
     fetchStudents();
@@ -69,8 +98,31 @@ const Students = () => {
       );
     }
 
+    // Sort
+    filtered = [...filtered].sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      switch (sortField) {
+        case "username":
+          return dir * a.username.localeCompare(b.username, "hu");
+        case "email":
+          return dir * (a.email || "").localeCompare(b.email || "", "hu");
+        case "aruhaz":
+          return dir * ((a.aruhaz || [])[0] || "").localeCompare((b.aruhaz || [])[0] || "", "hu");
+        case "beosztas":
+          return dir * ((a.beosztas || [])[0] || "").localeCompare((b.beosztas || [])[0] || "", "hu");
+        case "category":
+          return dir * (a.current_category || "").localeCompare(b.current_category || "", "hu");
+        case "enrollments":
+          return dir * ((enrollmentCounts[a.user_id] || 0) - (enrollmentCounts[b.user_id] || 0));
+        case "start_of_empl":
+          return dir * ((a.start_of_empl || "").localeCompare(b.start_of_empl || ""));
+        default:
+          return 0;
+      }
+    });
+
     setFilteredStudents(filtered);
-  }, [searchQuery, selectedAruhaz, students]);
+  }, [searchQuery, selectedAruhaz, students, sortField, sortDir, enrollmentCounts]);
 
   const fetchStudents = async () => {
     try {
@@ -138,11 +190,11 @@ const Students = () => {
   return (
     <>
     <main className="container mx-auto px-4 py-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6 page-enter">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Hallgatók</h2>
+            <h2 className="text-2xl font-bold tracking-tight gradient-text">Hallgatók</h2>
             <p className="text-muted-foreground">
               LearnWorlds hallgatók áttekintése és adatkezelés
             </p>
@@ -151,7 +203,7 @@ const Students = () => {
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 rounded-lg">
               <Users className="w-4 h-4 text-primary" />
               <span className="text-sm font-medium text-primary">
-                {filteredStudents.length} hallgató
+                <AnimatedCounter value={filteredStudents.length} /> hallgató
               </span>
             </div>
           </div>
@@ -200,32 +252,31 @@ const Students = () => {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
+              <SkeletonTable rows={8} columns={6} />
             ) : filteredStudents.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p>Nem található hallgató a szűrési feltételekkel</p>
-              </div>
+              <EmptyState
+                icon={<Users className="w-7 h-7 opacity-60" />}
+                title="Nem található hallgató"
+                description="Próbáld módosítani a keresési feltételeket."
+              />
             ) : (
               <div className="rounded-lg border overflow-hidden max-h-[70vh] overflow-y-auto custom-scroll">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Név</TableHead>
-                      <TableHead className="hidden sm:table-cell">Email</TableHead>
-                      <TableHead className="hidden md:table-cell">Áruház</TableHead>
-                      <TableHead className="hidden lg:table-cell">Beosztás</TableHead>
-                      <TableHead className="hidden lg:table-cell">Kategória</TableHead>
-                      <TableHead className="hidden md:table-cell">Kurzusok</TableHead>
-                      <TableHead className="hidden xl:table-cell">Munkaviszony kezdete</TableHead>
+                      <SortHeader field="username">Név</SortHeader>
+                      <SortHeader field="email" className="hidden sm:table-cell">Email</SortHeader>
+                      <SortHeader field="aruhaz" className="hidden md:table-cell">Áruház</SortHeader>
+                      <SortHeader field="beosztas" className="hidden lg:table-cell">Beosztás</SortHeader>
+                      <SortHeader field="category" className="hidden lg:table-cell">Kategória</SortHeader>
+                      <SortHeader field="enrollments" className="hidden md:table-cell">Kurzusok</SortHeader>
+                      <SortHeader field="start_of_empl" className="hidden xl:table-cell">Munkaviszony kezdete</SortHeader>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredStudents.map((student, idx) => (
-                      <TableRow key={student.user_id} className={`group cursor-pointer hover:bg-muted/50 animate-fade-up ${idx < 10 ? `stagger-${idx + 1}` : ''}`} onClick={() => setSelectedStudent({ id: student.user_id, name: student.username })}>
+                      <TableRow key={student.user_id} className="group cursor-pointer table-row-interactive hover:bg-muted/50 animate-fade-up" style={{ animationDelay: `${idx * 0.02}s` }} onClick={() => setSelectedStudent({ id: student.user_id, name: student.username })}>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0">
@@ -242,7 +293,19 @@ const Students = () => {
                           </div>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell">
-                          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                          <div
+                            className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer hover:text-primary transition-colors"
+                            title="Kattints a másoláshoz"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!student.email) return;
+                              navigator.clipboard.writeText(student.email);
+                              const el = e.currentTarget;
+                              const orig = el.innerHTML;
+                              el.textContent = "✓ Másolva!";
+                              setTimeout(() => { el.innerHTML = orig; }, 1200);
+                            }}
+                          >
                             <Mail className="w-3.5 h-3.5" />
                             {student.email || "—"}
                           </div>

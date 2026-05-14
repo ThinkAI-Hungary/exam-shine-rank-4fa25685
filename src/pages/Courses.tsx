@@ -33,6 +33,9 @@ import {
   Clock,
   ChevronRight,
 } from "lucide-react";
+import { SkeletonCards } from "@/components/ui/skeleton-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
 
 interface Course {
   lw_course_id: string;
@@ -206,11 +209,11 @@ const Courses = () => {
 
   return (
     <main className="container mx-auto px-4 py-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6 page-enter">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Kurzuskatalógus</h2>
+            <h2 className="text-2xl font-bold tracking-tight gradient-text">Kurzuskatalógus</h2>
             <p className="text-muted-foreground">
               LearnWorlds kurzusok áttekintése és statisztikái
             </p>
@@ -219,19 +222,19 @@ const Courses = () => {
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 rounded-lg">
               <BookOpen className="w-4 h-4 text-primary" />
               <span className="text-sm font-medium text-primary">
-                {filteredCourses.length} kurzus
+                <AnimatedCounter value={filteredCourses.length} /> kurzus
               </span>
             </div>
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 rounded-lg">
               <CheckCircle2 className="w-4 h-4 text-green-600" />
               <span className="text-sm font-medium text-green-600">
-                {activeCourses} aktív
+                <AnimatedCounter value={activeCourses} /> aktív
               </span>
             </div>
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
               <Users className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm font-medium text-muted-foreground">
-                {totalEnrollments} beiratkozás
+                <AnimatedCounter value={totalEnrollments} /> beiratkozás
               </span>
             </div>
           </div>
@@ -288,20 +291,19 @@ const Courses = () => {
 
         {/* Course Grid */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
+          <SkeletonCards count={6} />
         ) : filteredCourses.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p>Nem található kurzus a szűrési feltételekkel</p>
-          </div>
+          <EmptyState
+            icon={<BookOpen className="w-7 h-7 opacity-60" />}
+            title="Nem található kurzus"
+            description="Próbáld módosítani a keresési feltételeket."
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filteredCourses.map((course, idx) => (
               <Card
                 key={course.lw_course_id}
-                className="group hover:shadow-md transition-all duration-300 animate-fade-up cursor-pointer"
+                className="group hover:shadow-md transition-all duration-300 animate-fade-up cursor-pointer card-glow course-card"
                 style={{ animationDelay: `${idx * 0.03}s` }}
                 onClick={() => handleCourseClick(course)}
               >

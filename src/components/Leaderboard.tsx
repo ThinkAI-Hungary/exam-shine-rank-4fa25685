@@ -93,11 +93,11 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
           ) : (
             entries.map((entry, idx) => {
               const medalClass = entry.rank === 1 ? "medal-gold" : entry.rank === 2 ? "medal-silver" : entry.rank === 3 ? "medal-bronze" : "";
-              const staggerClass = idx < 10 ? `stagger-${idx + 1}` : "";
               return (
               <TableRow 
                 key={entry.rank}
-                className={`hover:bg-muted/30 transition-colors cursor-pointer animate-fade-up ${staggerClass} ${medalClass}`}
+                className={`table-row-interactive hover:bg-muted/30 transition-colors cursor-pointer animate-fade-up ${medalClass}`}
+                style={{ animationDelay: `${idx * 0.03}s` }}
                 onClick={() => handleRowClick(entry)}
               >
                 <TableCell className="text-center">
@@ -121,7 +121,7 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                   </div>
                 </TableCell>
                 <TableCell className="text-right">
-                  <Badge variant={entry.average_score >= 80 ? "default" : "outline"}>
+                  <Badge variant={entry.average_score >= 80 ? "default" : "outline"} className="score-badge">
                     {entry.average_score.toFixed(1)}%
                   </Badge>
                 </TableCell>

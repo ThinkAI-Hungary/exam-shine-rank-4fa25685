@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation, Outlet } from "react-router-dom";
+import { ScrollToTop } from "@/components/ui/scroll-to-top";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -231,7 +232,7 @@ const AppLayout = () => {
                     <TabsTrigger
                       key={tab.value}
                       value={tab.value}
-                      className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 transition-all duration-200 hover:bg-background/60 hover:text-foreground"
+                      className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary px-3 transition-all duration-200 hover:bg-background/60 hover:text-foreground relative data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-2 data-[state=active]:after:right-2 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-primary data-[state=active]:after:rounded-full"
                     >
                       {tab.icon}
                       <span className="hidden lg:inline">{tab.label}</span>
@@ -380,8 +381,11 @@ const AppLayout = () => {
 
       {/* Page Content */}
       <main className="flex-1 overflow-y-auto custom-scroll">
-        <Outlet context={{ user, isAdmin }} />
+        <div key={location.pathname} className="page-enter">
+          <Outlet context={{ user, isAdmin }} />
+        </div>
       </main>
+      <ScrollToTop />
     </div>
   );
 };
