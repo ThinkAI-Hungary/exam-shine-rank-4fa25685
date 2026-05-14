@@ -188,6 +188,7 @@ const AppLayout = () => {
     if (path.startsWith("/performance")) return "dashboard";
     if (path.startsWith("/management")) return "management";
     if (path.startsWith("/courses")) return "courses";
+    if (path.startsWith("/groups")) return "groups";
     if (path.startsWith("/admin")) return "management";
     return "leaderboard";
   };
