@@ -57,6 +57,9 @@ import {
   X,
   Plus,
   RefreshCw,
+  GraduationCap,
+  BookOpen,
+  UserMinus,
 } from "lucide-react";
 
 // ── Types ──
@@ -123,7 +126,13 @@ const UserManagement = () => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
+  const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
+
+  // Course & enrollment state
+  const [courses, setCourses] = useState<{ lw_course_id: string; title: string }[]>([]);
+  const [userEnrollments, setUserEnrollments] = useState<{ lw_course_id: string }[]>([]);
+  const [enrollLoading, setEnrollLoading] = useState(false);
 
   // Form state
   const [form, setForm] = useState<UserFormData>({ email: "", username: "", password: "", tags: [], uj_kollega: "", munkaviszony_kezdete: "" });
@@ -133,7 +142,73 @@ const UserManagement = () => {
   // ── Data fetching ──
   useEffect(() => {
     fetchUsers();
+    fetchCourses();
   }, []);
+
+  const fetchCourses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("lw_courses")
+        .select("lw_course_id, title")
+        .order("title", { ascending: true });
+      if (error) throw error;
+      setCourses(data || []);
+    } catch (e) {
+      console.error("Error fetching courses:", e);
+    }
+  };
+
+  const fetchUserEnrollments = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("lw_enrollments")
+        .select("lw_course_id")
+        .eq("user_id", userId);
+      if (error) throw error;
+      setUserEnrollments(data || []);
+    } catch (e) {
+      console.error("Error fetching user enrollments:", e);
+      setUserEnrollments([]);
+    }
+  };
+
+  const openEnrollDialog = async (user: UserRow) => {
+    setSelectedUser(user);
+    setEnrollDialogOpen(true);
+    setEnrollLoading(true);
+    await fetchUserEnrollments(user.user_id);
+    setEnrollLoading(false);
+  };
+
+  const handleEnroll = async (courseId: string) => {
+    if (!selectedUser) return;
+    setEnrollLoading(true);
+    try {
+      await callManageUser("enroll", { user_id: selectedUser.user_id, course_id: courseId });
+      toast({ title: "Beiratás sikeres", description: `${selectedUser.username} beiratva a kurzusba.` });
+      await fetchUserEnrollments(selectedUser.user_id);
+    } catch (e: any) {
+      toast({ title: "Hiba", description: e.message, variant: "destructive" });
+    } finally {
+      setEnrollLoading(false);
+    }
+  };
+
+  const handleUnenroll = async (courseId: string) => {
+    if (!selectedUser) return;
+    setEnrollLoading(true);
+    try {
+      await callManageUser("unenroll", { user_id: selectedUser.user_id, course_id: courseId });
+      toast({ title: "Kiírás sikeres", description: `${selectedUser.username} kiíratva a kurzusból.` });
+      // Also remove from local lw_enrollments
+      await supabase.from("lw_enrollments").delete().eq("user_id", selectedUser.user_id).eq("lw_course_id", courseId);
+      await fetchUserEnrollments(selectedUser.user_id);
+    } catch (e: any) {
+      toast({ title: "Hiba", description: e.message, variant: "destructive" });
+    } finally {
+      setEnrollLoading(false);
+    }
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -492,6 +567,15 @@ const UserManagement = () => {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8 text-primary hover:text-primary"
+                              onClick={() => openEnrollDialog(user)}
+                              title="Kurzus beiratás"
+                            >
+                              <GraduationCap className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive"
                               onClick={() => {
                                 setSelectedUser(user);
@@ -774,6 +858,93 @@ const UserManagement = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Enrollment Management Dialog ── */}
+      <Dialog open={enrollDialogOpen} onOpenChange={setEnrollDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-primary" />
+              Kurzus beiratás
+            </DialogTitle>
+            <DialogDescription>
+              {selectedUser?.username} – Kurzusok kezelése
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            {enrollLoading && courses.length === 0 ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-1 max-h-[50vh] overflow-y-auto custom-scroll pr-1">
+                {courses.map((course) => {
+                  const isEnrolled = userEnrollments.some(
+                    (e) => e.lw_course_id === course.lw_course_id
+                  );
+                  return (
+                    <div
+                      key={course.lw_course_id}
+                      className={`flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors ${
+                        isEnrolled
+                          ? "bg-primary/5 border border-primary/20"
+                          : "hover:bg-muted/50 border border-transparent"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <BookOpen className={`w-4 h-4 flex-shrink-0 ${
+                          isEnrolled ? "text-primary" : "text-muted-foreground"
+                        }`} />
+                        <span className="text-sm truncate">
+                          {course.title || course.lw_course_id}
+                        </span>
+                        {isEnrolled && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary/30 text-primary flex-shrink-0">
+                            Beiratva
+                          </Badge>
+                        )}
+                      </div>
+                      <Button
+                        variant={isEnrolled ? "ghost" : "outline"}
+                        size="sm"
+                        className={`h-7 text-xs flex-shrink-0 ml-2 ${
+                          isEnrolled
+                            ? "text-destructive hover:text-destructive hover:bg-destructive/10"
+                            : "text-primary hover:text-primary hover:bg-primary/10"
+                        }`}
+                        disabled={enrollLoading}
+                        onClick={() =>
+                          isEnrolled
+                            ? handleUnenroll(course.lw_course_id)
+                            : handleEnroll(course.lw_course_id)
+                        }
+                      >
+                        {enrollLoading ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : isEnrolled ? (
+                          <><UserMinus className="w-3 h-3 mr-1" />Kiírás</>
+                        ) : (
+                          <><Plus className="w-3 h-3 mr-1" />Beiratás</>
+                        )}
+                      </Button>
+                    </div>
+                  );
+                })}
+                {courses.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    Nincs elérhető kurzus. Futtasd a szinkronizálást.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEnrollDialogOpen(false)}>
+              Bezárás
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 };
