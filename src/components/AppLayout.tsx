@@ -73,6 +73,13 @@ const NAV_TABS: NavTab[] = [
     path: "/courses",
     adminOnly: true,
   },
+  {
+    value: "groups",
+    label: "Csoportok",
+    icon: <Users className="w-4 h-4" />,
+    path: "/groups",
+    adminOnly: true,
+  },
 ];
 
 const AppLayout = () => {

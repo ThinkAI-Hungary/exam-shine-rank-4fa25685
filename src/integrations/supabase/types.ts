@@ -246,6 +246,81 @@ export type Database = {
         }
         Relationships: []
       }
+      lw_groups: {
+        Row: {
+          lw_group_id: string
+          title: string
+          description: string | null
+          product_ids: string[] | null
+          manager_ids: string[] | null
+          tags: string[] | null
+          max_members: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          lw_group_id: string
+          title: string
+          description?: string | null
+          product_ids?: string[] | null
+          manager_ids?: string[] | null
+          tags?: string[] | null
+          max_members?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          lw_group_id?: string
+          title?: string
+          description?: string | null
+          product_ids?: string[] | null
+          manager_ids?: string[] | null
+          tags?: string[] | null
+          max_members?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      lw_group_members: {
+        Row: {
+          id: string
+          lw_group_id: string
+          user_id: string
+          role: string | null
+          joined_at: string | null
+        }
+        Insert: {
+          id?: string
+          lw_group_id: string
+          user_id: string
+          role?: string | null
+          joined_at?: string | null
+        }
+        Update: {
+          id?: string
+          lw_group_id?: string
+          user_id?: string
+          role?: string | null
+          joined_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lw_group_members_lw_group_id_fkey"
+            columns: ["lw_group_id"]
+            isOneToOne: false
+            referencedRelation: "lw_groups"
+            referencedColumns: ["lw_group_id"]
+          },
+          {
+            foreignKeyName: "lw_group_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       lw_courses: {
         Row: {
           categories: string[] | null

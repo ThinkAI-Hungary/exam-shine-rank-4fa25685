@@ -1096,6 +1096,90 @@ serve(async (req) => {
       console.error('Course catalog sync failed:', err instanceof Error ? err.message : err);
     }
 
+    // ── Step 6.5: Sync Groups from LearnWorlds ──
+    console.log('\n--- Step 6.5: Syncing Groups ---');
+    let groupsSynced = 0;
+    try {
+      // Fetch all groups (paginated)
+      const allGroups: any[] = [];
+      let gPage = 1;
+      let gHasMore = true;
+      while (gHasMore) {
+        await throttle(350);
+        const url = `${API_BASE}/groups?page=${gPage}&items_per_page=50`;
+        const resp = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Lw-Client': LW_CLIENT_ID },
+        });
+        if (!resp.ok) {
+          console.error(`Groups API error page ${gPage}: ${resp.status}`);
+          break;
+        }
+        const json = await resp.json();
+        const groups = json.data || json.groups || [];
+        if (groups.length === 0) { gHasMore = false; break; }
+        allGroups.push(...groups);
+        gPage++;
+        // Stop if we've fetched everything (check meta.totalPages or response size)
+        if (json.meta?.page >= json.meta?.totalPages) gHasMore = false;
+        if (groups.length < 50) gHasMore = false;
+      }
+
+      console.log(`Fetched ${allGroups.length} groups from LearnWorlds`);
+
+      if (allGroups.length > 0) {
+        // Upsert groups
+        const groupRows = allGroups.map((g: any) => ({
+          lw_group_id: g.id,
+          title: g.title || g.name || 'Unnamed Group',
+          description: g.description || null,
+          product_ids: g.products?.map((p: any) => typeof p === 'string' ? p : p.id) || [],
+          manager_ids: g.managers?.map((m: any) => typeof m === 'string' ? m : m.id) || [],
+          tags: g.tags || [],
+          max_members: g.max_members || g.seats || null,
+          updated_at: new Date().toISOString(),
+        }));
+
+        const { error: groupUpsertErr } = await supabase
+          .from('lw_groups')
+          .upsert(groupRows, { onConflict: 'lw_group_id' });
+
+        if (groupUpsertErr) {
+          console.error('Error upserting groups:', JSON.stringify(groupUpsertErr));
+        } else {
+          groupsSynced = groupRows.length;
+          console.log(`Synced ${groupsSynced} groups`);
+        }
+
+        // Sync group memberships
+        let membersSynced = 0;
+        for (const group of allGroups) {
+          const members = group.members || group.users || [];
+          if (members.length === 0) continue;
+
+          const memberRows = members.map((m: any) => ({
+            lw_group_id: group.id,
+            user_id: typeof m === 'string' ? m : m.id || m.user_id,
+            role: (group.managers || []).some((mgr: any) =>
+              (typeof mgr === 'string' ? mgr : mgr.id) === (typeof m === 'string' ? m : m.id || m.user_id)
+            ) ? 'manager' : 'member',
+          }));
+
+          const { error: memErr } = await supabase
+            .from('lw_group_members')
+            .upsert(memberRows, { onConflict: 'lw_group_id,user_id', ignoreDuplicates: true });
+
+          if (memErr) {
+            console.error(`Error upserting members for group ${group.id}:`, JSON.stringify(memErr));
+          } else {
+            membersSynced += memberRows.length;
+          }
+        }
+        console.log(`Synced ${membersSynced} group memberships`);
+      }
+    } catch (err) {
+      console.error('Groups sync failed:', err instanceof Error ? err.message : err);
+    }
+
     // Step 7: Sync enrollments per bundle course (throttled)
     console.log('\n--- Step 7: Syncing Enrollments (throttled) ---');
     const enrolledUserIds = new Set<string>();
