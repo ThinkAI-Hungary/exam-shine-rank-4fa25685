@@ -134,7 +134,7 @@ const StoreLeaderboard = ({ entries, limit, compact = false }: StoreLeaderboardP
               const medalClass = store.rank === 1 ? "medal-gold" : store.rank === 2 ? "medal-silver" : store.rank === 3 ? "medal-bronze" : "";
               const staggerClass = idx < 10 ? `stagger-${idx + 1}` : "";
               return (
-              <TableRow key={store.storeName} className={`hover:bg-muted/30 transition-colors animate-fade-up ${staggerClass} ${medalClass}`}>
+              <TableRow key={store.storeName} className={`hover:bg-muted/30 transition-colors animate-fade-up ${staggerClass} ${medalClass} ${compact ? "h-16" : ""}`}>
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center">
                     {getRankIcon(store.rank)}
