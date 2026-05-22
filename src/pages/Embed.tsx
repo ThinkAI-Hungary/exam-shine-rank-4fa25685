@@ -97,7 +97,7 @@ const Embed = () => {
                   Áruházak átlag vizsgaeredménye alapján
                 </p>
               </div>
-              <StoreLeaderboard entries={leaderboard} limit={3} />
+              <StoreLeaderboard entries={leaderboard} limit={3} compact />
             </div>
           </div>
         )}
