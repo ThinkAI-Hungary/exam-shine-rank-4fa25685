@@ -31,9 +31,10 @@ interface StoreStats {
 
 interface StoreLeaderboardProps {
   entries: LeaderboardEntry[];
+  limit?: number;
 }
 
-const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
+const StoreLeaderboard = ({ entries, limit }: StoreLeaderboardProps) => {
   const storeStats = useMemo(() => {
     const storeMap = new Map<string, {
       users: Set<string>;
@@ -91,8 +92,8 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
       .sort((a, b) => b.averageScore - a.averageScore)
       .map((s, i) => ({ ...s, rank: i + 1 }));
 
-    return stats;
-  }, [entries]);
+    return limit ? stats.slice(0, limit) : stats;
+  }, [entries, limit]);
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
