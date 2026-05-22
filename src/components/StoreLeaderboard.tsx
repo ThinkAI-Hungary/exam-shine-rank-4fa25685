@@ -31,9 +31,10 @@ interface StoreStats {
 
 interface StoreLeaderboardProps {
   entries: LeaderboardEntry[];
+  limit?: number;
 }
 
-const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
+const StoreLeaderboard = ({ entries, limit }: StoreLeaderboardProps) => {
   const storeStats = useMemo(() => {
     const storeMap = new Map<string, {
       users: Set<string>;
