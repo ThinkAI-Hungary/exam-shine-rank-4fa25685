@@ -36,7 +36,9 @@ const App = () => (
           
           {/* Embed pages - standalone, no layout */}
           <Route path="/embed" element={<Embed />} />
+          <Route path="/embed/full" element={<EmbedFull />} />
           <Route path="/embed/badges" element={<EmbedBadges />} />
+
 
           {/* All pages under the shared AppLayout */}
           <Route element={<AppLayout />}>
