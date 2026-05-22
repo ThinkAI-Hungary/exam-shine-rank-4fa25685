@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy } from "lucide-react";
 import Leaderboard from "@/components/Leaderboard";
+import StoreLeaderboard from "@/components/StoreLeaderboard";
 
 interface LeaderboardEntry {
   rank: number;
   username: string;
   user_id: string;
+  email: string | null;
   total_score: number;
   exam_count: number;
   average_score: number;
@@ -45,6 +46,7 @@ const Embed = () => {
           rank: item.rank,
           username: item.users.username,
           user_id: item.user_id,
+          email: item.users.email ?? null,
           total_score: item.total_score,
           exam_count: item.exam_count,
           average_score: item.average_score,
@@ -53,8 +55,7 @@ const Embed = () => {
           start_of_empl: item.users.start_of_empl,
         }))
         .sort((a, b) => b.average_score - a.average_score)
-        .map((entry, index) => ({ ...entry, rank: index + 1 }))
-        .slice(0, 3);
+        .map((entry, index) => ({ ...entry, rank: index + 1 }));
 
       setLeaderboard(formattedData);
     } catch (error) {
@@ -64,24 +65,41 @@ const Embed = () => {
     }
   };
 
+  const topIndividuals = leaderboard.slice(0, 3);
+
   return (
     <div className="min-h-screen bg-background p-4">
-      <div className="max-w-5xl mx-auto">
-        <div className="mb-4 text-center">
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Ranglista
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Az összes kurzuson szerzett átlag pontszám alapján rangsorolva
-          </p>
-        </div>
-
+      <div className="max-w-6xl mx-auto">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-pulse text-muted-foreground">Ranglista betöltése...</div>
           </div>
         ) : (
-          <Leaderboard entries={leaderboard} isEmbedded={true} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="mb-3 text-center">
+                <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                  Egyéni Top 3
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Átlag vizsgaeredmény alapján
+                </p>
+              </div>
+              <Leaderboard entries={topIndividuals} isEmbedded={true} />
+            </div>
+
+            <div>
+              <div className="mb-3 text-center">
+                <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                  Áruház Top 3
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Áruházak átlag vizsgaeredménye alapján
+                </p>
+              </div>
+              <StoreLeaderboard entries={leaderboard} limit={3} />
+            </div>
+          </div>
         )}
 
         <div className="mt-3 text-center text-xs text-muted-foreground">
