@@ -96,7 +96,7 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
               return (
               <TableRow 
                 key={entry.rank}
-                className={`table-row-interactive hover:bg-muted/30 transition-colors cursor-pointer animate-fade-up ${medalClass}`}
+                className={`table-row-interactive hover:bg-muted/30 transition-colors cursor-pointer animate-fade-up ${medalClass} ${isEmbedded ? "h-16" : ""}`}
                 style={{ animationDelay: `${idx * 0.03}s` }}
                 onClick={() => handleRowClick(entry)}
               >
@@ -106,12 +106,12 @@ const Leaderboard = ({ entries, isEmbedded = false }: LeaderboardProps) => {
                   </div>
                 </TableCell>
                 <TableCell className="font-medium">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span>{entry.username}</span>
+                  <div className={`flex items-center gap-2 ${isEmbedded ? "" : "flex-wrap"}`}>
+                    <span className={isEmbedded ? "truncate" : ""}>{entry.username}</span>
                     {getStoreTags(entry.aruhaz).length > 0 && (
                       <div className="flex gap-1 flex-wrap">
                         {getStoreTags(entry.aruhaz).map((tag, idx) => (
-                          <Badge key={idx} variant="outline" className="text-xs">
+                          <Badge key={idx} variant="outline" className="text-xs whitespace-nowrap">
                             {tag}
                           </Badge>
                         ))}
