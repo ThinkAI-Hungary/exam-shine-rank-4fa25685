@@ -53,7 +53,8 @@ const Embed = () => {
           start_of_empl: item.users.start_of_empl,
         }))
         .sort((a, b) => b.average_score - a.average_score)
-        .map((entry, index) => ({ ...entry, rank: index + 1 }));
+        .map((entry, index) => ({ ...entry, rank: index + 1 }))
+        .slice(0, 3);
 
       setLeaderboard(formattedData);
     } catch (error) {
