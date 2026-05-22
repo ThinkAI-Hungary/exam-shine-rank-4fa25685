@@ -92,8 +92,8 @@ const StoreLeaderboard = ({ entries, limit }: StoreLeaderboardProps) => {
       .sort((a, b) => b.averageScore - a.averageScore)
       .map((s, i) => ({ ...s, rank: i + 1 }));
 
-    return stats;
-  }, [entries]);
+    return limit ? stats.slice(0, limit) : stats;
+  }, [entries, limit]);
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
