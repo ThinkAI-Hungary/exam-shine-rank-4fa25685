@@ -97,6 +97,86 @@ export type Database = {
           },
         ]
       }
+      company_monitoring: {
+        Row: {
+          company_name: string
+          created_at: string | null
+          current_employee_count: number | null
+          id: string
+          is_active: boolean | null
+          last_change_at: string | null
+          last_checked_at: string | null
+          notes: string | null
+          previous_employee_count: number | null
+          tax_number: string
+          updated_at: string | null
+        }
+        Insert: {
+          company_name: string
+          created_at?: string | null
+          current_employee_count?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_change_at?: string | null
+          last_checked_at?: string | null
+          notes?: string | null
+          previous_employee_count?: number | null
+          tax_number: string
+          updated_at?: string | null
+        }
+        Update: {
+          company_name?: string
+          created_at?: string | null
+          current_employee_count?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_change_at?: string | null
+          last_checked_at?: string | null
+          notes?: string | null
+          previous_employee_count?: number | null
+          tax_number?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      company_monitoring_log: {
+        Row: {
+          changed: boolean | null
+          checked_at: string | null
+          company_id: string | null
+          employee_count: number
+          id: string
+          previous_count: number | null
+          raw_response: Json | null
+        }
+        Insert: {
+          changed?: boolean | null
+          checked_at?: string | null
+          company_id?: string | null
+          employee_count: number
+          id?: string
+          previous_count?: number | null
+          raw_response?: Json | null
+        }
+        Update: {
+          changed?: boolean | null
+          checked_at?: string | null
+          company_id?: string | null
+          employee_count?: number
+          id?: string
+          previous_count?: number | null
+          raw_response?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_monitoring_log_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "company_monitoring"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       course_time_tracking: {
         Row: {
           course_id: string
