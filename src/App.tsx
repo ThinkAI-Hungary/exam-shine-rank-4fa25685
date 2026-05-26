@@ -19,6 +19,7 @@ import PerformanceOverview from "./pages/PerformanceOverview";
 import UserManagement from "./pages/UserManagement";
 import Courses from "./pages/Courses";
 import Groups from "./pages/Groups";
+import CompanyMonitoring from "./pages/CompanyMonitoring";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/management" element={<UserManagement />} />
             <Route path="/courses" element={<Courses />} />
             <Route path="/groups" element={<Groups />} />
+            <Route path="/monitoring" element={<CompanyMonitoring />} />
             <Route path="/profile/:userId" element={<UserProfile />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/admin/user-linking" element={<AdminUserLinking />} />

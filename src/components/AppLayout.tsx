@@ -28,6 +28,7 @@ import {
   Sun,
   BookOpen,
   RefreshCw,
+  Building2,
 } from "lucide-react";
 
 interface NavTab {
@@ -78,6 +79,13 @@ const NAV_TABS: NavTab[] = [
     label: "Csoportok",
     icon: <Users className="w-4 h-4" />,
     path: "/groups",
+    adminOnly: true,
+  },
+  {
+    value: "monitoring",
+    label: "Cégfigyelés",
+    icon: <Building2 className="w-4 h-4" />,
+    path: "/monitoring",
     adminOnly: true,
   },
 ];
@@ -189,6 +197,7 @@ const AppLayout = () => {
     if (path.startsWith("/management")) return "management";
     if (path.startsWith("/courses")) return "courses";
     if (path.startsWith("/groups")) return "groups";
+    if (path.startsWith("/monitoring")) return "monitoring";
     if (path.startsWith("/admin")) return "management";
     return "leaderboard";
   };
