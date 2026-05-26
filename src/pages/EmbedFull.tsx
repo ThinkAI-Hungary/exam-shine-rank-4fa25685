@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import Leaderboard from "@/components/Leaderboard";
-import StoreLeaderboard from "@/components/StoreLeaderboard";
 
 interface LeaderboardEntry {
   rank: number;
@@ -16,9 +15,9 @@ interface LeaderboardEntry {
   start_of_empl?: string;
 }
 
-const EXCLUDED_USERNAMES = ['LW DEV', 'LWSupport Test'];
+const EXCLUDED_USERNAMES = ["LW DEV", "LWSupport Test"];
 
-const Embed = () => {
+const EmbedFull = () => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -65,41 +64,24 @@ const Embed = () => {
     }
   };
 
-  const topIndividuals = leaderboard.slice(0, 3);
-
   return (
     <div className="min-h-screen bg-background p-4">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-5xl mx-auto">
+        <div className="mb-4 text-center">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+            Ranglista
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Az összes kurzuson szerzett átlag pontszám alapján rangsorolva
+          </p>
+        </div>
+
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-pulse text-muted-foreground">Ranglista betöltése...</div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <div className="mb-3 text-center">
-                <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  Egyéni Top 3
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Átlag vizsgaeredmény alapján
-                </p>
-              </div>
-              <Leaderboard entries={topIndividuals} isEmbedded={true} />
-            </div>
-
-            <div>
-              <div className="mb-3 text-center">
-                <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  Áruház Top 3
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Áruházak átlag vizsgaeredménye alapján
-                </p>
-              </div>
-              <StoreLeaderboard entries={leaderboard} limit={3} compact />
-            </div>
-          </div>
+          <Leaderboard entries={leaderboard} isEmbedded={true} />
         )}
 
         <div className="mt-3 text-center text-xs text-muted-foreground">
@@ -110,4 +92,4 @@ const Embed = () => {
   );
 };
 
-export default Embed;
+export default EmbedFull;

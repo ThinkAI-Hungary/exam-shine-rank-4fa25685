@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AppLayout from "./components/AppLayout";
 import Index from "./pages/Index";
 import Embed from "./pages/Embed";
+import EmbedFull from "./pages/EmbedFull";
 import EmbedBadges from "./pages/EmbedBadges";
 import Auth from "./pages/Auth";
 import UserProfile from "./pages/UserProfile";
@@ -36,7 +37,9 @@ const App = () => (
           
           {/* Embed pages - standalone, no layout */}
           <Route path="/embed" element={<Embed />} />
+          <Route path="/embed/full" element={<EmbedFull />} />
           <Route path="/embed/badges" element={<EmbedBadges />} />
+
 
           {/* All pages under the shared AppLayout */}
           <Route element={<AppLayout />}>

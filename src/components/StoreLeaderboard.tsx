@@ -31,9 +31,11 @@ interface StoreStats {
 
 interface StoreLeaderboardProps {
   entries: LeaderboardEntry[];
+  limit?: number;
+  compact?: boolean;
 }
 
-const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
+const StoreLeaderboard = ({ entries, limit, compact = false }: StoreLeaderboardProps) => {
   const storeStats = useMemo(() => {
     const storeMap = new Map<string, {
       users: Set<string>;
@@ -91,8 +93,8 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
       .sort((a, b) => b.averageScore - a.averageScore)
       .map((s, i) => ({ ...s, rank: i + 1 }));
 
-    return stats;
-  }, [entries]);
+    return limit ? stats.slice(0, limit) : stats;
+  }, [entries, limit]);
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -116,13 +118,13 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
             <TableHead>Áruház</TableHead>
             <TableHead className="text-right">Kollégák</TableHead>
             <TableHead className="text-right">Átlag vizsgaeredmény</TableHead>
-            <TableHead className="hidden md:table-cell">Legjobb kolléga</TableHead>
+            {!compact && <TableHead className="hidden md:table-cell">Legjobb kolléga</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {storeStats.length === 0 ? (
             <TableRow>
-            <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+            <TableCell colSpan={compact ? 4 : 5} className="text-center text-muted-foreground py-8">
                 <Store className="w-10 h-10 mx-auto mb-2 text-muted-foreground/30" />
                 <p>Nincs áruház szintű adat.</p>
               </TableCell>
@@ -132,7 +134,7 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
               const medalClass = store.rank === 1 ? "medal-gold" : store.rank === 2 ? "medal-silver" : store.rank === 3 ? "medal-bronze" : "";
               const staggerClass = idx < 10 ? `stagger-${idx + 1}` : "";
               return (
-              <TableRow key={store.storeName} className={`hover:bg-muted/30 transition-colors animate-fade-up ${staggerClass} ${medalClass}`}>
+              <TableRow key={store.storeName} className={`hover:bg-muted/30 transition-colors animate-fade-up ${staggerClass} ${medalClass} ${compact ? "h-16" : ""}`}>
                 <TableCell className="text-center">
                   <div className="flex items-center justify-center">
                     {getRankIcon(store.rank)}
@@ -151,17 +153,19 @@ const StoreLeaderboard = ({ entries }: StoreLeaderboardProps) => {
                   </div>
                 </TableCell>
                 <TableCell className="text-right">
-                  <Badge variant={store.averageScore >= 80 ? "default" : "outline"}>
+                  <Badge variant={store.averageScore >= 80 ? "default" : "outline"} className="score-badge">
                     {store.averageScore.toFixed(1)}%
                   </Badge>
                 </TableCell>
-                <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
-                  {store.topPerformer && (
-                    <span>
-                      {store.topPerformer} ({store.topScore.toFixed(1)}%)
-                    </span>
-                  )}
-                </TableCell>
+                {!compact && (
+                  <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
+                    {store.topPerformer && (
+                      <span>
+                        {store.topPerformer} ({store.topScore.toFixed(1)}%)
+                      </span>
+                    )}
+                  </TableCell>
+                )}
               </TableRow>
               );
             })
