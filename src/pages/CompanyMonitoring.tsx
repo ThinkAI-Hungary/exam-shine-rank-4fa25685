@@ -466,7 +466,7 @@ const CompanyMonitoring = () => {
               <EmptyState
                 icon={<Building2 className="w-7 h-7 opacity-60" />}
                 title={companies.length === 0 ? "Nincs még monitorozott cég" : "Nincs találat"}
-                description={companies.length === 0 ? "Add hozzá az első céget az „Új cég" gombbal." : "Próbáld módosítani a keresési feltételeket."}
+                description={companies.length === 0 ? 'Add hozzá az első céget az "Új cég" gombbal.' : "Próbáld módosítani a keresési feltételeket."}
               />
             ) : (
               <div className="rounded-lg border overflow-hidden max-h-[60vh] overflow-y-auto custom-scroll">
