@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import Navigation from "@/components/Navigation";
-import { Trophy, Users, Award, AlertTriangle, Loader2, Link as LinkIcon, Eye, Menu } from "lucide-react";
+import { Trophy, Users, Award, AlertTriangle, Loader2, Link as LinkIcon, Eye, Menu, Building2, Activity, TrendingUp, TrendingDown } from "lucide-react";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -17,6 +17,11 @@ const AdminDashboard = () => {
     unlinkedUsers: 0,
     totalBadges: 0,
     activeWarnings: 0,
+    monitoredCompanies: 0,
+    companiesWithChanges: 0,
+    totalEmployees: 0,
+    lastOptenCheck: null as string | null,
+    recentChanges: [] as Array<{ company_name: string; current_employee_count: number; previous_employee_count: number | null }>,
   });
 
   useEffect(() => {
@@ -68,12 +73,40 @@ const AdminDashboard = () => {
         .select("*", { count: "exact", head: true })
         .eq("resolved", false);
 
+      // Get OPTEN company monitoring stats
+      const { data: companies } = await supabase
+        .from("company_monitoring")
+        .select("company_name, current_employee_count, previous_employee_count, last_checked_at")
+        .eq("is_active", true);
+
+      const monitoredCompanies = companies?.length || 0;
+      const companiesWithChanges = (companies || []).filter(
+        (c: any) => c.previous_employee_count !== null && c.current_employee_count !== c.previous_employee_count
+      ).length;
+      const totalEmployees = (companies || []).reduce(
+        (sum: number, c: any) => sum + (c.current_employee_count || 0), 0
+      );
+      const lastOptenCheck = (companies || []).reduce(
+        (latest: string | null, c: any) => {
+          if (!c.last_checked_at) return latest;
+          return !latest || c.last_checked_at > latest ? c.last_checked_at : latest;
+        }, null
+      );
+      const recentChanges = (companies || []).filter(
+        (c: any) => c.previous_employee_count !== null && c.current_employee_count !== c.previous_employee_count
+      ).slice(0, 3);
+
       setStats({
         totalUsers: totalProfiles || 0,
         linkedUsers: linked || 0,
         unlinkedUsers: (totalProfiles || 0) - (linked || 0),
         totalBadges: badges || 0,
         activeWarnings: warnings || 0,
+        monitoredCompanies,
+        companiesWithChanges,
+        totalEmployees,
+        lastOptenCheck,
+        recentChanges,
       });
     } catch (error) {
       console.error("Error fetching stats:", error);
@@ -181,6 +214,52 @@ const AdminDashboard = () => {
             </Card>
           </div>
 
+          {/* OPTEN Monitoring Row */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="border-primary/20 bg-primary/[0.02]">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Monitorozott Cégek</CardTitle>
+                <Building2 className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-primary">{stats.monitoredCompanies}</div>
+                <p className="text-xs text-muted-foreground">
+                  Összesen {stats.totalEmployees} alkalmazott
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className={stats.companiesWithChanges > 0 ? "border-amber-500/20 bg-amber-500/[0.02]" : ""}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Létszámváltozások</CardTitle>
+                <Activity className={`h-4 w-4 ${stats.companiesWithChanges > 0 ? "text-amber-600" : "text-muted-foreground"}`} />
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${stats.companiesWithChanges > 0 ? "text-amber-600" : ""}`}>{stats.companiesWithChanges}</div>
+                <p className="text-xs text-muted-foreground">
+                  Cég létszáma változott
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Utolsó OPTEN Ellenőrzés</CardTitle>
+                <Eye className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-lg font-bold">
+                  {stats.lastOptenCheck
+                    ? new Date(stats.lastOptenCheck).toLocaleDateString("hu-HU", { month: "short", day: "numeric" })
+                    : "—"}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  OPTEN API lekérdezés
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
@@ -212,6 +291,14 @@ const AdminDashboard = () => {
                   <Trophy className="mr-2 h-4 w-4" />
                   Ranglista Megtekintése
                 </Button>
+                <Button 
+                  className="w-full justify-start" 
+                  variant="outline"
+                  onClick={() => navigate("/monitoring")}
+                >
+                  <Building2 className="mr-2 h-4 w-4" />
+                  OPTEN Cégfigyelés
+                </Button>
               </CardContent>
             </Card>
 
@@ -232,6 +319,27 @@ const AdminDashboard = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Nem összekapcsolt</span>
                   <span className="text-sm font-medium">{stats.unlinkedUsers}</span>
+                </div>
+                <div className="border-t pt-3 mt-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">OPTEN Változások</p>
+                  {stats.recentChanges.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Nincs aktuális változás</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {stats.recentChanges.map((c: any, i: number) => {
+                        const diff = c.current_employee_count - (c.previous_employee_count || 0);
+                        return (
+                          <div key={i} className="flex items-center justify-between text-xs">
+                            <span className="truncate mr-2">{c.company_name}</span>
+                            <span className={`font-medium flex items-center gap-1 ${diff > 0 ? "text-green-600" : "text-red-600"}`}>
+                              {diff > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                              {diff > 0 ? "+" : ""}{diff}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

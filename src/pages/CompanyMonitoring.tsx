@@ -50,7 +50,17 @@ import {
   Eye,
   Trash2,
   Activity,
+  Download,
+  Pencil,
+  Link2,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   LineChart,
   Line,
@@ -76,6 +86,17 @@ interface CompanyRow {
   is_active: boolean;
   notes: string | null;
   created_at: string;
+  company_status: string | null;
+  foundation_date: string | null;
+  main_activity: string | null;
+  registered_capital: string | null;
+  company_form: string | null;
+  lw_group_id: string | null;
+}
+
+interface LwGroup {
+  lw_group_id: string;
+  title: string;
 }
 
 interface LogEntry {
@@ -128,6 +149,14 @@ const CompanyMonitoring = () => {
   // Remove dialog
   const [removeTarget, setRemoveTarget] = useState<CompanyRow | null>(null);
 
+  // Edit dialog
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ company_name: "", notes: "", lw_group_id: "" });
+  const [editTarget, setEditTarget] = useState<CompanyRow | null>(null);
+
+  // LW groups for linking
+  const [lwGroups, setLwGroups] = useState<LwGroup[]>([]);
+
   const toggleSort = (field: typeof sortField) => {
     if (sortField === field) setSortDir(sortDir === "asc" ? "desc" : "asc");
     else { setSortField(field); setSortDir("asc"); }
@@ -145,7 +174,17 @@ const CompanyMonitoring = () => {
   // ── Data fetching ──
   useEffect(() => {
     fetchCompanies();
+    fetchLwGroups();
   }, []);
+
+  const fetchLwGroups = async () => {
+    try {
+      const { data } = await supabase.from("lw_groups").select("lw_group_id, title").order("title");
+      setLwGroups(data || []);
+    } catch (e) {
+      console.error("Error fetching LW groups:", e);
+    }
+  };
 
   const fetchCompanies = async () => {
     setLoading(true);
@@ -298,6 +337,56 @@ const CompanyMonitoring = () => {
     }
   };
 
+  const handleEditCompany = async () => {
+    if (!editTarget) return;
+    setActionLoading(true);
+    try {
+      await callOptenFunction("update-company", {
+        company_id: editTarget.id,
+        company_name: editForm.company_name,
+        notes: editForm.notes,
+        lw_group_id: editForm.lw_group_id || null,
+      });
+      toast({ title: "Cég frissítve", description: `${editForm.company_name} adatai módosítva.` });
+      setEditDialogOpen(false);
+      void fetchCompanies();
+    } catch (e: any) {
+      toast({ title: "Hiba", description: e.message, variant: "destructive" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openEditDialog = (company: CompanyRow) => {
+    setEditTarget(company);
+    setEditForm({
+      company_name: company.company_name,
+      notes: company.notes || "",
+      lw_group_id: company.lw_group_id || "",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("opten-check-employees", {
+        body: { action: "export-csv" },
+      });
+      if (error) throw error;
+      // data is the CSV string
+      const blob = new Blob([data], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cegfigyelés_${new Date().toISOString().substring(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "CSV exportálva" });
+    } catch (e: any) {
+      toast({ title: "Export hiba", description: e.message, variant: "destructive" });
+    }
+  };
+
   const openDetail = (company: CompanyRow) => {
     setDetailCompany(company);
     void fetchCompanyLogs(company.id);
@@ -369,6 +458,15 @@ const CompanyMonitoring = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleExportCsv}
+              disabled={companies.length === 0}
+              title="CSV export"
+            >
+              <Download className="w-4 h-4" />
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -550,6 +648,15 @@ const CompanyMonitoring = () => {
                               title="Ellenőrzés most"
                             >
                               <RefreshCw className={`w-3.5 h-3.5 ${actionLoading ? "animate-spin" : ""}`} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => openEditDialog(company)}
+                              title="Szerkesztés"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -745,6 +852,47 @@ const CompanyMonitoring = () => {
             </div>
           )}
 
+          {/* Extra OPTEN data */}
+          {detailCompany && (detailCompany.company_form || detailCompany.company_status || detailCompany.main_activity) && (
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {detailCompany.company_form && (
+                <div className="p-2 rounded-lg bg-muted/30 border">
+                  <p className="text-muted-foreground">Cégforma</p>
+                  <p className="font-medium">{detailCompany.company_form}</p>
+                </div>
+              )}
+              {detailCompany.company_status && (
+                <div className="p-2 rounded-lg bg-muted/30 border">
+                  <p className="text-muted-foreground">Státusz</p>
+                  <p className="font-medium">{detailCompany.company_status}</p>
+                </div>
+              )}
+              {detailCompany.main_activity && (
+                <div className="p-2 rounded-lg bg-muted/30 border">
+                  <p className="text-muted-foreground">Főtevékenység</p>
+                  <p className="font-medium">{detailCompany.main_activity}</p>
+                </div>
+              )}
+              {detailCompany.foundation_date && (
+                <div className="p-2 rounded-lg bg-muted/30 border">
+                  <p className="text-muted-foreground">Alapítás</p>
+                  <p className="font-medium">{detailCompany.foundation_date}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* LW Group link */}
+          {detailCompany?.lw_group_id && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/10 text-xs">
+              <Link2 className="w-3.5 h-3.5 text-primary" />
+              <span className="text-muted-foreground">LearnWorlds csoport:</span>
+              <span className="font-medium text-primary">
+                {lwGroups.find(g => g.lw_group_id === detailCompany.lw_group_id)?.title || detailCompany.lw_group_id}
+              </span>
+            </div>
+          )}
+
           {/* Notes */}
           {detailCompany?.notes && (
             <div className="p-3 rounded-lg bg-muted/30 border text-sm text-muted-foreground">
@@ -789,6 +937,68 @@ const CompanyMonitoring = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Edit Company Dialog ── */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cég szerkesztése</DialogTitle>
+            <DialogDescription>
+              Módosítsd a cég adatait és a LearnWorlds csoport összekapcsolást.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Cég neve</Label>
+              <Input
+                id="edit-name"
+                value={editForm.company_name}
+                onChange={(e) => setEditForm({ ...editForm, company_name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-group">LearnWorlds csoport</Label>
+              <Select
+                value={editForm.lw_group_id || "none"}
+                onValueChange={(v) => setEditForm({ ...editForm, lw_group_id: v === "none" ? "" : v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Válassz csoportot..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nincs összekapcsolva</SelectItem>
+                  {lwGroups.map((g) => (
+                    <SelectItem key={g.lw_group_id} value={g.lw_group_id}>
+                      {g.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                A LearnWorlds csoporttal összekapcsolt cég létszámváltozása később automatikusan módosíthatja a székkorlátot.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-notes">Megjegyzés</Label>
+              <Textarea
+                id="edit-notes"
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Mégsem
+            </Button>
+            <Button onClick={handleEditCompany} disabled={actionLoading}>
+              {actionLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Mentés
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 };

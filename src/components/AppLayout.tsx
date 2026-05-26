@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useOptenNotifications } from "@/hooks/useOptenNotifications";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,6 +100,9 @@ const AppLayout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const { toast } = useToast();
+
+  // Real-time push notifications for OPTEN changes
+  useOptenNotifications(isAdmin);
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('theme') === 'dark';
