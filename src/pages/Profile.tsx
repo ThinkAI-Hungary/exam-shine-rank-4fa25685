@@ -6,8 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Link as LinkIcon, CheckCircle, XCircle, Award } from "lucide-react";
+import { Loader2, Link as LinkIcon, CheckCircle, XCircle, Award, BookOpen, TrendingUp, Target, Trophy } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import BadgeDisplay from "@/components/BadgeDisplay";
+import { WarningIndicator } from "@/components/WarningIndicator";
 
 interface Profile {
   id: string;
@@ -42,6 +44,18 @@ const Profile = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [linkEmail, setLinkEmail] = useState("");
   const [badges, setBadges] = useState<BadgeData[]>([]);
+  const [examStats, setExamStats] = useState<{
+    total: number;
+    avgScore: number;
+    passRate: number;
+    passed: number;
+  } | null>(null);
+  const [perfMetrics, setPerfMetrics] = useState<{
+    exam_performance_pct: number;
+    training_activity_pct: number;
+    overall_performance_pct: number;
+    years_of_service: number;
+  } | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -81,6 +95,31 @@ const Profile = () => {
           .order('awarded_at', { ascending: false });
         
         setBadges(badgesData || []);
+
+        // Fetch exam results for stats
+        const { data: examData } = await supabase
+          .from('exam_results')
+          .select('score')
+          .eq('user_id', data.learnworlds_user_id);
+
+        if (examData && examData.length > 0) {
+          const total = examData.length;
+          const avgScore = examData.reduce((sum: number, e: any) => sum + e.score, 0) / total;
+          const passed = examData.filter((e: any) => e.score >= 60).length;
+          setExamStats({ total, avgScore, passRate: (passed / total) * 100, passed });
+        }
+
+        // Fetch performance metrics
+        const { data: metricsData } = await supabase
+          .from('user_performance_metrics')
+          .select('exam_performance_pct, training_activity_pct, overall_performance_pct, years_of_service')
+          .eq('user_id', data.learnworlds_user_id)
+          .eq('evaluation_period', 'last_year')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (metricsData) setPerfMetrics(metricsData);
       }
     } catch (error: any) {
       console.error("Error fetching profile:", error);
@@ -272,6 +311,89 @@ const Profile = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Warning indicator */}
+        {profile?.learnworlds_user_id && (
+          <WarningIndicator userId={profile.learnworlds_user_id} variant="card" />
+        )}
+
+        {/* Statistics */}
+        {profile?.link_verified && examStats && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Statisztikáim
+              </CardTitle>
+              <CardDescription>
+                Vizsga és képzési teljesítmény áttekintés
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* KPI grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-lg border p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <BookOpen className="w-4 h-4 text-primary" />
+                    <span className="text-xs text-muted-foreground">Összes vizsga</span>
+                  </div>
+                  <p className="text-2xl font-bold">{examStats.total}</p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Trophy className="w-4 h-4 text-yellow-600" />
+                    <span className="text-xs text-muted-foreground">Átlag pontszám</span>
+                  </div>
+                  <p className="text-2xl font-bold">{examStats.avgScore.toFixed(1)}%</p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Target className="w-4 h-4 text-green-600" />
+                    <span className="text-xs text-muted-foreground">Sikerességi arány</span>
+                  </div>
+                  <p className="text-2xl font-bold">{examStats.passRate.toFixed(0)}%</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{examStats.passed}/{examStats.total} sikeres</p>
+                </div>
+                {perfMetrics && (
+                  <div className="rounded-lg border p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Award className="w-4 h-4 text-accent" />
+                      <span className="text-xs text-muted-foreground">Munkaviszony</span>
+                    </div>
+                    <p className="text-2xl font-bold">{perfMetrics.years_of_service.toFixed(1)} év</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Performance bars */}
+              {perfMetrics && (
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-sm mb-1.5">
+                      <span>Vizsga teljesítmény</span>
+                      <span className="font-semibold">{perfMetrics.exam_performance_pct.toFixed(1)}%</span>
+                    </div>
+                    <Progress value={perfMetrics.exam_performance_pct} className="h-2" />
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-sm mb-1.5">
+                      <span>Képzési aktivitás</span>
+                      <span className="font-semibold">{perfMetrics.training_activity_pct.toFixed(1)}%</span>
+                    </div>
+                    <Progress value={perfMetrics.training_activity_pct} className="h-2" />
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-sm mb-1.5">
+                      <span>Összteljesítmény</span>
+                      <span className="font-semibold">{perfMetrics.overall_performance_pct.toFixed(1)}%</span>
+                    </div>
+                    <Progress value={perfMetrics.overall_performance_pct} className="h-2" />
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Button variant="outline" onClick={() => navigate("/")}>
           Vissza a főoldalra

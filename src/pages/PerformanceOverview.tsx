@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Users,
   BookOpen,
@@ -90,6 +92,19 @@ const PerformanceOverview = () => {
   const [allExams, setAllExams] = useState<ExamRow[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [badgeCount, setBadgeCount] = useState(0);
+  const [badgeDetails, setBadgeDetails] = useState<Array<{
+    id: string;
+    user_id: string;
+    username: string;
+    awarded_at: string;
+    badge_name: string;
+    badge_type: string;
+    badge_level: string | null;
+    icon_name: string;
+    color: string;
+    description: string;
+  }>>([]);
+  const [badgeDialogOpen, setBadgeDialogOpen] = useState(false);
   const [courseCompletionData, setCourseCompletionData] = useState<{name: string; fullName: string; avg: number; count: number}[]>([]);
 
   // View and filter state
@@ -119,6 +134,32 @@ const PerformanceOverview = () => {
       setAllExams(examRes.data || []);
       setUsers(userRes.data || []);
       setBadgeCount(badgeRes.count || 0);
+
+      // Fetch full badge details for the dialog
+      const { data: fullBadges } = await supabase
+        .from("user_badges")
+        .select("id, user_id, awarded_at, badge_definitions(badge_name, badge_type, badge_level, icon_name, color, description)")
+        .is("revoked_at", null)
+        .order("awarded_at", { ascending: false });
+
+      if (fullBadges) {
+        // Map usernames
+        const userMap = new Map<string, string>();
+        (userRes.data || []).forEach((u: any) => userMap.set(u.user_id, u.username));
+
+        setBadgeDetails(fullBadges.map((b: any) => ({
+          id: b.id,
+          user_id: b.user_id,
+          username: userMap.get(b.user_id) || b.user_id,
+          awarded_at: b.awarded_at,
+          badge_name: b.badge_definitions?.badge_name || "—",
+          badge_type: b.badge_definitions?.badge_type || "—",
+          badge_level: b.badge_definitions?.badge_level || null,
+          icon_name: b.badge_definitions?.icon_name || "Award",
+          color: b.badge_definitions?.color || "#888",
+          description: b.badge_definitions?.description || "",
+        })));
+      }
 
       // Fetch course completion data
       try {
@@ -336,6 +377,7 @@ const PerformanceOverview = () => {
   const isFiltered = selectedYear !== "all" || selectedMonth !== "all";
 
   return (
+    <>
     <main className="container mx-auto px-4 py-6">
       <div className="max-w-7xl mx-auto space-y-6 page-enter">
         {/* Header + View Tabs + Date Filter */}
@@ -413,7 +455,7 @@ const PerformanceOverview = () => {
             <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center"><Target className="w-5 h-5 text-green-600" /></div>
             <div><p className="text-2xl font-bold animate-count-up stat-value"><AnimatedCounter value={Math.round(passRate)} suffix="%" /></p><p className="text-xs text-muted-foreground">Sikerességi arány</p></div>
           </div></CardContent></Card>
-          <Card className="kpi-card animate-fade-up stagger-5"><CardContent className="pt-6"><div className="flex items-center gap-3">
+          <Card className="kpi-card animate-fade-up stagger-5 cursor-pointer hover:ring-2 hover:ring-yellow-500/40 transition-all" onClick={() => setBadgeDialogOpen(true)}><CardContent className="pt-6"><div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center"><Award className="w-5 h-5 text-yellow-600" /></div>
             <div><p className="text-2xl font-bold animate-count-up stat-value">{badgeCount}</p><p className="text-xs text-muted-foreground">Kiosztott jelvény</p></div>
           </div></CardContent></Card>
@@ -918,6 +960,86 @@ const PerformanceOverview = () => {
         )}
       </div>
     </main>
+
+    {/* Badge details dialog */}
+    <Dialog open={badgeDialogOpen} onOpenChange={setBadgeDialogOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Award className="w-5 h-5 text-yellow-600" />
+            Kiosztott jelvények ({badgeCount})
+          </DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="max-h-[60vh] pr-3">
+          {badgeDetails.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Award className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p>Még nincsenek kiosztott jelvények</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {badgeDetails.map((b) => {
+                const isSvg = b.icon_name.startsWith("/");
+                const typeLabels: Record<string, string> = {
+                  category: "Kategória",
+                  aspirant: "Törekvő",
+                  monthly_star: "Havi csillag",
+                  progress: "Előrehaladás",
+                };
+                return (
+                  <div
+                    key={b.id}
+                    className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
+                    onClick={() => { setBadgeDialogOpen(false); navigate(`/performance/${b.user_id}`); }}
+                  >
+                    {/* Badge icon */}
+                    <div
+                      className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: `${b.color}20`, border: `1px solid ${b.color}30` }}
+                    >
+                      {isSvg ? (
+                        <img src={b.icon_name} alt={b.badge_name} className="w-6 h-6" style={{ objectFit: "contain" }} />
+                      ) : (
+                        <Award className="w-5 h-5" style={{ color: b.color }} />
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm truncate">{b.username}</span>
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-1.5 py-0 flex-shrink-0"
+                          style={{ borderColor: `${b.color}50`, color: b.color }}
+                        >
+                          {typeLabels[b.badge_type] || b.badge_type}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {b.badge_name}
+                        {b.badge_level && ` (${b.badge_level})`}
+                      </p>
+                    </div>
+
+                    {/* Date */}
+                    <div className="text-[11px] text-muted-foreground text-right flex-shrink-0">
+                      {new Date(b.awarded_at).toLocaleDateString("hu-HU", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </div>
+
+                    <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
 

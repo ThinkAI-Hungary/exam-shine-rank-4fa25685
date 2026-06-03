@@ -32,10 +32,24 @@ import {
   CheckCircle2,
   Clock,
   ChevronRight,
+  UserPlus,
+  Plus,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SkeletonCards } from "@/components/ui/skeleton-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
+import { toast } from "sonner";
+
+// Reuse the manage-user edge function caller
+async function callManageUser(action: string, payload: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke("manage-user", {
+    body: { action, ...payload },
+  });
+  if (data && !data.success) throw new Error(data.error || "Ismeretlen hiba");
+  if (error) throw new Error(data?.error || error.message || "Edge function hiba");
+  return data;
+}
 
 interface Course {
   lw_course_id: string;
@@ -71,6 +85,13 @@ const Courses = () => {
   const [enrolledUsers, setEnrolledUsers] = useState<EnrolledUser[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailSearch, setDetailSearch] = useState("");
+
+  // Enrollment mode state
+  const [enrollMode, setEnrollMode] = useState<"view" | "enroll">("view");
+  const [allUsers, setAllUsers] = useState<{ user_id: string; username: string; email: string | null }[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [bulkEnrolling, setBulkEnrolling] = useState(false);
+  const [enrollUserSearch, setEnrollUserSearch] = useState("");
 
   useEffect(() => {
     fetchCourses();
@@ -182,6 +203,53 @@ const Courses = () => {
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const fetchAllUsers = async () => {
+    if (allUsers.length > 0) return; // already loaded
+    const { data } = await supabase
+      .from("users")
+      .select("user_id, username, email")
+      .order("username", { ascending: true });
+    setAllUsers(data || []);
+  };
+
+  const openEnrollMode = async () => {
+    setEnrollMode("enroll");
+    setSelectedUserIds(new Set());
+    setEnrollUserSearch("");
+    await fetchAllUsers();
+  };
+
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUserIds(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  const handleBulkUserEnroll = async () => {
+    if (!selectedCourse || selectedUserIds.size === 0) return;
+    setBulkEnrolling(true);
+    let success = 0;
+    let failed = 0;
+    for (const userId of selectedUserIds) {
+      try {
+        await callManageUser("enroll", { user_id: userId, course_id: selectedCourse.lw_course_id });
+        success++;
+      } catch (e) {
+        failed++;
+        console.error(`Failed to enroll ${userId}:`, e);
+      }
+    }
+    toast.success(`Tömeges beiratás kész: ${success} sikeres${failed > 0 ? `, ${failed} sikertelen` : ""}`);
+    setSelectedUserIds(new Set());
+    setEnrollMode("view");
+    // Refresh enrolled users
+    await handleCourseClick(selectedCourse);
+    setBulkEnrolling(false);
   };
 
   const getStatusBadge = (status: string | null) => {
@@ -375,7 +443,7 @@ const Courses = () => {
       </div>
 
       {/* Course Detail Dialog */}
-      <Dialog open={!!selectedCourse} onOpenChange={(open) => { if (!open) setSelectedCourse(null); }}>
+      <Dialog open={!!selectedCourse} onOpenChange={(open) => { if (!open) { setSelectedCourse(null); setEnrollMode("view"); } }}>
         <DialogContent className="sm:max-w-lg overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -383,62 +451,169 @@ const Courses = () => {
               {selectedCourse?.title || selectedCourse?.lw_course_id}
             </DialogTitle>
             <DialogDescription>
-              Beiratkozott felhasználók ({enrolledUsers.length})
+              {enrollMode === "view"
+                ? `Beiratkozott felhasználók (${enrolledUsers.length})`
+                : "Felhasználók kijelölése beiratáshoz"}
             </DialogDescription>
           </DialogHeader>
 
-          {/* Search */}
-          {enrolledUsers.length > 5 && (
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Keresés név vagy email alapján..."
-                value={detailSearch}
-                onChange={(e) => setDetailSearch(e.target.value)}
-                className="pl-8 h-8 text-sm w-full"
-              />
-            </div>
+          {/* Mode tabs */}
+          {isAdmin && (
+            <Tabs value={enrollMode} onValueChange={(v) => {
+              if (v === "enroll") openEnrollMode();
+              else setEnrollMode("view");
+            }}>
+              <TabsList className="w-full">
+                <TabsTrigger value="view" className="flex-1 gap-1.5 text-xs">
+                  <Users className="w-3.5 h-3.5" /> Beiratkozottak
+                </TabsTrigger>
+                <TabsTrigger value="enroll" className="flex-1 gap-1.5 text-xs">
+                  <UserPlus className="w-3.5 h-3.5" /> Felhasználók beiratása
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           )}
 
-          {/* User List */}
-          {detailLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : filteredEnrolledUsers.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              {enrolledUsers.length === 0 ? "Nincs beiratkozott felhasználó" : "Nincs találat"}
-            </div>
-          ) : (
-            <div className="space-y-1 max-h-[45vh] overflow-y-auto custom-scroll">
-              {filteredEnrolledUsers.map((user) => (
-                <div key={user.user_id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-semibold text-primary">
-                      {user.username.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{user.username}</p>
-                    {user.email && (
-                      <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <div className="w-16">
-                      <Progress value={user.completion_percentage} className="h-1.5" />
-                    </div>
-                    <span className={`text-xs font-mono w-10 text-right ${
-                      user.completion_percentage >= 100 ? "text-green-600 font-semibold" :
-                      user.completion_percentage > 0 ? "text-foreground" : "text-muted-foreground"
-                    }`}>
-                      {user.completion_percentage.toFixed(0)}%
-                    </span>
-                  </div>
+          {enrollMode === "view" ? (
+            <>
+              {/* Search */}
+              {enrolledUsers.length > 5 && (
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Keresés név vagy email alapján..."
+                    value={detailSearch}
+                    onChange={(e) => setDetailSearch(e.target.value)}
+                    className="pl-8 h-8 text-sm w-full"
+                  />
                 </div>
-              ))}
-            </div>
+              )}
+
+              {/* User List */}
+              {detailLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredEnrolledUsers.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  {enrolledUsers.length === 0 ? "Nincs beiratkozott felhasználó" : "Nincs találat"}
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-[45vh] overflow-y-auto custom-scroll">
+                  {filteredEnrolledUsers.map((user) => (
+                    <div key={user.user_id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs font-semibold text-primary">
+                          {user.username.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{user.username}</p>
+                        {user.email && (
+                          <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="w-16">
+                          <Progress value={user.completion_percentage} className="h-1.5" />
+                        </div>
+                        <span className={`text-xs font-mono w-10 text-right ${
+                          user.completion_percentage >= 100 ? "text-green-600 font-semibold" :
+                          user.completion_percentage > 0 ? "text-foreground" : "text-muted-foreground"
+                        }`}>
+                          {user.completion_percentage.toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Enroll mode: search + multi-select users */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Felhasználó keresése..."
+                  value={enrollUserSearch}
+                  onChange={(e) => setEnrollUserSearch(e.target.value)}
+                  className="pl-8 h-8 text-sm w-full"
+                />
+              </div>
+
+              {/* Bulk action bar */}
+              {selectedUserIds.size > 0 && (
+                <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-primary/5 border border-primary/20">
+                  <span className="text-xs text-primary font-medium">
+                    {selectedUserIds.size} felhasználó kijelölve
+                  </span>
+                  <Button
+                    size="sm"
+                    className="h-6 text-[11px] px-3"
+                    disabled={bulkEnrolling}
+                    onClick={handleBulkUserEnroll}
+                  >
+                    {bulkEnrolling ? (
+                      <><Loader2 className="w-3 h-3 animate-spin mr-1" />Beiratás...</>
+                    ) : (
+                      <><Plus className="w-3 h-3 mr-1" />Kijelöltek beiratása</>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {/* User list with checkboxes */}
+              <div className="space-y-0.5 max-h-[40vh] overflow-y-auto custom-scroll">
+                {allUsers
+                  .filter((u) => {
+                    if (!enrollUserSearch) return true;
+                    const q = enrollUserSearch.toLowerCase();
+                    return u.username.toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
+                  })
+                  .map((user) => {
+                    const alreadyEnrolled = enrolledUsers.some((e) => e.user_id === user.user_id);
+                    const isSelected = selectedUserIds.has(user.user_id);
+                    return (
+                      <div
+                        key={user.user_id}
+                        className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-md transition-colors cursor-pointer ${
+                          alreadyEnrolled
+                            ? "bg-primary/5 border border-primary/20 opacity-60"
+                            : isSelected
+                            ? "bg-accent/10 border border-accent/30"
+                            : "hover:bg-muted/50 border border-transparent"
+                        }`}
+                        onClick={() => !alreadyEnrolled && toggleUserSelection(user.user_id)}
+                      >
+                        {!alreadyEnrolled ? (
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleUserSelection(user.user_id)}
+                            className="w-3.5 h-3.5 rounded border-border accent-primary flex-shrink-0 cursor-pointer"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs font-medium truncate block">{user.username}</span>
+                          {user.email && (
+                            <span className="text-[10px] text-muted-foreground truncate block">{user.email}</span>
+                          )}
+                        </div>
+                        {alreadyEnrolled && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-primary/30 text-primary flex-shrink-0">
+                            Már beiratva
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
           )}
 
           <DialogFooter className="sm:justify-end">

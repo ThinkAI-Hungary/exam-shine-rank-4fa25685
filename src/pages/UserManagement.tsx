@@ -154,6 +154,8 @@ const UserManagement = () => {
   const [userEnrollments, setUserEnrollments] = useState<{ lw_course_id: string }[]>([]);
   const [enrollLoading, setEnrollLoading] = useState(false);
   const [enrollSearchQuery, setEnrollSearchQuery] = useState("");
+  const [selectedCourseIds, setSelectedCourseIds] = useState<Set<string>>(new Set());
+  const [bulkEnrolling, setBulkEnrolling] = useState(false);
 
   // Form state
   const [form, setForm] = useState<UserFormData>({ email: "", username: "", password: "", tags: [], uj_kollega: "", munkaviszony_kezdete: "" });
@@ -197,8 +199,42 @@ const UserManagement = () => {
     setSelectedUser(user);
     setEnrollDialogOpen(true);
     setEnrollLoading(true);
+    setSelectedCourseIds(new Set());
     await fetchUserEnrollments(user.user_id);
     setEnrollLoading(false);
+  };
+
+  const toggleCourseSelection = (courseId: string) => {
+    setSelectedCourseIds(prev => {
+      const next = new Set(prev);
+      if (next.has(courseId)) next.delete(courseId);
+      else next.add(courseId);
+      return next;
+    });
+  };
+
+  const handleBulkEnroll = async () => {
+    if (!selectedUser || selectedCourseIds.size === 0) return;
+    setBulkEnrolling(true);
+    let success = 0;
+    let failed = 0;
+    for (const courseId of selectedCourseIds) {
+      try {
+        await callManageUser("enroll", { user_id: selectedUser.user_id, course_id: courseId });
+        success++;
+      } catch (e) {
+        failed++;
+        console.error(`Failed to enroll in ${courseId}:`, e);
+      }
+    }
+    toast({
+      title: "Tömeges beiratás kész",
+      description: `${success} sikeres${failed > 0 ? `, ${failed} sikertelen` : ""}`,
+      variant: failed > 0 ? "destructive" : undefined,
+    });
+    setSelectedCourseIds(new Set());
+    await fetchUserEnrollments(selectedUser.user_id);
+    setBulkEnrolling(false);
   };
 
   const handleEnroll = async (courseId: string) => {
@@ -892,8 +928,8 @@ const UserManagement = () => {
       </AlertDialog>
 
       {/* ── Enrollment Management Dialog ── */}
-      <Dialog open={enrollDialogOpen} onOpenChange={(open) => { setEnrollDialogOpen(open); if (!open) setEnrollSearchQuery(""); }}>
-        <DialogContent className="sm:max-w-[420px] overflow-hidden">
+      <Dialog open={enrollDialogOpen} onOpenChange={(open) => { setEnrollDialogOpen(open); if (!open) { setEnrollSearchQuery(""); setSelectedCourseIds(new Set()); } }}>
+        <DialogContent className="sm:max-w-[480px] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <GraduationCap className="w-5 h-5 text-primary" />
@@ -913,6 +949,28 @@ const UserManagement = () => {
               className="pl-8 h-8 text-sm w-full"
             />
           </div>
+
+          {/* Bulk action bar */}
+          {selectedCourseIds.size > 0 && (
+            <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-primary/5 border border-primary/20">
+              <span className="text-xs text-primary font-medium">
+                {selectedCourseIds.size} kurzus kijelölve
+              </span>
+              <Button
+                size="sm"
+                className="h-6 text-[11px] px-3"
+                disabled={bulkEnrolling}
+                onClick={handleBulkEnroll}
+              >
+                {bulkEnrolling ? (
+                  <><Loader2 className="w-3 h-3 animate-spin mr-1" />Beiratás...</>
+                ) : (
+                  <>Kijelöltekre beiratás</>
+                )}
+              </Button>
+            </div>
+          )}
+
           {/* Course list */}
           {enrollLoading && courses.length === 0 ? (
             <div className="flex justify-center py-8">
@@ -930,19 +988,30 @@ const UserManagement = () => {
                 const isEnrolled = userEnrollments.some(
                   (e) => e.lw_course_id === course.lw_course_id
                 );
+                const isSelected = selectedCourseIds.has(course.lw_course_id);
                 return (
                   <div
                     key={course.lw_course_id}
                     className={`flex items-center justify-between rounded-md px-2.5 py-1.5 transition-colors ${
                       isEnrolled
                         ? "bg-primary/5 border border-primary/20"
+                        : isSelected
+                        ? "bg-accent/10 border border-accent/30"
                         : "hover:bg-muted/50 border border-transparent"
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
-                      <BookOpen className={`w-3.5 h-3.5 flex-shrink-0 ${
-                        isEnrolled ? "text-primary" : "text-muted-foreground"
-                      }`} />
+                      {/* Checkbox for non-enrolled courses */}
+                      {!isEnrolled ? (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleCourseSelection(course.lw_course_id)}
+                          className="w-3.5 h-3.5 rounded border-border accent-primary flex-shrink-0 cursor-pointer"
+                        />
+                      ) : (
+                        <BookOpen className="w-3.5 h-3.5 flex-shrink-0 text-primary" />
+                      )}
                       <span className="text-xs truncate">
                         {course.title || course.lw_course_id}
                       </span>
@@ -960,7 +1029,7 @@ const UserManagement = () => {
                           ? "text-destructive hover:text-destructive hover:bg-destructive/10"
                           : "text-primary hover:text-primary hover:bg-primary/10"
                       }`}
-                      disabled={enrollLoading}
+                      disabled={enrollLoading || bulkEnrolling}
                       onClick={() =>
                         isEnrolled
                           ? handleUnenroll(course.lw_course_id)
