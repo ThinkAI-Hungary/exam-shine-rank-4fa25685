@@ -42,6 +42,16 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
     return iconMap[iconName] || Star;
   };
 
+  // Renders either an SVG image or a Lucide icon based on icon_name
+  const BadgeIcon = ({ iconName, className = "w-5 h-5" }: { iconName: string; className?: string }) => {
+    if (iconName.startsWith("/")) {
+      // Custom SVG path
+      return <img src={iconName} alt="" className={className} style={{ objectFit: "contain" }} />;
+    }
+    const Icon = getIcon(iconName);
+    return <Icon className={className} />;
+  };
+
   const activeBadges = badges.filter(b => !b.revoked_at && (showExpired || !b.expires_at || new Date(b.expires_at) > new Date()));
   
   // Group badges by type
@@ -55,7 +65,6 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
     const primaryBadge = categoryBadges[0] || aspirantBadges[0] || monthlyBadges[0] || progressBadges[0];
     if (!primaryBadge) return null;
 
-    const Icon = getIcon(primaryBadge.badge_definitions.icon_name);
     const isMonthly = primaryBadge.badge_definitions.badge_type === 'monthly_star';
     const isCategory = primaryBadge.badge_definitions.badge_type === 'category';
     
@@ -77,7 +86,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                 padding: '0.125rem 0.5rem'
               }}
             >
-              <Icon className="w-4 h-4 flex-shrink-0" />
+              <BadgeIcon iconName={primaryBadge.badge_definitions.icon_name} className="w-4 h-4 flex-shrink-0" />
               <span className="text-xs font-semibold whitespace-nowrap leading-tight">
                 {primaryBadge.badge_definitions.badge_name}
               </span>
@@ -102,7 +111,6 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <h3 className="text-sm font-medium text-muted-foreground mb-2">Kategória</h3>
           <div className="flex flex-wrap gap-2">
             {categoryBadges.map(badge => {
-              const Icon = getIcon(badge.badge_definitions.icon_name);
               return (
                 <TooltipProvider key={badge.id}>
                   <Tooltip>
@@ -116,7 +124,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                           color: badge.badge_definitions.color
                         }}
                       >
-                        <Icon className="w-5 h-5" />
+                        <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-5 h-5" />
                         <span className="font-semibold">{badge.badge_definitions.badge_name}</span>
                       </Badge>
                     </TooltipTrigger>
@@ -140,7 +148,6 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <h3 className="text-sm font-medium text-muted-foreground mb-2">Törekvő</h3>
           <div className="flex flex-wrap gap-2">
             {aspirantBadges.map(badge => {
-              const Icon = getIcon(badge.badge_definitions.icon_name);
               return (
                 <TooltipProvider key={badge.id}>
                   <Tooltip>
@@ -153,7 +160,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                           color: badge.badge_definitions.color
                         }}
                       >
-                        <Icon className="w-4 h-4" />
+                        <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-4 h-4" />
                         <span>{badge.badge_definitions.badge_name}</span>
                       </Badge>
                     </TooltipTrigger>
@@ -177,7 +184,6 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <h3 className="text-sm font-medium text-muted-foreground mb-2">Havi csillagok</h3>
           <div className="flex flex-wrap gap-2">
             {monthlyBadges.map(badge => {
-              const Icon = getIcon(badge.badge_definitions.icon_name);
               const isExpiring = badge.expires_at && new Date(badge.expires_at) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
               return (
                 <TooltipProvider key={badge.id}>
@@ -191,7 +197,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                           borderColor: badge.badge_definitions.color
                         }}
                       >
-                        <Icon className="w-4 h-4" />
+                        <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-4 h-4" />
                         <span>{badge.badge_definitions.badge_name}</span>
                       </Badge>
                     </TooltipTrigger>
@@ -220,7 +226,6 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <h3 className="text-sm font-medium text-muted-foreground mb-2">Előrehaladás</h3>
           <div className="flex flex-wrap gap-2">
             {progressBadges.map(badge => {
-              const Icon = getIcon(badge.badge_definitions.icon_name);
               return (
                 <TooltipProvider key={badge.id}>
                   <Tooltip>
@@ -234,7 +239,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                           color: badge.badge_definitions.color
                         }}
                       >
-                        <Icon className="w-4 h-4" />
+                        <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-4 h-4" />
                         <span>{badge.badge_definitions.badge_name}</span>
                       </Badge>
                     </TooltipTrigger>

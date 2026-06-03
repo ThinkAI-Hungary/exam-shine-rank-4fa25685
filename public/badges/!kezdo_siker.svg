@@ -1,0 +1,113 @@
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <!-- Definitions -->
+  <defs>
+    <!-- Red gradient -->
+    <radialGradient id="redRadial" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FF4444;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#E63946;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#C1121F;stop-opacity:1" />
+    </radialGradient>
+    
+    <linearGradient id="redLinear" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B6B;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#E63946;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#A4161A;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Black gradient -->
+    <linearGradient id="blackGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A4A4A;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1A1A1A;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Background -->
+    <radialGradient id="bg" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#F8F8F8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F0F0F0;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Pattern -->
+    <pattern id="checkerPattern" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+      <rect x="0" y="0" width="10" height="10" fill="#E63946" opacity="0.08"/>
+      <rect x="10" y="10" width="10" height="10" fill="#E63946" opacity="0.08"/>
+    </pattern>
+    
+    <!-- Shadow -->
+    <filter id="shadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="2"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <g transform="translate(200, 200)">
+    <!-- Frame -->
+    <circle cx="0" cy="0" r="150" fill="url(#redRadial)" stroke="#A4161A" stroke-width="3"/>
+    <circle cx="0" cy="0" r="138" fill="none" stroke="#FF6B6B" stroke-width="1.5"/>
+    <circle cx="0" cy="0" r="130" fill="url(#bg)"/>
+    
+    <!-- Pattern -->
+    <circle cx="0" cy="0" r="130" fill="url(#checkerPattern)"/>
+    
+    <!-- Decorative circles -->
+    <circle cx="0" cy="0" r="105" fill="none" stroke="#E63946" stroke-width="0.5" opacity="0.2"/>
+    <circle cx="0" cy="0" r="80" fill="none" stroke="#E63946" stroke-width="0.5" opacity="0.2"/>
+    
+    <!-- Starter Flag (centered) -->
+    <g filter="url(#shadow)" transform="translate(-20, 0)">
+      <!-- Flag pole -->
+      <rect x="-3" y="-45" width="6" height="90" rx="3" fill="url(#blackGrad)"/>
+      
+      <!-- Flag (waving) with checkered pattern -->
+      <path d="M 3,-40 L 3,-40 Q 25,-42 40,-40 Q 45,-35 45,-25 Q 45,-15 40,-10 Q 25,-8 3,-10 Z" 
+            fill="white" stroke="#1A1A1A" stroke-width="1.5"/>
+      
+      <!-- Checkered pattern on flag -->
+      <g>
+        <!-- Row 1 -->
+        <rect x="3" y="-40" width="8" height="6" fill="#1A1A1A"/>
+        <rect x="19" y="-40" width="8" height="6" fill="#1A1A1A"/>
+        <rect x="35" y="-40" width="8" height="6" fill="#1A1A1A"/>
+        
+        <!-- Row 2 -->
+        <rect x="11" y="-34" width="8" height="6" fill="#1A1A1A"/>
+        <rect x="27" y="-34" width="8" height="6" fill="#1A1A1A"/>
+        
+        <!-- Row 3 -->
+        <rect x="3" y="-28" width="8" height="6" fill="#1A1A1A"/>
+        <rect x="19" y="-28" width="8" height="6" fill="#1A1A1A"/>
+        <rect x="35" y="-28" width="8" height="6" fill="#1A1A1A"/>
+        
+        <!-- Row 4 -->
+        <rect x="11" y="-22" width="8" height="6" fill="#1A1A1A"/>
+        <rect x="27" y="-22" width="8" height="6" fill="#1A1A1A"/>
+        
+        <!-- Row 5 -->
+        <rect x="3" y="-16" width="8" height="6" fill="#1A1A1A"/>
+        <rect x="19" y="-16" width="8" height="6" fill="#1A1A1A"/>
+        <rect x="35" y="-16" width="7" height="6" fill="#1A1A1A"/>
+      </g>
+      
+      <!-- Flag base stand -->
+      <ellipse cx="0" cy="45" rx="12" ry="4" fill="url(#blackGrad)"/>
+    </g>
+    
+    <!-- Text - split into two lines (adjusted) -->
+    <text x="0" y="-75" font-family="Arial, sans-serif" font-size="20" font-weight="bold"
+          fill="#1A1A1A" text-anchor="middle" letter-spacing="1.5">
+      Kezdő
+    </text>
+    
+    <text x="0" y="80" font-family="Arial, sans-serif" font-size="20" font-weight="bold"
+          fill="#1A1A1A" text-anchor="middle" letter-spacing="1.5">
+      Siker
+    </text>
+  </g>
+</svg>

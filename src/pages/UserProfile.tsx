@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Calendar, Trophy, TrendingUp, Target } from "lucide-react";
 import { toast } from "sonner";
 import BadgeDisplay from "@/components/BadgeDisplay";
+import { WarningIndicator } from "@/components/WarningIndicator";
 
 interface UserData {
   user_id: string;
@@ -189,6 +190,9 @@ const UserProfile = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Warning Card (sárga/piros lap) */}
+        <WarningIndicator userId={userData.user_id} variant="card" />
 
         {/* Performance Metrics */}
         {metrics && (

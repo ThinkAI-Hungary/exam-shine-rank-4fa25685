@@ -1,0 +1,76 @@
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <!-- Definitions -->
+  <defs>
+    <!-- Premium Silver gradient -->
+    <radialGradient id="silverRadial" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#F8F8F8;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#D0D0D0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#A8A8A8;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Elegant Diego Blue -->
+    <linearGradient id="blueElegant" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4DB8FF;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#2B8FD9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1A6FB8;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Light blue for background -->
+    <radialGradient id="bgBlue" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#F0F8FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E6F2FF;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Subtle pattern -->
+    <pattern id="dots" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+      <circle cx="10" cy="10" r="1" fill="#2B8FD9" opacity="0.1"/>
+    </pattern>
+    
+    <!-- Soft shadow -->
+    <filter id="softShadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="1" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.25"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <g transform="translate(200, 200)">
+    <!-- Outer silver ring -->
+    <circle cx="0" cy="0" r="150" fill="url(#silverRadial)" stroke="#B0B0B0" stroke-width="2"/>
+    
+    <!-- Inner rings -->
+    <circle cx="0" cy="0" r="140" fill="none" stroke="#D8D8D8" stroke-width="1"/>
+    <circle cx="0" cy="0" r="132" fill="url(#bgBlue)"/>
+    
+    <!-- Dotted pattern -->
+    <circle cx="0" cy="0" r="132" fill="url(#dots)"/>
+    
+    <!-- Concentric circles decoration -->
+    <circle cx="0" cy="0" r="110" fill="none" stroke="#2B8FD9" stroke-width="0.5" opacity="0.2"/>
+    <circle cx="0" cy="0" r="90" fill="none" stroke="#2B8FD9" stroke-width="0.5" opacity="0.2"/>
+    <circle cx="0" cy="0" r="70" fill="none" stroke="#2B8FD9" stroke-width="0.5" opacity="0.2"/>
+    
+    <!-- Simple rounded arrow -->
+    <g filter="url(#softShadow)">
+      <!-- Rounded shaft -->
+      <rect x="-6" y="-15" width="12" height="60" rx="6" fill="url(#blueElegant)"/>
+      
+      <!-- Rounded triangular head -->
+      <path d="M 0,-50 L -24,-15 L 0,-22 L 24,-15 Z" 
+            fill="url(#blueElegant)" stroke="url(#blueElegant)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    </g>
+    
+    <!-- Elegant text with better contrast -->
+    <text x="0" y="100" font-family="Garamond, Georgia, serif" font-size="22" font-weight="600"
+          fill="#808080" text-anchor="middle" letter-spacing="2">
+      A jövő ezüstje
+    </text>
+  </g>
+</svg>

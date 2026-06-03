@@ -25,6 +25,7 @@ import StudentQuickView from "@/components/StudentQuickView";
 import { SkeletonTable } from "@/components/ui/skeleton-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
+import { useWarningStatuses, WarningIcon } from "@/components/WarningIndicator";
 
 
 interface Student {
@@ -79,6 +80,9 @@ const Students = () => {
     fetchStudents();
     fetchEnrollmentCounts();
   }, []);
+
+  // Batch-fetch warning statuses for all students
+  const warningMap = useWarningStatuses(students.map(s => s.user_id));
 
   useEffect(() => {
     let filtered = students;
@@ -285,7 +289,12 @@ const Students = () => {
                               </span>
                             </div>
                             <div>
-                              <p className="font-medium text-sm">{student.username}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-medium text-sm">{student.username}</p>
+                                {warningMap.get(student.user_id) && (
+                                  <WarningIcon warningType={warningMap.get(student.user_id)!} />
+                                )}
+                              </div>
                               <p className="text-xs text-muted-foreground sm:hidden">
                                 {student.email || "—"}
                               </p>

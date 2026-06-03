@@ -1,0 +1,100 @@
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <!-- Definitions -->
+  <defs>
+    <!-- Bronze gradient -->
+    <radialGradient id="bronzeRadial" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFB366;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#CD7F32;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B4513;stop-opacity:1" />
+    </radialGradient>
+    
+    <linearGradient id="bronzeLinear" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD4A3;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#CD7F32;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B4513;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Light orange for arrow -->
+    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF9F5A;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#FF8534;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E67324;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Warm background -->
+    <radialGradient id="warmBg" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFFAF5;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#FFF3E6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFE8CC;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Pattern -->
+    <pattern id="bronzePattern" x="0" y="0" width="25" height="25" patternUnits="userSpaceOnUse">
+      <circle cx="12.5" cy="12.5" r="1" fill="#CD7F32" opacity="0.12"/>
+    </pattern>
+    
+    <!-- Soft shadow -->
+    <filter id="softShadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="1" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.25"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <g transform="translate(200, 200)">
+    <!-- Outer bronze octagon border (visible thick frame) -->
+    <path d="M -115,-47 L -47,-115 L 47,-115 L 115,-47 L 115,47 L 47,115 L -47,115 L -115,47 Z" 
+          fill="url(#bronzeRadial)" stroke="#6B4423" stroke-width="4"/>
+    
+    <!-- Inner octagon frame layer -->
+    <path d="M -105,-43 L -43,-105 L 43,-105 L 105,-43 L 105,43 L 43,105 L -43,105 L -105,43 Z" 
+          fill="url(#bronzeRadial)" stroke="none"/>
+    
+    <!-- Middle decorative ring -->
+    <path d="M -100,-41 L -41,-100 L 41,-100 L 100,-41 L 100,41 L 41,100 L -41,100 L -100,41 Z" 
+          fill="none" stroke="#FFD4A3" stroke-width="2"/>
+    
+    <!-- Inner octagon border -->
+    <path d="M -92,-38 L -38,-92 L 38,-92 L 92,-38 L 92,38 L 38,92 L -38,92 L -92,38 Z" 
+          fill="none" stroke="#CD7F32" stroke-width="1"/>
+    
+    <!-- Inner circle background -->
+    <circle cx="0" cy="0" r="120" fill="url(#warmBg)"/>
+    
+    <!-- Pattern -->
+    <circle cx="0" cy="0" r="120" fill="url(#bronzePattern)"/>
+    
+    <!-- Progress circles decoration -->
+    <circle cx="0" cy="0" r="100" fill="none" stroke="#CD7F32" stroke-width="0.5" opacity="0.2"/>
+    <circle cx="0" cy="0" r="75" fill="none" stroke="#CD7F32" stroke-width="0.5" opacity="0.2"/>
+    
+    <!-- Upward arrow -->
+    <g filter="url(#softShadow)">
+      <!-- Arrow shaft -->
+      <rect x="-7" y="-10" width="14" height="55" rx="7" fill="url(#orangeGrad)"/>
+      
+      <!-- Arrow head -->
+      <path d="M 0,-50 L -26,-10 L 0,-20 L 26,-10 Z" 
+            fill="url(#orangeGrad)" stroke="url(#orangeGrad)" stroke-width="2" stroke-linejoin="round"/>
+      
+      <!-- Number 3 at the top of arrow -->
+      <circle cx="0" cy="-50" r="14" fill="url(#bronzeLinear)" opacity="0.9"/>
+      <text x="0" y="-43" font-family="Georgia, serif" font-size="20" font-weight="bold"
+            fill="white" text-anchor="middle">
+        3
+      </text>
+    </g>
+    
+    <!-- Text (positioned to fit within octagon) -->
+    <text x="0" y="85" font-family="Garamond, Georgia, serif" font-size="20" font-weight="600"
+          fill="#6B4423" text-anchor="middle" letter-spacing="2">
+      A jövő bronza
+    </text>
+  </g>
+</svg>

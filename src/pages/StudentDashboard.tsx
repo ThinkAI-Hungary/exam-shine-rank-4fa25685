@@ -18,6 +18,7 @@ import {
   Calendar,
   GraduationCap,
 } from "lucide-react";
+import { WarningIndicator } from "@/components/WarningIndicator";
 import {
   BarChart,
   Bar,
@@ -315,6 +316,9 @@ const StudentDashboard = () => {
             </div>
           </CardHeader>
         </Card>
+
+        {/* Warning Card (sárga/piros lap) */}
+        {userData && <WarningIndicator userId={userData.user_id} variant="card" />}
 
         {/* Stats Grid */}
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">

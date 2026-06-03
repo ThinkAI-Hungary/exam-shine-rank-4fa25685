@@ -1,0 +1,81 @@
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <!-- Definitions -->
+  <defs>
+    <!-- Yellow/Warning gradient -->
+    <radialGradient id="yellowRadial" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFE135;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#FFC107;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFA000;stop-opacity:1" />
+    </radialGradient>
+    
+    <linearGradient id="yellowLinear" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFF59D;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#FFC107;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF8F00;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Dark orange/red for symbol -->
+    <linearGradient id="orangeRed" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6F00;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E65100;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Light background -->
+    <radialGradient id="lightBg" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFFEF0;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#FFF9E0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFF3C0;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Warning stripes pattern -->
+    <pattern id="warningStripes" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect x="0" y="0" width="5" height="10" fill="#FFC107" opacity="0.1"/>
+    </pattern>
+    
+    <!-- Soft shadow -->
+    <filter id="softShadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="1" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <g transform="translate(200, 200)">
+    <!-- Outer yellow ring -->
+    <circle cx="0" cy="0" r="150" fill="url(#yellowRadial)" stroke="#FFA000" stroke-width="2"/>
+    
+    <!-- Inner rings -->
+    <circle cx="0" cy="0" r="140" fill="none" stroke="#FFE082" stroke-width="1"/>
+    <circle cx="0" cy="0" r="132" fill="url(#lightBg)"/>
+    
+    <!-- Warning stripes -->
+    <circle cx="0" cy="0" r="132" fill="url(#warningStripes)"/>
+    
+    <!-- Yellow card icon (centered) -->
+    <g filter="url(#softShadow)">
+      <!-- Card shape -->
+      <rect x="-35" y="-55" width="70" height="95" rx="5" 
+            fill="url(#yellowLinear)" stroke="#FFA000" stroke-width="3"/>
+      
+      <!-- Card corner fold -->
+      <path d="M 35,-55 L 35,-38 L 18,-55 Z" fill="#FFD54F" opacity="0.6"/>
+      
+      <!-- Warning symbol on card -->
+      <circle cx="0" cy="-5" r="22" fill="none" stroke="url(#orangeRed)" stroke-width="3.5"/>
+      <rect x="-3.5" y="-18" width="7" height="16" rx="3.5" fill="url(#orangeRed)"/>
+      <circle cx="0" cy="4" r="3.5" fill="url(#orangeRed)"/>
+    </g>
+    
+    <!-- Text -->
+    <text x="0" y="100" font-family="Arial, sans-serif" font-size="20" font-weight="bold"
+          fill="#E65100" text-anchor="middle" letter-spacing="1">
+      Sárga lap
+    </text>
+  </g>
+</svg>
