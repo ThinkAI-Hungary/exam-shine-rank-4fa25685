@@ -180,7 +180,24 @@ const CompanyMonitoring = () => {
   useEffect(() => {
     fetchCompanies();
     fetchLwGroups();
+
+    // Realtime: refetch whenever a monitored company changes
+    const channel = supabase
+      .channel("company_monitoring_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "company_monitoring" },
+        () => {
+          void fetchCompanies();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, []);
+
 
   const fetchLwGroups = async () => {
     try {
