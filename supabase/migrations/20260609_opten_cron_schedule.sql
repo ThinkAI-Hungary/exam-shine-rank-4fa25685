@@ -3,8 +3,9 @@
 -- Runs on the 1st of every month at 06:00 UTC (08:00 Budapest)
 -- ============================================================
 
--- Enable pg_cron extension (if not already enabled)
--- Note: This must be enabled via Supabase Dashboard > Database > Extensions
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS http WITH SCHEMA extensions;
+-- pg_cron must be enabled via Supabase Dashboard > Database > Extensions
 -- CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 -- Create a helper function that calls the edge function
