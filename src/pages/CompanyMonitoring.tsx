@@ -200,7 +200,7 @@ const CompanyMonitoring = () => {
         .eq("is_active", true)
         .order("company_name");
       if (error) throw error;
-      setCompanies(data || []);
+      setCompanies((data || []) as unknown as CompanyRow[]);
     } catch (e) {
       console.error("Error fetching companies:", e);
     } finally {
