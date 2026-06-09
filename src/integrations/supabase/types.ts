@@ -99,6 +99,7 @@ export type Database = {
       }
       company_monitoring: {
         Row: {
+          company_code: string | null
           company_name: string
           created_at: string | null
           current_employee_count: number | null
@@ -112,6 +113,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          company_code?: string | null
           company_name: string
           created_at?: string | null
           current_employee_count?: number | null
@@ -125,6 +127,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          company_code?: string | null
           company_name?: string
           created_at?: string | null
           current_employee_count?: number | null
