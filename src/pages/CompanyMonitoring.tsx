@@ -92,6 +92,8 @@ interface CompanyRow {
   registered_capital: string | null;
   company_form: string | null;
   lw_group_id: string | null;
+  company_code: string | null;
+  store_name: string | null;
 }
 
 interface LwGroup {
@@ -251,6 +253,8 @@ const CompanyMonitoring = () => {
       list = list.filter(
         (c) =>
           c.company_name.toLowerCase().includes(q) ||
+          (c.store_name && c.store_name.toLowerCase().includes(q)) ||
+          (c.company_code && c.company_code.toLowerCase().includes(q)) ||
           c.tax_number.includes(q)
       );
     }
@@ -660,7 +664,15 @@ const CompanyMonitoring = () => {
                             </div>
                             <div>
                               <p className="font-medium text-sm">{company.company_name}</p>
-                              <p className="text-xs text-muted-foreground sm:hidden">{company.tax_number}</p>
+                              <div className="flex items-center gap-1.5">
+                                {company.company_code && (
+                                  <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1 py-0.5 rounded">{company.company_code}</span>
+                                )}
+                                {company.store_name && (
+                                  <span className="text-xs text-muted-foreground">{company.store_name}</span>
+                                )}
+                                <p className="text-xs text-muted-foreground sm:hidden">{company.tax_number}</p>
+                              </div>
                             </div>
                           </div>
                         </TableCell>
@@ -858,7 +870,9 @@ const CompanyMonitoring = () => {
               {detailCompany?.company_name}
             </DialogTitle>
             <DialogDescription>
-              Adószám: {detailCompany?.tax_number} · Létszámtörténet
+              {detailCompany?.company_code && <span className="font-mono mr-1">{detailCompany.company_code}</span>}
+              {detailCompany?.store_name && <span className="mr-1">· {detailCompany.store_name}</span>}
+              · Adószám: {detailCompany?.tax_number || "—"} · Létszámtörténet
             </DialogDescription>
           </DialogHeader>
 
