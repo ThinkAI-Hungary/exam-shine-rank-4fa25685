@@ -109,7 +109,7 @@ export type Database = {
           last_checked_at: string | null
           notes: string | null
           previous_employee_count: number | null
-          tax_number: string
+          tax_number: string | null
           updated_at: string | null
         }
         Insert: {
@@ -123,7 +123,7 @@ export type Database = {
           last_checked_at?: string | null
           notes?: string | null
           previous_employee_count?: number | null
-          tax_number: string
+          tax_number?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -137,7 +137,7 @@ export type Database = {
           last_checked_at?: string | null
           notes?: string | null
           previous_employee_count?: number | null
-          tax_number?: string
+          tax_number?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -902,6 +902,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      trigger_opten_check_all: { Args: never; Returns: undefined }
       update_all_users_performance_metrics: {
         Args: {
           p_evaluation_period?: Database["public"]["Enums"]["evaluation_period"]
