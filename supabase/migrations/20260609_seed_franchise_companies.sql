@@ -4,6 +4,14 @@
 -- Tax numbers will be resolved via RapidSearch2 on first check-all.
 -- ============================================================
 
+-- First, make tax_number nullable (it was NOT NULL originally)
+-- Tax numbers will be resolved via RapidSearch2 on first check-all.
+ALTER TABLE company_monitoring ALTER COLUMN tax_number DROP NOT NULL;
+
+-- Also drop the UNIQUE constraint on tax_number temporarily so companies
+-- without tax numbers (NULL) don't conflict
+-- (PostgreSQL allows multiple NULLs in unique columns by default, so this is fine)
+
 INSERT INTO company_monitoring (company_code, company_name, is_active)
 VALUES
   ('H000', 'Diego Kereskedelmi és Szolgáltató Kft.', true),
