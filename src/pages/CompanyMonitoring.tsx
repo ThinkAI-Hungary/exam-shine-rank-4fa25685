@@ -141,6 +141,11 @@ const CompanyMonitoring = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addForm, setAddForm] = useState({ company_name: "", tax_number: "", notes: "" });
 
+  // Company name search (RapidSearch2)
+  const [companySearchQuery, setCompanySearchQuery] = useState("");
+  const [companySearchResults, setCompanySearchResults] = useState<any[]>([]);
+  const [companySearching, setCompanySearching] = useState(false);
+
   // Detail dialog
   const [detailCompany, setDetailCompany] = useState<CompanyRow | null>(null);
   const [detailLogs, setDetailLogs] = useState<LogEntry[]>([]);
@@ -282,6 +287,36 @@ const CompanyMonitoring = () => {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const handleCompanySearch = async () => {
+    if (!companySearchQuery || companySearchQuery.length < 3) {
+      toast({ title: "Hiba", description: "Legalább 3 karakter szükséges a kereséshez", variant: "destructive" });
+      return;
+    }
+    setCompanySearching(true);
+    setCompanySearchResults([]);
+    try {
+      const result = await callOptenFunction("search-company", { text: companySearchQuery });
+      setCompanySearchResults(result.results || []);
+      if (!result.results || result.results.length === 0) {
+        toast({ title: "Nincs találat", description: `"${companySearchQuery}" keresésre nem érkezett eredmény.` });
+      }
+    } catch (e: any) {
+      toast({ title: "Keresési hiba", description: e.message, variant: "destructive" });
+    } finally {
+      setCompanySearching(false);
+    }
+  };
+
+  const selectSearchResult = (result: any) => {
+    setAddForm({
+      company_name: result.name,
+      tax_number: result.tax_number,
+      notes: result.address ? `${result.address.zip} ${result.address.city}, ${result.address.street}` : "",
+    });
+    setCompanySearchResults([]);
+    setCompanySearchQuery("");
   };
 
   const handleCheckAll = async () => {
@@ -689,6 +724,54 @@ const CompanyMonitoring = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {/* Company name search via RapidSearch2 */}
+            <div className="space-y-2">
+              <Label>Keresés cégnév alapján (OPTEN)</Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Pl. Diego Kft."
+                  value={companySearchQuery}
+                  onChange={(e) => setCompanySearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleCompanySearch()}
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCompanySearch}
+                  disabled={companySearching || companySearchQuery.length < 3}
+                >
+                  {companySearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                </Button>
+              </div>
+              {companySearchResults.length > 0 && (
+                <div className="max-h-[200px] overflow-y-auto border rounded-md divide-y">
+                  {companySearchResults.map((r: any, i: number) => (
+                    <div
+                      key={i}
+                      className="px-3 py-2 hover:bg-muted/50 cursor-pointer transition-colors"
+                      onClick={() => selectSearchResult(r)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{r.name}</span>
+                        <span className="text-xs font-mono text-muted-foreground">{r.tax_number}</span>
+                      </div>
+                      {r.address && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {r.address.zip} {r.address.city}, {r.address.street}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+              <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">vagy kézi megadás</span></div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="add-name">Cég neve *</Label>
               <Input

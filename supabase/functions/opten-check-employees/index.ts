@@ -153,6 +153,53 @@ async function fetchCompanyData(token: string, taxNumber: string): Promise<Opten
   };
 }
 
+// ── RapidSearch2: search companies by name ──
+
+interface RapidSearchResult {
+  Name: string;
+  Address3: { Zip: number; City: string; StreetAndNum: string } | null;
+  RegNumber: string;
+  ShortTaxNumber: string;
+  FullTaxNumber: string;
+}
+
+async function searchCompanyByName(token: string, text: string): Promise<RapidSearchResult[]> {
+  if (!text || text.length < 3) {
+    throw new Error("Search text must be at least 3 characters");
+  }
+
+  console.log(`[OPTEN] RapidSearch2 for: "${text}"`);
+  const resp = await fetch(OPTEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      service: "rapidsearch2",
+      function: "RapidSearch2",
+      arguments: {
+        Token: token,
+        Text: text,
+        NotOnlyOperatingCompanies: "0",
+        OnlyNormalCompanies: "1",
+      },
+    }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`RapidSearch2 failed (${resp.status}): ${errText.substring(0, 300)}`);
+  }
+
+  const data = await resp.json();
+
+  if (data?.error) {
+    throw new Error(`RapidSearch2 error: ${data.error}`);
+  }
+
+  const list = data?.RapidSearchResponse?.List || [];
+  console.log(`[OPTEN] RapidSearch2 found ${list.length} results for "${text}"`);
+  return list;
+}
+
 // ── Email notification (Resend API) ──
 
 async function sendChangeNotification(
@@ -588,6 +635,182 @@ serve(async (req) => {
         errors,
         total: companies.length,
         results,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ════════════════════════════════════════
+    // ACTION: search-company (RapidSearch2)
+    // ════════════════════════════════════════
+    if (action === "search-company") {
+      const { text } = payload;
+      if (!text || String(text).length < 3) {
+        throw new Error("Search text must be at least 3 characters");
+      }
+
+      const token = await getOptenToken();
+      const results = await searchCompanyByName(token, String(text));
+
+      return new Response(JSON.stringify({
+        success: true,
+        query: text,
+        results: results.map((r: RapidSearchResult) => ({
+          name: r.Name,
+          tax_number: r.ShortTaxNumber,
+          full_tax_number: r.FullTaxNumber,
+          reg_number: r.RegNumber,
+          address: r.Address3 ? {
+            zip: r.Address3.Zip,
+            city: r.Address3.City,
+            street: r.Address3.StreetAndNum,
+          } : null,
+        })),
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ════════════════════════════════════════
+    // ACTION: bulk-import
+    // ════════════════════════════════════════
+    if (action === "bulk-import") {
+      const { companies: companiesToImport } = payload;
+      if (!Array.isArray(companiesToImport) || companiesToImport.length === 0) {
+        throw new Error("companies array is required and must not be empty");
+      }
+
+      console.log(`[bulk-import] Starting import of ${companiesToImport.length} companies...`);
+
+      const token = await getOptenToken();
+      let imported = 0;
+      let skipped = 0;
+      let failed = 0;
+      const importResults: any[] = [];
+
+      for (const item of companiesToImport) {
+        const { company_code, company_name } = item;
+        if (!company_name) {
+          importResults.push({ company_code, company_name, status: "skipped", reason: "No name" });
+          skipped++;
+          continue;
+        }
+
+        try {
+          // Rate limit: 1.5s between requests
+          if (imported + skipped + failed > 0) {
+            await new Promise((r) => setTimeout(r, 1500));
+          }
+
+          // Step 1: Search by name using RapidSearch2
+          const searchResults = await searchCompanyByName(token, company_name.trim());
+
+          if (!searchResults || searchResults.length === 0) {
+            importResults.push({ company_code, company_name, status: "failed", reason: "No OPTEN results" });
+            failed++;
+            continue;
+          }
+
+          // Pick the best match (first result or exact name match)
+          const exactMatch = searchResults.find(
+            (r: RapidSearchResult) => r.Name.toLowerCase().trim() === company_name.toLowerCase().trim()
+          );
+          const bestMatch = exactMatch || searchResults[0];
+          const taxNumber = bestMatch.ShortTaxNumber;
+
+          if (!taxNumber || taxNumber.length < 8) {
+            importResults.push({ company_code, company_name, status: "failed", reason: "Invalid tax number from search", match: bestMatch.Name });
+            failed++;
+            continue;
+          }
+
+          // Step 2: Check if already exists
+          const { data: existing } = await sb
+            .from("company_monitoring")
+            .select("id, company_name, is_active")
+            .eq("tax_number", taxNumber)
+            .maybeSingle();
+
+          if (existing) {
+            if (company_code) {
+              await sb.from("company_monitoring").update({ company_code, updated_at: new Date().toISOString() }).eq("id", existing.id);
+            }
+            importResults.push({ company_code, company_name, status: "skipped", reason: "Already exists", tax_number: taxNumber, match: bestMatch.Name });
+            skipped++;
+            continue;
+          }
+
+          // Step 3: Insert new company
+          const { data: newCompany, error: insertErr } = await sb
+            .from("company_monitoring")
+            .insert({
+              company_name: bestMatch.Name,
+              tax_number: taxNumber,
+              company_code: company_code || null,
+              notes: company_name !== bestMatch.Name ? `Excel név: ${company_name}` : null,
+              is_active: true,
+            })
+            .select("*")
+            .single();
+
+          if (insertErr) {
+            importResults.push({ company_code, company_name, status: "failed", reason: insertErr.message });
+            failed++;
+            continue;
+          }
+
+          // Step 4: Fetch employee data via MultiInfo
+          await new Promise((r) => setTimeout(r, 1000));
+          const companyData = await fetchCompanyData(token, taxNumber);
+
+          if (companyData.employeeCount !== null) {
+            await sb.from("company_monitoring").update({
+              current_employee_count: companyData.employeeCount,
+              company_status: companyData.companyStatus,
+              foundation_date: companyData.foundationDate,
+              main_activity: companyData.mainActivity,
+              registered_capital: companyData.registeredCapital,
+              company_form: companyData.companyForm,
+              last_checked_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }).eq("id", newCompany.id);
+
+            await sb.from("company_monitoring_log").insert({
+              company_id: newCompany.id,
+              employee_count: companyData.employeeCount,
+              previous_count: null,
+              changed: false,
+              raw_response: companyData.rawScoring,
+            });
+          }
+
+          imported++;
+          importResults.push({
+            company_code,
+            company_name,
+            status: "imported",
+            tax_number: taxNumber,
+            opten_name: bestMatch.Name,
+            employee_count: companyData.employeeCount,
+          });
+
+          console.log(`[bulk-import] ${imported}/${companiesToImport.length}: ${bestMatch.Name} (${taxNumber}) → ${companyData.employeeCount} fő`);
+        } catch (err) {
+          console.error(`[bulk-import] Failed for ${company_name}:`, err);
+          importResults.push({ company_code, company_name, status: "failed", reason: err instanceof Error ? err.message : String(err) });
+          failed++;
+        }
+      }
+
+      console.log(`[bulk-import] Done: ${imported} imported, ${skipped} skipped, ${failed} failed`);
+
+      return new Response(JSON.stringify({
+        success: true,
+        imported,
+        skipped,
+        failed,
+        total: companiesToImport.length,
+        results: importResults,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
