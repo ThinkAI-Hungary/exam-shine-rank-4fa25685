@@ -324,11 +324,19 @@ const CompanyMonitoring = () => {
     toast({ title: "Ellenőrzés indítása...", description: "Az összes cég létszámának lekérdezése folyamatban." });
     try {
       const result = await callOptenFunction("check-all", {});
-      toast({
-        title: "✅ Ellenőrzés kész",
-        description: `${result.checked} cég ellenőrizve, ${result.changed} változás, ${result.errors} hiba`,
-      });
+      if (result.queued) {
+        toast({
+          title: "🚀 Ellenőrzés elindítva",
+          description: result.message || `${result.total} cég ellenőrzése a háttérben fut. Frissítsd az oldalt pár perc múlva.`,
+        });
+      } else {
+        toast({
+          title: "✅ Ellenőrzés kész",
+          description: `${result.checked ?? 0} cég ellenőrizve, ${result.changed ?? 0} változás, ${result.errors ?? 0} hiba`,
+        });
+      }
       void fetchCompanies();
+
     } catch (e: any) {
       toast({ title: "Hiba", description: e.message, variant: "destructive" });
     } finally {
