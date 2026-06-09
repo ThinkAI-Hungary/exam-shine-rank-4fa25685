@@ -180,7 +180,24 @@ const CompanyMonitoring = () => {
   useEffect(() => {
     fetchCompanies();
     fetchLwGroups();
+
+    // Realtime: refetch whenever a monitored company changes
+    const channel = supabase
+      .channel("company_monitoring_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "company_monitoring" },
+        () => {
+          void fetchCompanies();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, []);
+
 
   const fetchLwGroups = async () => {
     try {
@@ -327,66 +344,27 @@ const CompanyMonitoring = () => {
       if (result.queued) {
         toast({
           title: "🚀 Ellenőrzés elindítva",
-          description: result.message || `${result.total} cég ellenőrzése a háttérben fut. Az oldal 5 másodpercenként automatikusan frissül.`,
+          description: result.message || `${result.total} cég ellenőrzése a háttérben fut. A táblázat valós időben frissül, ahogy érkeznek az adatok.`,
         });
 
-        // Poll every 5 seconds while background job runs
-        const startTime = Date.now();
-        const maxDurationMs = Math.max(((result.total ?? 100) * 3000) + 60000, 5 * 60 * 1000); // total*3s + 1min buffer, min 5 min
-        let lastProgress = -1;
-        let stableTicks = 0;
-
-        const pollInterval = setInterval(async () => {
-          try {
-            const { count: checkedCount } = await supabase
-              .from("company_monitoring")
-              .select("*", { count: "exact", head: true })
-              .eq("is_active", true)
-              .gte("last_checked_at", new Date(startTime - 5000).toISOString());
-
-            void fetchCompanies();
-
-            const progress = checkedCount ?? 0;
-            if (progress === lastProgress) {
-              stableTicks++;
-            } else {
-              stableTicks = 0;
-              lastProgress = progress;
-            }
-
-            const elapsed = Date.now() - startTime;
-            // Stop if: all done, no progress for 30s (6 ticks), or max duration
-            if (
-              (result.total && progress >= result.total) ||
-              stableTicks >= 6 ||
-              elapsed > maxDurationMs
-            ) {
-              clearInterval(pollInterval);
-              setCheckAllLoading(false);
-              toast({
-                title: "✅ Ellenőrzés kész",
-                description: `${progress} cég ellenőrizve${result.total ? ` (${result.total}-ból)` : ""}.`,
-              });
-            }
-          } catch (pollErr) {
-            console.error("Polling error:", pollErr);
-          }
-        }, 5000);
-
-        return; // Don't set loading=false in finally
+        // Auto-disable the loading indicator after the estimated runtime.
+        // The table itself updates live via Supabase Realtime subscription.
+        const estimatedMs = Math.max(((result.total ?? 100) * 3000) + 30000, 60_000);
+        setTimeout(() => setCheckAllLoading(false), estimatedMs);
+        return;
       }
 
       toast({
         title: "✅ Ellenőrzés kész",
         description: `${result.checked ?? 0} cég ellenőrizve, ${result.changed ?? 0} változás, ${result.errors ?? 0} hiba`,
       });
-      void fetchCompanies();
       setCheckAllLoading(false);
     } catch (e: any) {
       toast({ title: "Hiba", description: e.message, variant: "destructive" });
       setCheckAllLoading(false);
     }
   };
+
 
 
   const handleCheckSingle = async (company: CompanyRow) => {
