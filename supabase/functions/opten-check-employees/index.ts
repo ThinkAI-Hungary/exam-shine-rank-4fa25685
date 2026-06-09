@@ -557,129 +557,123 @@ serve(async (req) => {
         });
       }
 
-      console.log(`[check-all] Found ${companies.length} active companies`);
+      console.log(`[check-all] Found ${companies.length} active companies - processing in background`);
 
-      const token = await getOptenToken();
-      let checked = 0;
-      let changedCount = 0;
-      let errors = 0;
-      const results: any[] = [];
-
-      for (const company of companies) {
+      const runBackground = async () => {
         try {
-          // Rate limit: 1.5 request per second
-          if (checked > 0 || errors > 0) {
-            await new Promise((r) => setTimeout(r, 1500));
-          }
+          const token = await getOptenToken();
+          let checked = 0;
+          let changedCount = 0;
+          let errors = 0;
 
-          let taxNumber = company.tax_number;
-
-          // If no tax number, resolve it via RapidSearch2
-          if (!taxNumber || taxNumber.replace(/\D/g, "").length < 8) {
-            console.log(`[check-all] Resolving tax number for "${company.company_name}" via RapidSearch2...`);
+          for (const company of companies) {
             try {
-              const searchResults = await searchCompanyByName(token, company.company_name.trim());
-              if (searchResults && searchResults.length > 0) {
-                const exactMatch = searchResults.find(
-                  (r: RapidSearchResult) => r.Name.toLowerCase().trim() === company.company_name.toLowerCase().trim()
-                );
-                const bestMatch = exactMatch || searchResults[0];
-                taxNumber = bestMatch.ShortTaxNumber;
+              if (checked > 0 || errors > 0) {
+                await new Promise((r) => setTimeout(r, 1500));
+              }
 
-                if (taxNumber && taxNumber.length >= 8) {
-                  // Save the resolved tax number and OPTEN name
-                  const updateFields: Record<string, unknown> = {
-                    tax_number: taxNumber,
-                    updated_at: new Date().toISOString(),
-                  };
-                  if (!exactMatch && bestMatch.Name !== company.company_name) {
-                    updateFields.notes = `Excel név: ${company.company_name} → OPTEN: ${bestMatch.Name}`;
+              let taxNumber = company.tax_number;
+
+              if (!taxNumber || taxNumber.replace(/\D/g, "").length < 8) {
+                console.log(`[check-all] Resolving tax for "${company.company_name}" via RapidSearch2...`);
+                try {
+                  const searchResults = await searchCompanyByName(token, company.company_name.trim());
+                  if (searchResults && searchResults.length > 0) {
+                    const exactMatch = searchResults.find(
+                      (r: RapidSearchResult) => r.Name.toLowerCase().trim() === company.company_name.toLowerCase().trim()
+                    );
+                    const bestMatch = exactMatch || searchResults[0];
+                    taxNumber = bestMatch.ShortTaxNumber;
+
+                    if (taxNumber && taxNumber.length >= 8) {
+                      const updateFields: Record<string, unknown> = {
+                        tax_number: taxNumber,
+                        updated_at: new Date().toISOString(),
+                      };
+                      if (!exactMatch && bestMatch.Name !== company.company_name) {
+                        updateFields.notes = `Excel név: ${company.company_name} → OPTEN: ${bestMatch.Name}`;
+                      }
+                      await sb.from("company_monitoring").update(updateFields).eq("id", company.id);
+                      console.log(`[check-all] Resolved: "${company.company_name}" → tax ${taxNumber}`);
+                      await new Promise((r) => setTimeout(r, 1000));
+                    } else {
+                      console.warn(`[check-all] Could not resolve tax for "${company.company_name}"`);
+                      errors++;
+                      continue;
+                    }
+                  } else {
+                    errors++;
+                    continue;
                   }
-                  await sb.from("company_monitoring").update(updateFields).eq("id", company.id);
-                  console.log(`[check-all] Resolved: "${company.company_name}" → tax ${taxNumber} (${bestMatch.Name})`);
-                  await new Promise((r) => setTimeout(r, 1000));
-                } else {
-                  console.warn(`[check-all] Could not resolve tax for "${company.company_name}"`);
+                } catch (searchErr) {
+                  console.warn(`[check-all] RapidSearch2 failed for "${company.company_name}":`, searchErr);
                   errors++;
-                  results.push({ company_name: company.company_name, error: "Tax number not resolved" });
                   continue;
                 }
-              } else {
+              }
+
+              const result = await fetchCompanyData(token, taxNumber);
+
+              if (result.error || result.employeeCount === null) {
+                console.warn(`[check-all] Error for ${company.company_name}: ${result.error}`);
                 errors++;
-                results.push({ company_name: company.company_name, error: "No RapidSearch2 results" });
                 continue;
               }
-            } catch (searchErr) {
-              console.warn(`[check-all] RapidSearch2 failed for "${company.company_name}":`, searchErr);
+
+              const previousCount = company.current_employee_count;
+              const currentCount = result.employeeCount;
+              const changed = previousCount !== null && previousCount !== currentCount;
+
+              const updateData: Record<string, unknown> = {
+                current_employee_count: currentCount,
+                previous_employee_count: previousCount,
+                last_checked_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+              if (changed) {
+                updateData.last_change_at = new Date().toISOString();
+              }
+              await sb.from("company_monitoring").update(updateData).eq("id", company.id);
+
+              await sb.from("company_monitoring_log").insert({
+                company_id: company.id,
+                employee_count: currentCount,
+                previous_count: previousCount,
+                changed,
+                raw_response: result.rawScoring,
+              });
+
+              if (changed) {
+                changedCount++;
+                await sendChangeNotification(sb, company.company_name, company.tax_number, previousCount, currentCount);
+              }
+
+              checked++;
+            } catch (err) {
+              console.error(`[check-all] Failed for ${company.company_name}:`, err);
               errors++;
-              results.push({ company_name: company.company_name, error: `Search failed: ${searchErr instanceof Error ? searchErr.message : String(searchErr)}` });
-              continue;
             }
           }
 
-          const result = await fetchCompanyData(token, taxNumber);
-
-          if (result.error || result.employeeCount === null) {
-            console.warn(`[check-all] Error for ${company.company_name}: ${result.error}`);
-            errors++;
-            results.push({ company_name: company.company_name, error: result.error });
-            continue;
-          }
-
-          const previousCount = company.current_employee_count;
-          const currentCount = result.employeeCount;
-          const changed = previousCount !== null && previousCount !== currentCount;
-
-          // Update
-          const updateData: Record<string, unknown> = {
-            current_employee_count: currentCount,
-            previous_employee_count: previousCount,
-            last_checked_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-          if (changed) {
-            updateData.last_change_at = new Date().toISOString();
-          }
-          await sb.from("company_monitoring").update(updateData).eq("id", company.id);
-
-          // Log
-          await sb.from("company_monitoring_log").insert({
-            company_id: company.id,
-            employee_count: currentCount,
-            previous_count: previousCount,
-            changed,
-            raw_response: result.rawScoring,
-          });
-
-          if (changed) {
-            changedCount++;
-            await sendChangeNotification(sb, company.company_name, company.tax_number, previousCount, currentCount);
-          }
-
-          checked++;
-          results.push({
-            company_name: company.company_name,
-            tax_number: company.tax_number,
-            previous: previousCount,
-            current: currentCount,
-            changed,
-          });
-        } catch (err) {
-          console.error(`[check-all] Failed for ${company.company_name}:`, err);
-          errors++;
-          results.push({ company_name: company.company_name, error: err instanceof Error ? err.message : String(err) });
+          console.log(`[check-all] BACKGROUND DONE: ${checked} checked, ${changedCount} changed, ${errors} errors`);
+        } catch (bgErr) {
+          console.error(`[check-all] Background task crashed:`, bgErr);
         }
-      }
+      };
 
-      console.log(`[check-all] Done: ${checked} checked, ${changedCount} changed, ${errors} errors`);
+      // @ts-ignore - EdgeRuntime is available in Supabase edge runtime
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(runBackground());
+      } else {
+        runBackground();
+      }
 
       return new Response(JSON.stringify({
         success: true,
-        checked,
-        changed: changedCount,
-        errors,
+        queued: true,
         total: companies.length,
-        results,
+        message: `${companies.length} cég ellenőrzése elindult a háttérben (~${Math.ceil(companies.length * 2.5 / 60)} perc). Frissítsd az oldalt pár perc múlva.`,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
