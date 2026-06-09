@@ -567,12 +567,57 @@ serve(async (req) => {
 
       for (const company of companies) {
         try {
-          // Rate limit: 1 request per second
-          if (checked > 0) {
-            await new Promise((r) => setTimeout(r, 1000));
+          // Rate limit: 1.5 request per second
+          if (checked > 0 || errors > 0) {
+            await new Promise((r) => setTimeout(r, 1500));
           }
 
-          const result = await fetchCompanyData(token, company.tax_number);
+          let taxNumber = company.tax_number;
+
+          // If no tax number, resolve it via RapidSearch2
+          if (!taxNumber || taxNumber.replace(/\D/g, "").length < 8) {
+            console.log(`[check-all] Resolving tax number for "${company.company_name}" via RapidSearch2...`);
+            try {
+              const searchResults = await searchCompanyByName(token, company.company_name.trim());
+              if (searchResults && searchResults.length > 0) {
+                const exactMatch = searchResults.find(
+                  (r: RapidSearchResult) => r.Name.toLowerCase().trim() === company.company_name.toLowerCase().trim()
+                );
+                const bestMatch = exactMatch || searchResults[0];
+                taxNumber = bestMatch.ShortTaxNumber;
+
+                if (taxNumber && taxNumber.length >= 8) {
+                  // Save the resolved tax number and OPTEN name
+                  const updateFields: Record<string, unknown> = {
+                    tax_number: taxNumber,
+                    updated_at: new Date().toISOString(),
+                  };
+                  if (!exactMatch && bestMatch.Name !== company.company_name) {
+                    updateFields.notes = `Excel név: ${company.company_name} → OPTEN: ${bestMatch.Name}`;
+                  }
+                  await sb.from("company_monitoring").update(updateFields).eq("id", company.id);
+                  console.log(`[check-all] Resolved: "${company.company_name}" → tax ${taxNumber} (${bestMatch.Name})`);
+                  await new Promise((r) => setTimeout(r, 1000));
+                } else {
+                  console.warn(`[check-all] Could not resolve tax for "${company.company_name}"`);
+                  errors++;
+                  results.push({ company_name: company.company_name, error: "Tax number not resolved" });
+                  continue;
+                }
+              } else {
+                errors++;
+                results.push({ company_name: company.company_name, error: "No RapidSearch2 results" });
+                continue;
+              }
+            } catch (searchErr) {
+              console.warn(`[check-all] RapidSearch2 failed for "${company.company_name}":`, searchErr);
+              errors++;
+              results.push({ company_name: company.company_name, error: `Search failed: ${searchErr instanceof Error ? searchErr.message : String(searchErr)}` });
+              continue;
+            }
+          }
+
+          const result = await fetchCompanyData(token, taxNumber);
 
           if (result.error || result.employeeCount === null) {
             console.warn(`[check-all] Error for ${company.company_name}: ${result.error}`);
