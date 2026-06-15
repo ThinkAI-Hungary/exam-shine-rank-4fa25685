@@ -109,6 +109,7 @@ export type Database = {
           last_checked_at: string | null
           notes: string | null
           previous_employee_count: number | null
+          store_name: string | null
           tax_number: string | null
           updated_at: string | null
         }
@@ -123,6 +124,7 @@ export type Database = {
           last_checked_at?: string | null
           notes?: string | null
           previous_employee_count?: number | null
+          store_name?: string | null
           tax_number?: string | null
           updated_at?: string | null
         }
@@ -137,6 +139,7 @@ export type Database = {
           last_checked_at?: string | null
           notes?: string | null
           previous_employee_count?: number | null
+          store_name?: string | null
           tax_number?: string | null
           updated_at?: string | null
         }
