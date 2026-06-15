@@ -596,30 +596,61 @@ const StudentDashboard = () => {
             <CardContent>
               {badges.length > 0 ? (
                 <div className="grid grid-cols-2 gap-3">
-                  {badges.map((badge) => (
-                    <div
-                      key={badge.id}
-                      className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 border"
-                    >
+                  {badges.map((badge) => {
+                    // Resolve the correct SVG icon from badge metadata
+                    const resolveSvgPath = (): string | null => {
+                      const { badge_type, badge_level, badge_name, icon_name } = badge.badge_definitions;
+                      if (icon_name.startsWith('/')) return icon_name;
+                      const nameLower = (badge_name || '').toLowerCase();
+                      if (badge_type === 'category' || badge_type === 'aspirant') {
+                        if (badge_level === 'bronze') return '/badges/!jovo_bronzja2_jelveny.svg';
+                        if (badge_level === 'silver') return '/badges/!jovo_ezustje_svg.svg';
+                        if (badge_level === 'gold') return '/badges/!jovo_aranya_jelveny.svg';
+                      }
+                      if (badge_type === 'monthly_star') {
+                        if (nameLower.includes('vizsga') || nameLower.includes('exam') || nameLower.includes('mester'))
+                          return '/badges/!honap_vizsga_mester_final.svg';
+                        if (nameLower.includes('képzési') || nameLower.includes('training') || nameLower.includes('bajnok'))
+                          return '/badges/!kepzesi_bajnok.svg';
+                        if (nameLower.includes('kezdő') || nameLower.includes('starter') || nameLower.includes('siker') || nameLower.includes('success'))
+                          return '/badges/!kezdo_siker.svg';
+                      }
+                      return null;
+                    };
+                    const svgPath = resolveSvgPath();
+
+                    return (
                       <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
+                        key={badge.id}
+                        className="flex flex-col items-center gap-2 p-4 rounded-xl border transition-transform hover:scale-[1.02]"
                         style={{
-                          background: `${badge.badge_definitions.color}20`,
-                          color: badge.badge_definitions.color,
+                          background: `${badge.badge_definitions.color}10`,
+                          borderColor: `${badge.badge_definitions.color}30`,
                         }}
                       >
-                        🏅
+                        <div
+                          className="w-14 h-14 rounded-xl flex items-center justify-center"
+                          style={{
+                            background: `${badge.badge_definitions.color}18`,
+                          }}
+                        >
+                          {svgPath ? (
+                            <img src={svgPath} alt={badge.badge_definitions.badge_name} className="w-12 h-12" style={{ objectFit: "contain" }} />
+                          ) : (
+                            <Award className="w-7 h-7" style={{ color: badge.badge_definitions.color }} />
+                          )}
+                        </div>
+                        <div className="text-center min-w-0">
+                          <p className="text-sm font-semibold truncate" style={{ color: badge.badge_definitions.color }}>
+                            {badge.badge_definitions.badge_name}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {new Date(badge.awarded_at).toLocaleDateString("hu-HU")}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {badge.badge_definitions.badge_name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(badge.awarded_at).toLocaleDateString("hu-HU")}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
