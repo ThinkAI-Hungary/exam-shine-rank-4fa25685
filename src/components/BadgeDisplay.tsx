@@ -43,10 +43,10 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
   };
 
   // Renders either an SVG image or a Lucide icon based on icon_name
-  const BadgeIcon = ({ iconName, className = "w-5 h-5" }: { iconName: string; className?: string }) => {
+  const BadgeIcon = ({ iconName, className = "w-5 h-5", svgClassName }: { iconName: string; className?: string; svgClassName?: string }) => {
     if (iconName.startsWith("/")) {
-      // Custom SVG path
-      return <img src={iconName} alt="" className={className} style={{ objectFit: "contain" }} />;
+      // Custom SVG path — use larger size for detailed SVG badges
+      return <img src={iconName} alt="" className={svgClassName || className} style={{ objectFit: "contain" }} />;
     }
     const Icon = getIcon(iconName);
     return <Icon className={className} />;
@@ -86,7 +86,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                 padding: '0.125rem 0.5rem'
               }}
             >
-              <BadgeIcon iconName={primaryBadge.badge_definitions.icon_name} className="w-4 h-4 flex-shrink-0" />
+              <BadgeIcon iconName={primaryBadge.badge_definitions.icon_name} className="w-4 h-4 flex-shrink-0" svgClassName="w-6 h-6 flex-shrink-0" />
               <span className="text-xs font-semibold whitespace-nowrap leading-tight">
                 {primaryBadge.badge_definitions.badge_name}
               </span>
@@ -105,28 +105,34 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {categoryBadges.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">Kategória</h3>
-          <div className="flex flex-wrap gap-2">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">Kategória</h3>
+          <div className="flex flex-wrap gap-3">
             {categoryBadges.map(badge => {
+              const isSvg = badge.badge_definitions.icon_name.startsWith("/");
               return (
                 <TooltipProvider key={badge.id}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Badge 
-                        variant="secondary" 
-                        className="flex items-center gap-2 py-2 px-3 cursor-help"
+                      <div
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-help transition-transform hover:scale-105"
                         style={{ 
-                          backgroundColor: `${badge.badge_definitions.color}20`,
-                          borderColor: badge.badge_definitions.color,
-                          color: badge.badge_definitions.color
+                          backgroundColor: `${badge.badge_definitions.color}12`,
+                          border: `1.5px solid ${badge.badge_definitions.color}40`,
                         }}
                       >
-                        <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-5 h-5" />
-                        <span className="font-semibold">{badge.badge_definitions.badge_name}</span>
-                      </Badge>
+                        {isSvg ? (
+                          <img src={badge.badge_definitions.icon_name} alt={badge.badge_definitions.badge_name} className="w-16 h-16" style={{ objectFit: "contain" }} />
+                        ) : (
+                          <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-8 h-8" />
+                        )}
+                        <span className="text-xs font-semibold text-center" style={{ color: badge.badge_definitions.color }}>{badge.badge_definitions.badge_name}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(badge.awarded_at).toLocaleDateString('hu-HU')}
+                        </span>
+                      </div>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="font-medium">{badge.badge_definitions.badge_name}</p>
@@ -145,24 +151,31 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
 
       {aspirantBadges.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">Törekvő</h3>
-          <div className="flex flex-wrap gap-2">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">Törekvő</h3>
+          <div className="flex flex-wrap gap-3">
             {aspirantBadges.map(badge => {
+              const isSvg = badge.badge_definitions.icon_name.startsWith("/");
               return (
                 <TooltipProvider key={badge.id}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Badge 
-                        variant="outline" 
-                        className="flex items-center gap-2 py-2 px-3 cursor-help"
+                      <div
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-help transition-transform hover:scale-105"
                         style={{ 
-                          borderColor: badge.badge_definitions.color,
-                          color: badge.badge_definitions.color
+                          backgroundColor: `${badge.badge_definitions.color}08`,
+                          border: `1.5px dashed ${badge.badge_definitions.color}50`,
                         }}
                       >
-                        <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-4 h-4" />
-                        <span>{badge.badge_definitions.badge_name}</span>
-                      </Badge>
+                        {isSvg ? (
+                          <img src={badge.badge_definitions.icon_name} alt={badge.badge_definitions.badge_name} className="w-14 h-14" style={{ objectFit: "contain" }} />
+                        ) : (
+                          <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-7 h-7" />
+                        )}
+                        <span className="text-xs font-medium text-center" style={{ color: badge.badge_definitions.color }}>{badge.badge_definitions.badge_name}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(badge.awarded_at).toLocaleDateString('hu-HU')}
+                        </span>
+                      </div>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="font-medium">{badge.badge_definitions.badge_name}</p>
@@ -181,25 +194,32 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
 
       {monthlyBadges.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">Havi csillagok</h3>
-          <div className="flex flex-wrap gap-2">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">Havi csillagok</h3>
+          <div className="flex flex-wrap gap-3">
             {monthlyBadges.map(badge => {
+              const isSvg = badge.badge_definitions.icon_name.startsWith("/");
               const isExpiring = badge.expires_at && new Date(badge.expires_at) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
               return (
                 <TooltipProvider key={badge.id}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Badge 
-                        variant="default" 
-                        className={`flex items-center gap-2 py-2 px-3 cursor-help ${isExpiring ? 'opacity-70' : ''}`}
+                      <div
+                        className={`flex flex-col items-center gap-2 p-3 rounded-xl cursor-help transition-transform hover:scale-105 ${isExpiring ? 'opacity-70' : ''}`}
                         style={{ 
-                          backgroundColor: badge.badge_definitions.color,
-                          borderColor: badge.badge_definitions.color
+                          backgroundColor: `${badge.badge_definitions.color}15`,
+                          border: `1.5px solid ${badge.badge_definitions.color}40`,
                         }}
                       >
-                        <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-4 h-4" />
-                        <span>{badge.badge_definitions.badge_name}</span>
-                      </Badge>
+                        {isSvg ? (
+                          <img src={badge.badge_definitions.icon_name} alt={badge.badge_definitions.badge_name} className="w-14 h-14" style={{ objectFit: "contain" }} />
+                        ) : (
+                          <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-7 h-7" />
+                        )}
+                        <span className="text-xs font-semibold text-center" style={{ color: badge.badge_definitions.color }}>{badge.badge_definitions.badge_name}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(badge.awarded_at).toLocaleDateString('hu-HU')}
+                        </span>
+                      </div>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="font-medium">{badge.badge_definitions.badge_name}</p>
@@ -223,25 +243,31 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
 
       {progressBadges.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">Előrehaladás</h3>
-          <div className="flex flex-wrap gap-2">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">Előrehaladás</h3>
+          <div className="flex flex-wrap gap-3">
             {progressBadges.map(badge => {
+              const isSvg = badge.badge_definitions.icon_name.startsWith("/");
               return (
                 <TooltipProvider key={badge.id}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Badge 
-                        variant="secondary" 
-                        className="flex items-center gap-2 py-2 px-3 cursor-help"
+                      <div
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-help transition-transform hover:scale-105"
                         style={{ 
-                          backgroundColor: `${badge.badge_definitions.color}20`,
-                          borderColor: badge.badge_definitions.color,
-                          color: badge.badge_definitions.color
+                          backgroundColor: `${badge.badge_definitions.color}12`,
+                          border: `1.5px solid ${badge.badge_definitions.color}30`,
                         }}
                       >
-                        <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-4 h-4" />
-                        <span>{badge.badge_definitions.badge_name}</span>
-                      </Badge>
+                        {isSvg ? (
+                          <img src={badge.badge_definitions.icon_name} alt={badge.badge_definitions.badge_name} className="w-14 h-14" style={{ objectFit: "contain" }} />
+                        ) : (
+                          <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-7 h-7" />
+                        )}
+                        <span className="text-xs font-medium text-center" style={{ color: badge.badge_definitions.color }}>{badge.badge_definitions.badge_name}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(badge.awarded_at).toLocaleDateString('hu-HU')}
+                        </span>
+                      </div>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="font-medium">{badge.badge_definitions.badge_name}</p>

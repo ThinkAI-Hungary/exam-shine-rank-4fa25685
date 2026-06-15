@@ -994,11 +994,11 @@ const PerformanceOverview = () => {
                   >
                     {/* Badge icon */}
                     <div
-                      className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: `${b.color}20`, border: `1px solid ${b.color}30` }}
+                      className={`${isSvg ? 'w-12 h-12' : 'w-10 h-10'} rounded-lg flex items-center justify-center flex-shrink-0`}
+                      style={{ backgroundColor: `${b.color}15`, border: `1.5px solid ${b.color}30` }}
                     >
                       {isSvg ? (
-                        <img src={b.icon_name} alt={b.badge_name} className="w-6 h-6" style={{ objectFit: "contain" }} />
+                        <img src={b.icon_name} alt={b.badge_name} className="w-10 h-10" style={{ objectFit: "contain" }} />
                       ) : (
                         <Award className="w-5 h-5" style={{ color: b.color }} />
                       )}
