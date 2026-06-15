@@ -2,6 +2,16 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import Leaderboard from "@/components/Leaderboard";
 
+const HUNGARIAN_MONTHS = [
+  'Január', 'Február', 'Március', 'Április', 'Május', 'Június',
+  'Július', 'Augusztus', 'Szeptember', 'Október', 'November', 'December'
+];
+
+const getCurrentPeriodLabel = () => {
+  const now = new Date();
+  return `${now.getFullYear()}. ${HUNGARIAN_MONTHS[now.getMonth()]}`;
+};
+
 interface LeaderboardEntry {
   rank: number;
   username: string;
@@ -73,6 +83,9 @@ const EmbedFull = () => {
           </h2>
           <p className="text-sm text-muted-foreground">
             Az összes kurzuson szerzett átlag pontszám alapján rangsorolva
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {getCurrentPeriodLabel()}
           </p>
         </div>
 

@@ -3,6 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 import Leaderboard from "@/components/Leaderboard";
 import StoreLeaderboard from "@/components/StoreLeaderboard";
 
+const HUNGARIAN_MONTHS = [
+  'Január', 'Február', 'Március', 'Április', 'Május', 'Június',
+  'Július', 'Augusztus', 'Szeptember', 'Október', 'November', 'December'
+];
+
+const getCurrentPeriodLabel = () => {
+  const now = new Date();
+  return `${now.getFullYear()}. ${HUNGARIAN_MONTHS[now.getMonth()]}`;
+};
+
 interface LeaderboardEntry {
   rank: number;
   username: string;
@@ -84,6 +94,9 @@ const Embed = () => {
                 <p className="text-xs text-muted-foreground">
                   Átlag vizsgaeredmény alapján
                 </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {getCurrentPeriodLabel()}
+                </p>
               </div>
               <Leaderboard entries={topIndividuals} isEmbedded={true} />
             </div>
@@ -95,6 +108,9 @@ const Embed = () => {
                 </h2>
                 <p className="text-xs text-muted-foreground">
                   Áruházak átlag vizsgaeredménye alapján
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {getCurrentPeriodLabel()}
                 </p>
               </div>
               <StoreLeaderboard entries={leaderboard} limit={3} compact />
