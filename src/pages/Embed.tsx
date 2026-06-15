@@ -94,6 +94,9 @@ const Embed = () => {
                 <p className="text-xs text-muted-foreground">
                   Átlag vizsgaeredmény alapján
                 </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {getCurrentPeriodLabel()}
+                </p>
               </div>
               <Leaderboard entries={topIndividuals} isEmbedded={true} />
             </div>
