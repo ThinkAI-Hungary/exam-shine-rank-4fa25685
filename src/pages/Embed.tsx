@@ -109,6 +109,9 @@ const Embed = () => {
                 <p className="text-xs text-muted-foreground">
                   Áruházak átlag vizsgaeredménye alapján
                 </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {getCurrentPeriodLabel()}
+                </p>
               </div>
               <StoreLeaderboard entries={leaderboard} limit={3} compact />
             </div>
