@@ -24,6 +24,45 @@ interface BadgeDisplayProps {
 }
 
 const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDisplayProps) => {
+  // Maps badge metadata to the correct SVG icon path in /badges/
+  const resolveBadgeSvg = (badge: BadgeData['badge_definitions']): string | null => {
+    const { badge_type, badge_level, badge_name } = badge;
+    const nameLower = (badge_name || '').toLowerCase();
+
+    // Category badges: Bronze, Silver, Gold
+    if (badge_type === 'category') {
+      if (badge_level === 'bronze') return '/badges/!jovo_bronzja2_jelveny.svg';
+      if (badge_level === 'silver') return '/badges/!jovo_ezustje_svg.svg';
+      if (badge_level === 'gold') return '/badges/!jovo_aranya_jelveny.svg';
+    }
+
+    // Aspirant badges
+    if (badge_type === 'aspirant') {
+      if (badge_level === 'bronze') return '/badges/!jovo_bronzja2_jelveny.svg';
+      if (badge_level === 'silver') return '/badges/!jovo_ezustje_svg.svg';
+      if (badge_level === 'gold') return '/badges/!jovo_aranya_jelveny.svg';
+    }
+
+    // Monthly star badges - match by name
+    if (badge_type === 'monthly_star') {
+      if (nameLower.includes('vizsga') || nameLower.includes('exam') || nameLower.includes('mester'))
+        return '/badges/!honap_vizsga_mester_final.svg';
+      if (nameLower.includes('képzési') || nameLower.includes('training') || nameLower.includes('bajnok'))
+        return '/badges/!kepzesi_bajnok.svg';
+      if (nameLower.includes('kezdő') || nameLower.includes('starter') || nameLower.includes('siker') || nameLower.includes('success'))
+        return '/badges/!kezdo_siker.svg';
+    }
+
+    return null;
+  };
+
+  // Returns the effective SVG path for a badge: prefers icon_name if it's already an SVG path,
+  // otherwise falls back to the resolved SVG based on badge metadata
+  const getEffectiveSvgPath = (badge: BadgeData['badge_definitions']): string | null => {
+    if (badge.icon_name.startsWith('/')) return badge.icon_name;
+    return resolveBadgeSvg(badge);
+  };
+
   const getIcon = (iconName: string) => {
     const iconMap: Record<string, any> = {
       Medal,
@@ -43,12 +82,12 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
   };
 
   // Renders either an SVG image or a Lucide icon based on icon_name
-  const BadgeIcon = ({ iconName, className = "w-5 h-5", svgClassName }: { iconName: string; className?: string; svgClassName?: string }) => {
-    if (iconName.startsWith("/")) {
-      // Custom SVG path — use larger size for detailed SVG badges
-      return <img src={iconName} alt="" className={svgClassName || className} style={{ objectFit: "contain" }} />;
+  const BadgeIcon = ({ badge, className = "w-5 h-5", svgClassName }: { badge: BadgeData['badge_definitions']; className?: string; svgClassName?: string }) => {
+    const svgPath = getEffectiveSvgPath(badge);
+    if (svgPath) {
+      return <img src={svgPath} alt="" className={svgClassName || className} style={{ objectFit: "contain" }} />;
     }
-    const Icon = getIcon(iconName);
+    const Icon = getIcon(badge.icon_name);
     return <Icon className={className} />;
   };
 
@@ -86,7 +125,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                 padding: '0.125rem 0.5rem'
               }}
             >
-              <BadgeIcon iconName={primaryBadge.badge_definitions.icon_name} className="w-4 h-4 flex-shrink-0" svgClassName="w-6 h-6 flex-shrink-0" />
+              <BadgeIcon badge={primaryBadge.badge_definitions} className="w-4 h-4 flex-shrink-0" svgClassName="w-6 h-6 flex-shrink-0" />
               <span className="text-xs font-semibold whitespace-nowrap leading-tight">
                 {primaryBadge.badge_definitions.badge_name}
               </span>
@@ -111,7 +150,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Kategória</h3>
           <div className="flex flex-wrap gap-3">
             {categoryBadges.map(badge => {
-              const isSvg = badge.badge_definitions.icon_name.startsWith("/");
+              const svgPath = getEffectiveSvgPath(badge.badge_definitions);
               return (
                 <TooltipProvider key={badge.id}>
                   <Tooltip>
@@ -123,10 +162,10 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                           border: `1.5px solid ${badge.badge_definitions.color}40`,
                         }}
                       >
-                        {isSvg ? (
-                          <img src={badge.badge_definitions.icon_name} alt={badge.badge_definitions.badge_name} className="w-16 h-16" style={{ objectFit: "contain" }} />
+                        {svgPath ? (
+                          <img src={svgPath} alt={badge.badge_definitions.badge_name} className="w-16 h-16" style={{ objectFit: "contain" }} />
                         ) : (
-                          <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-8 h-8" />
+                          <BadgeIcon badge={badge.badge_definitions} className="w-8 h-8" />
                         )}
                         <span className="text-xs font-semibold text-center" style={{ color: badge.badge_definitions.color }}>{badge.badge_definitions.badge_name}</span>
                         <span className="text-[10px] text-muted-foreground">
@@ -154,7 +193,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Törekvő</h3>
           <div className="flex flex-wrap gap-3">
             {aspirantBadges.map(badge => {
-              const isSvg = badge.badge_definitions.icon_name.startsWith("/");
+              const svgPath = getEffectiveSvgPath(badge.badge_definitions);
               return (
                 <TooltipProvider key={badge.id}>
                   <Tooltip>
@@ -166,10 +205,10 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                           border: `1.5px dashed ${badge.badge_definitions.color}50`,
                         }}
                       >
-                        {isSvg ? (
-                          <img src={badge.badge_definitions.icon_name} alt={badge.badge_definitions.badge_name} className="w-14 h-14" style={{ objectFit: "contain" }} />
+                        {svgPath ? (
+                          <img src={svgPath} alt={badge.badge_definitions.badge_name} className="w-14 h-14" style={{ objectFit: "contain" }} />
                         ) : (
-                          <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-7 h-7" />
+                          <BadgeIcon badge={badge.badge_definitions} className="w-7 h-7" />
                         )}
                         <span className="text-xs font-medium text-center" style={{ color: badge.badge_definitions.color }}>{badge.badge_definitions.badge_name}</span>
                         <span className="text-[10px] text-muted-foreground">
@@ -197,7 +236,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Havi csillagok</h3>
           <div className="flex flex-wrap gap-3">
             {monthlyBadges.map(badge => {
-              const isSvg = badge.badge_definitions.icon_name.startsWith("/");
+              const svgPath = getEffectiveSvgPath(badge.badge_definitions);
               const isExpiring = badge.expires_at && new Date(badge.expires_at) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
               return (
                 <TooltipProvider key={badge.id}>
@@ -210,10 +249,10 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                           border: `1.5px solid ${badge.badge_definitions.color}40`,
                         }}
                       >
-                        {isSvg ? (
-                          <img src={badge.badge_definitions.icon_name} alt={badge.badge_definitions.badge_name} className="w-14 h-14" style={{ objectFit: "contain" }} />
+                        {svgPath ? (
+                          <img src={svgPath} alt={badge.badge_definitions.badge_name} className="w-14 h-14" style={{ objectFit: "contain" }} />
                         ) : (
-                          <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-7 h-7" />
+                          <BadgeIcon badge={badge.badge_definitions} className="w-7 h-7" />
                         )}
                         <span className="text-xs font-semibold text-center" style={{ color: badge.badge_definitions.color }}>{badge.badge_definitions.badge_name}</span>
                         <span className="text-[10px] text-muted-foreground">
@@ -246,7 +285,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Előrehaladás</h3>
           <div className="flex flex-wrap gap-3">
             {progressBadges.map(badge => {
-              const isSvg = badge.badge_definitions.icon_name.startsWith("/");
+              const svgPath = getEffectiveSvgPath(badge.badge_definitions);
               return (
                 <TooltipProvider key={badge.id}>
                   <Tooltip>
@@ -258,10 +297,10 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                           border: `1.5px solid ${badge.badge_definitions.color}30`,
                         }}
                       >
-                        {isSvg ? (
-                          <img src={badge.badge_definitions.icon_name} alt={badge.badge_definitions.badge_name} className="w-14 h-14" style={{ objectFit: "contain" }} />
+                        {svgPath ? (
+                          <img src={svgPath} alt={badge.badge_definitions.badge_name} className="w-14 h-14" style={{ objectFit: "contain" }} />
                         ) : (
-                          <BadgeIcon iconName={badge.badge_definitions.icon_name} className="w-7 h-7" />
+                          <BadgeIcon badge={badge.badge_definitions} className="w-7 h-7" />
                         )}
                         <span className="text-xs font-medium text-center" style={{ color: badge.badge_definitions.color }}>{badge.badge_definitions.badge_name}</span>
                         <span className="text-[10px] text-muted-foreground">

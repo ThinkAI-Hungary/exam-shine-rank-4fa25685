@@ -979,7 +979,26 @@ const PerformanceOverview = () => {
           ) : (
             <div className="space-y-2">
               {badgeDetails.map((b) => {
-                const isSvg = b.icon_name.startsWith("/");
+                // Resolve the effective SVG path from badge metadata
+                const resolveSvgPath = (): string | null => {
+                  if (b.icon_name.startsWith('/')) return b.icon_name;
+                  const nameLower = (b.badge_name || '').toLowerCase();
+                  if (b.badge_type === 'category' || b.badge_type === 'aspirant') {
+                    if (b.badge_level === 'bronze') return '/badges/!jovo_bronzja2_jelveny.svg';
+                    if (b.badge_level === 'silver') return '/badges/!jovo_ezustje_svg.svg';
+                    if (b.badge_level === 'gold') return '/badges/!jovo_aranya_jelveny.svg';
+                  }
+                  if (b.badge_type === 'monthly_star') {
+                    if (nameLower.includes('vizsga') || nameLower.includes('exam') || nameLower.includes('mester'))
+                      return '/badges/!honap_vizsga_mester_final.svg';
+                    if (nameLower.includes('képzési') || nameLower.includes('training') || nameLower.includes('bajnok'))
+                      return '/badges/!kepzesi_bajnok.svg';
+                    if (nameLower.includes('kezdő') || nameLower.includes('starter') || nameLower.includes('siker') || nameLower.includes('success'))
+                      return '/badges/!kezdo_siker.svg';
+                  }
+                  return null;
+                };
+                const svgPath = resolveSvgPath();
                 const typeLabels: Record<string, string> = {
                   category: "Kategória",
                   aspirant: "Törekvő",
@@ -994,11 +1013,11 @@ const PerformanceOverview = () => {
                   >
                     {/* Badge icon */}
                     <div
-                      className={`${isSvg ? 'w-12 h-12' : 'w-10 h-10'} rounded-lg flex items-center justify-center flex-shrink-0`}
+                      className={`${svgPath ? 'w-12 h-12' : 'w-10 h-10'} rounded-lg flex items-center justify-center flex-shrink-0`}
                       style={{ backgroundColor: `${b.color}15`, border: `1.5px solid ${b.color}30` }}
                     >
-                      {isSvg ? (
-                        <img src={b.icon_name} alt={b.badge_name} className="w-10 h-10" style={{ objectFit: "contain" }} />
+                      {svgPath ? (
+                        <img src={svgPath} alt={b.badge_name} className="w-10 h-10" style={{ objectFit: "contain" }} />
                       ) : (
                         <Award className="w-5 h-5" style={{ color: b.color }} />
                       )}
