@@ -84,6 +84,9 @@ const EmbedFull = () => {
           <p className="text-sm text-muted-foreground">
             Az összes kurzuson szerzett átlag pontszám alapján rangsorolva
           </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {getCurrentPeriodLabel()}
+          </p>
         </div>
 
         {loading ? (
