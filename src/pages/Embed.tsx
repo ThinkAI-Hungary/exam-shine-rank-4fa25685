@@ -3,6 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 import Leaderboard from "@/components/Leaderboard";
 import StoreLeaderboard from "@/components/StoreLeaderboard";
 
+const HUNGARIAN_MONTHS = [
+  'Január', 'Február', 'Március', 'Április', 'Május', 'Június',
+  'Július', 'Augusztus', 'Szeptember', 'Október', 'November', 'December'
+];
+
+const getCurrentPeriodLabel = () => {
+  const now = new Date();
+  return `${now.getFullYear()}. ${HUNGARIAN_MONTHS[now.getMonth()]}`;
+};
+
 interface LeaderboardEntry {
   rank: number;
   username: string;
