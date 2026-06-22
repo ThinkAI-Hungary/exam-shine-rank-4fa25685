@@ -252,10 +252,10 @@ const CompanyMonitoring = () => {
       const q = searchQuery.toLowerCase();
       list = list.filter(
         (c) =>
-          c.company_name.toLowerCase().includes(q) ||
-          (c.store_name && c.store_name.toLowerCase().includes(q)) ||
-          (c.company_code && c.company_code.toLowerCase().includes(q)) ||
-          c.tax_number.includes(q)
+          (c.company_name?.toLowerCase().includes(q) ?? false) ||
+          (c.store_name?.toLowerCase().includes(q) ?? false) ||
+          (c.company_code?.toLowerCase().includes(q) ?? false) ||
+          (c.tax_number?.includes(q) ?? false)
       );
     }
     return [...list].sort((a, b) => {
