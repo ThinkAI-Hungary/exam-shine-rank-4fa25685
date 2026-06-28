@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   BarChart3,
   TrendingUp,
@@ -102,6 +103,7 @@ const StudentDashboard = () => {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [badges, setBadges] = useState<BadgeData[]>([]);
+  const [selectedBadge, setSelectedBadge] = useState<(BadgeData & { svgPath: string | null }) | null>(null);
   const [enrollments, setEnrollments] = useState<EnrollmentProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -620,9 +622,11 @@ const StudentDashboard = () => {
                     const svgPath = resolveSvgPath();
 
                     return (
-                      <div
+                      <button
                         key={badge.id}
-                        className="flex flex-col items-center gap-2 p-4 rounded-xl border transition-transform hover:scale-[1.02]"
+                        type="button"
+                        onClick={() => setSelectedBadge({ ...badge, svgPath })}
+                        className="flex flex-col items-center gap-2 p-4 rounded-xl border transition-transform hover:scale-[1.02] cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-ring"
                         style={{
                           background: `${badge.badge_definitions.color}10`,
                           borderColor: `${badge.badge_definitions.color}30`,
@@ -648,7 +652,7 @@ const StudentDashboard = () => {
                             {new Date(badge.awarded_at).toLocaleDateString("hu-HU")}
                           </p>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -718,6 +722,37 @@ const StudentDashboard = () => {
           </CardContent>
         </Card>
       </div>
+      <Dialog open={!!selectedBadge} onOpenChange={(open) => !open && setSelectedBadge(null)}>
+        <DialogContent className="max-w-md">
+          {selectedBadge && (
+            <>
+              <DialogHeader>
+                <DialogTitle style={{ color: selectedBadge.badge_definitions.color }}>
+                  {selectedBadge.badge_definitions.badge_name}
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedBadge.badge_definitions.description || "Megszerzett jelvény"}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col items-center gap-4 py-4">
+                {selectedBadge.svgPath ? (
+                  <img
+                    src={selectedBadge.svgPath}
+                    alt={selectedBadge.badge_definitions.badge_name}
+                    className="w-64 h-64"
+                    style={{ objectFit: "contain" }}
+                  />
+                ) : (
+                  <Award className="w-40 h-40" style={{ color: selectedBadge.badge_definitions.color }} />
+                )}
+                <div className="text-center text-sm text-muted-foreground">
+                  Odaítélve: {new Date(selectedBadge.awarded_at).toLocaleDateString("hu-HU")}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 };
