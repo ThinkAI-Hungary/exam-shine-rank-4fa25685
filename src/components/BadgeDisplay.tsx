@@ -160,7 +160,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div
-                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-help transition-transform hover:scale-105"
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-pointer transition-transform hover:scale-105 text-left" role="button" tabIndex={0} onClick={() => setSelectedBadge(badge)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedBadge(badge); } }}
                         style={{ 
                           backgroundColor: `${badge.badge_definitions.color}12`,
                           border: `1.5px solid ${badge.badge_definitions.color}40`,
@@ -203,7 +203,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div
-                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-help transition-transform hover:scale-105"
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-pointer transition-transform hover:scale-105 text-left" role="button" tabIndex={0} onClick={() => setSelectedBadge(badge)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedBadge(badge); } }}
                         style={{ 
                           backgroundColor: `${badge.badge_definitions.color}08`,
                           border: `1.5px dashed ${badge.badge_definitions.color}50`,
@@ -247,7 +247,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div
-                        className={`flex flex-col items-center gap-2 p-3 rounded-xl cursor-help transition-transform hover:scale-105 ${isExpiring ? 'opacity-70' : ''}`}
+                        className={`flex flex-col items-center gap-2 p-3 rounded-xl cursor-pointer transition-transform hover:scale-105 text-left ${isExpiring ? 'opacity-70' : ''}`} role="button" tabIndex={0} onClick={() => setSelectedBadge(badge)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedBadge(badge); } }}
                         style={{ 
                           backgroundColor: `${badge.badge_definitions.color}15`,
                           border: `1.5px solid ${badge.badge_definitions.color}40`,
@@ -295,7 +295,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div
-                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-help transition-transform hover:scale-105"
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-pointer transition-transform hover:scale-105 text-left" role="button" tabIndex={0} onClick={() => setSelectedBadge(badge)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedBadge(badge); } }}
                         style={{ 
                           backgroundColor: `${badge.badge_definitions.color}12`,
                           border: `1.5px solid ${badge.badge_definitions.color}30`,
