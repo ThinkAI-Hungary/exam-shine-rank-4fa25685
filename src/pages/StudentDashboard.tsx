@@ -622,9 +622,11 @@ const StudentDashboard = () => {
                     const svgPath = resolveSvgPath();
 
                     return (
-                      <div
+                      <button
                         key={badge.id}
-                        className="flex flex-col items-center gap-2 p-4 rounded-xl border transition-transform hover:scale-[1.02]"
+                        type="button"
+                        onClick={() => setSelectedBadge({ ...badge, svgPath })}
+                        className="flex flex-col items-center gap-2 p-4 rounded-xl border transition-transform hover:scale-[1.02] cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-ring"
                         style={{
                           background: `${badge.badge_definitions.color}10`,
                           borderColor: `${badge.badge_definitions.color}30`,
