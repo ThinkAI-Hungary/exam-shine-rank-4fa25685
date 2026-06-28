@@ -722,6 +722,37 @@ const StudentDashboard = () => {
           </CardContent>
         </Card>
       </div>
+      <Dialog open={!!selectedBadge} onOpenChange={(open) => !open && setSelectedBadge(null)}>
+        <DialogContent className="max-w-md">
+          {selectedBadge && (
+            <>
+              <DialogHeader>
+                <DialogTitle style={{ color: selectedBadge.badge_definitions.color }}>
+                  {selectedBadge.badge_definitions.badge_name}
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedBadge.badge_definitions.description || "Megszerzett jelvény"}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col items-center gap-4 py-4">
+                {selectedBadge.svgPath ? (
+                  <img
+                    src={selectedBadge.svgPath}
+                    alt={selectedBadge.badge_definitions.badge_name}
+                    className="w-64 h-64"
+                    style={{ objectFit: "contain" }}
+                  />
+                ) : (
+                  <Award className="w-40 h-40" style={{ color: selectedBadge.badge_definitions.color }} />
+                )}
+                <div className="text-center text-sm text-muted-foreground">
+                  Odaítélve: {new Date(selectedBadge.awarded_at).toLocaleDateString("hu-HU")}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 };
