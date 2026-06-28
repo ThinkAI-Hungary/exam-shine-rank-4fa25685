@@ -652,7 +652,7 @@ const StudentDashboard = () => {
                             {new Date(badge.awarded_at).toLocaleDateString("hu-HU")}
                           </p>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
