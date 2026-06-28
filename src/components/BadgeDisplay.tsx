@@ -333,6 +333,43 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <p className="text-sm">Még nincs megszerzett jelvény</p>
         </div>
       )}
+      <Dialog open={!!selectedBadge} onOpenChange={(open) => !open && setSelectedBadge(null)}>
+        <DialogContent className="max-w-md">
+          {selectedBadge && (
+            <>
+              <DialogHeader>
+                <DialogTitle style={{ color: selectedBadge.badge_definitions.color }}>
+                  {selectedBadge.badge_definitions.badge_name}
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedBadge.badge_definitions.description}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col items-center gap-4 py-4">
+                {(() => {
+                  const svgPath = getEffectiveSvgPath(selectedBadge.badge_definitions);
+                  return svgPath ? (
+                    <img
+                      src={svgPath}
+                      alt={selectedBadge.badge_definitions.badge_name}
+                      className="w-64 h-64"
+                      style={{ objectFit: "contain" }}
+                    />
+                  ) : (
+                    <BadgeIcon badge={selectedBadge.badge_definitions} className="w-40 h-40" />
+                  );
+                })()}
+                <div className="text-center text-sm text-muted-foreground space-y-1">
+                  <p>Odaítélve: {new Date(selectedBadge.awarded_at).toLocaleDateString('hu-HU')}</p>
+                  {selectedBadge.expires_at && (
+                    <p>Lejár: {new Date(selectedBadge.expires_at).toLocaleDateString('hu-HU')}</p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
