@@ -26,6 +26,8 @@ interface BadgeDisplayProps {
 }
 
 const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDisplayProps) => {
+  const [selectedBadge, setSelectedBadge] = useState<BadgeData | null>(null);
+
   // Maps badge metadata to the correct SVG icon path in /badges/
   const resolveBadgeSvg = (badge: BadgeData['badge_definitions']): string | null => {
     const { badge_type, badge_level, badge_name } = badge;
