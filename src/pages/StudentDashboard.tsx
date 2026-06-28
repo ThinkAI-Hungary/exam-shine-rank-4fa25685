@@ -103,6 +103,7 @@ const StudentDashboard = () => {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
   const [badges, setBadges] = useState<BadgeData[]>([]);
+  const [selectedBadge, setSelectedBadge] = useState<(BadgeData & { svgPath: string | null }) | null>(null);
   const [enrollments, setEnrollments] = useState<EnrollmentProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
