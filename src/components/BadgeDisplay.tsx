@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Medal, Award, Trophy, Star, Rocket, Target, Zap, Crown, TrendingUp, Sparkles, GraduationCap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 interface BadgeData {
   id: string;
@@ -24,6 +26,8 @@ interface BadgeDisplayProps {
 }
 
 const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDisplayProps) => {
+  const [selectedBadge, setSelectedBadge] = useState<BadgeData | null>(null);
+
   // Maps badge metadata to the correct SVG icon path in /badges/
   const resolveBadgeSvg = (badge: BadgeData['badge_definitions']): string | null => {
     const { badge_type, badge_level, badge_name } = badge;
@@ -156,7 +160,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div
-                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-help transition-transform hover:scale-105"
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-pointer transition-transform hover:scale-105 text-left" role="button" tabIndex={0} onClick={() => setSelectedBadge(badge)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedBadge(badge); } }}
                         style={{ 
                           backgroundColor: `${badge.badge_definitions.color}12`,
                           border: `1.5px solid ${badge.badge_definitions.color}40`,
@@ -199,7 +203,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div
-                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-help transition-transform hover:scale-105"
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-pointer transition-transform hover:scale-105 text-left" role="button" tabIndex={0} onClick={() => setSelectedBadge(badge)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedBadge(badge); } }}
                         style={{ 
                           backgroundColor: `${badge.badge_definitions.color}08`,
                           border: `1.5px dashed ${badge.badge_definitions.color}50`,
@@ -243,7 +247,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div
-                        className={`flex flex-col items-center gap-2 p-3 rounded-xl cursor-help transition-transform hover:scale-105 ${isExpiring ? 'opacity-70' : ''}`}
+                        className={`flex flex-col items-center gap-2 p-3 rounded-xl cursor-pointer transition-transform hover:scale-105 text-left ${isExpiring ? 'opacity-70' : ''}`} role="button" tabIndex={0} onClick={() => setSelectedBadge(badge)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedBadge(badge); } }}
                         style={{ 
                           backgroundColor: `${badge.badge_definitions.color}15`,
                           border: `1.5px solid ${badge.badge_definitions.color}40`,
@@ -291,7 +295,7 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div
-                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-help transition-transform hover:scale-105"
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl cursor-pointer transition-transform hover:scale-105 text-left" role="button" tabIndex={0} onClick={() => setSelectedBadge(badge)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedBadge(badge); } }}
                         style={{ 
                           backgroundColor: `${badge.badge_definitions.color}12`,
                           border: `1.5px solid ${badge.badge_definitions.color}30`,
@@ -329,6 +333,43 @@ const BadgeDisplay = ({ badges, compact = false, showExpired = false }: BadgeDis
           <p className="text-sm">Még nincs megszerzett jelvény</p>
         </div>
       )}
+      <Dialog open={!!selectedBadge} onOpenChange={(open) => !open && setSelectedBadge(null)}>
+        <DialogContent className="max-w-md">
+          {selectedBadge && (
+            <>
+              <DialogHeader>
+                <DialogTitle style={{ color: selectedBadge.badge_definitions.color }}>
+                  {selectedBadge.badge_definitions.badge_name}
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedBadge.badge_definitions.description}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col items-center gap-4 py-4">
+                {(() => {
+                  const svgPath = getEffectiveSvgPath(selectedBadge.badge_definitions);
+                  return svgPath ? (
+                    <img
+                      src={svgPath}
+                      alt={selectedBadge.badge_definitions.badge_name}
+                      className="w-64 h-64"
+                      style={{ objectFit: "contain" }}
+                    />
+                  ) : (
+                    <BadgeIcon badge={selectedBadge.badge_definitions} className="w-40 h-40" />
+                  );
+                })()}
+                <div className="text-center text-sm text-muted-foreground space-y-1">
+                  <p>Odaítélve: {new Date(selectedBadge.awarded_at).toLocaleDateString('hu-HU')}</p>
+                  {selectedBadge.expires_at && (
+                    <p>Lejár: {new Date(selectedBadge.expires_at).toLocaleDateString('hu-HU')}</p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
